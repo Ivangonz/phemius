@@ -280,12 +280,15 @@ export interface components {
         };
         /** Audio */
         Audio: {
+            /** Conversion Note */
+            conversion_note: string | null;
             /** Created */
             created: number;
             /** Doc Id */
             doc_id: number;
             /** Error */
             error: string | null;
+            format: components["schemas"]["AudioFormat"] | null;
             /** Hint */
             hint: string | null;
             /** Id */
@@ -296,6 +299,8 @@ export interface components {
             path: string | null;
             /** Script */
             script: string | null;
+            /** Size Bytes */
+            size_bytes: number | null;
             stage: components["schemas"]["JobStage"];
             status: components["schemas"]["JobState"];
             /** Tone */
@@ -312,6 +317,8 @@ export interface components {
             /** Job Id */
             job_id: number;
         };
+        /** @enum {string} */
+        AudioFormat: "wav" | "m4a" | "mp3";
         /** AudioRequest */
         AudioRequest: {
             /** Tone */
@@ -377,12 +384,15 @@ export interface components {
             category: string;
             /** Created */
             created: number;
+            format: components["schemas"]["AudioFormat"] | null;
             /** Id */
             id: number;
             /** Is Changed */
             is_changed: boolean;
             /** Signature */
             signature: string;
+            /** Size Bytes */
+            size_bytes: number | null;
             /** Source */
             source: string;
             stage: components["schemas"]["JobStage"] | null;
@@ -439,13 +449,11 @@ export interface components {
             voice: string | null;
         };
         /** @enum {string} */
-        JobStage: "writing_script" | "narrating";
+        JobStage: "writing_script" | "narrating" | "converting";
         /** @enum {string} */
         JobState: "queued" | "running" | "done" | "failed" | "cancelled";
         /** @constant */
         JobType: "audio";
-        /** @enum {string} */
-        OutputFormat: "wav" | "m4a" | "mp3" | "mp4";
         /** Page[DocumentListItem] */
         Page_DocumentListItem_: {
             /** Items */
@@ -556,7 +564,7 @@ export interface components {
             /** Openrouter Api Key */
             openrouter_api_key?: string | null;
             /** @default wav */
-            output_format?: components["schemas"]["OutputFormat"];
+            output_format?: components["schemas"]["AudioFormat"];
             /** Script Api Key */
             script_api_key?: string | null;
             /** Script Base Url */

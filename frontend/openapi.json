@@ -24,6 +24,17 @@
       },
       "Audio": {
         "properties": {
+          "conversion_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversion Note"
+          },
           "created": {
             "title": "Created",
             "type": "number"
@@ -42,6 +53,16 @@
               }
             ],
             "title": "Error"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "hint": {
             "anyOf": [
@@ -84,6 +105,17 @@
             ],
             "title": "Script"
           },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
           "stage": {
             "$ref": "#/components/schemas/JobStage"
           },
@@ -125,6 +157,9 @@
           "voice",
           "script",
           "path",
+          "format",
+          "size_bytes",
+          "conversion_note",
           "created",
           "job_id",
           "status",
@@ -152,6 +187,14 @@
         ],
         "title": "AudioCreated",
         "type": "object"
+      },
+      "AudioFormat": {
+        "enum": [
+          "wav",
+          "m4a",
+          "mp3"
+        ],
+        "type": "string"
       },
       "AudioRequest": {
         "properties": {
@@ -364,6 +407,16 @@
             "title": "Created",
             "type": "number"
           },
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -375,6 +428,17 @@
           "signature": {
             "title": "Signature",
             "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
           },
           "source": {
             "title": "Source",
@@ -420,6 +484,8 @@
           "created",
           "updated",
           "audio_id",
+          "format",
+          "size_bytes",
           "status",
           "stage",
           "is_changed",
@@ -620,7 +686,8 @@
       "JobStage": {
         "enum": [
           "writing_script",
-          "narrating"
+          "narrating",
+          "converting"
         ],
         "type": "string"
       },
@@ -636,15 +703,6 @@
       },
       "JobType": {
         "const": "audio",
-        "type": "string"
-      },
-      "OutputFormat": {
-        "enum": [
-          "wav",
-          "m4a",
-          "mp3",
-          "mp4"
-        ],
         "type": "string"
       },
       "Page_DocumentListItem_": {
@@ -949,7 +1007,7 @@
             "title": "Openrouter Api Key"
           },
           "output_format": {
-            "$ref": "#/components/schemas/OutputFormat",
+            "$ref": "#/components/schemas/AudioFormat",
             "default": "wav"
           },
           "script_api_key": {

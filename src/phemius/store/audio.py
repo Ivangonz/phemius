@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TypedDict, cast
 
 from phemius.store.database import transaction
-from phemius.store.jobs import JobStage, JobState
+from phemius.store.jobs import AudioFormat, JobStage, JobState
 
 # Selected with `audio a JOIN jobs j ON j.audio_id = a.id`; every audio has a job.
 AUDIO_JOB_COLUMNS = (
@@ -36,6 +36,9 @@ class Audio(TypedDict):
     voice: str | None
     script: str | None
     path: str | None
+    format: AudioFormat | None
+    size_bytes: int | None
+    conversion_note: str | None
     created: float
     job_id: int
     status: JobState

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from phemius.app import create_app
 from phemius.voices.kokoro import INSTALL_HINT
+from tests.services.fakes import FakeFfmpeg, UseFfmpeg
 
 
 def test_config_lists_namespaced_voices_of_configured_engine(
@@ -98,3 +99,30 @@ def test_config_answers_with_a_hint_when_the_provider_key_is_missing(
     assert response.json()["model"] == "gpt-4o-mini"
     assert response.json()["llm_error"] == "OpenAI needs an API key."
     assert "OPENAI_API_KEY" in response.json()["llm_hint"]
+
+
+def test_config_reports_ffmpeg_version(
+    client: TestClient, use_ffmpeg: UseFfmpeg
+) -> None:
+    use_ffmpeg(FakeFfmpeg(stdout=b"ffmpeg version 7.1 Copyright\n"))
+
+    body = client.get("/api/config").json()
+
+    assert body["ffmpeg"] == {
+        "is_present": True,
+        "version": "7.1",
+        "status": "ok",
+        "message": "ffmpeg 7.1 converts audio to M4A or MP3.",
+        "hint": None,
+    }
+
+
+def test_config_reports_missing_ffmpeg_as_optional(
+    client: TestClient, use_ffmpeg: UseFfmpeg
+) -> None:
+    use_ffmpeg(None)
+
+    ffmpeg_check = client.get("/api/config").json()["ffmpeg"]
+
+    assert (ffmpeg_check["is_present"], ffmpeg_check["status"]) == (False, "optional")
+    assert ffmpeg_check["hint"]

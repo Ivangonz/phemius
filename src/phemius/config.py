@@ -22,13 +22,13 @@ from pydantic import (
 from phemius.errors import PhemiusError
 from phemius.store import database
 from phemius.store import settings as settings_store
+from phemius.store.jobs import AudioFormat
 
 ENV_PREFIX = "PHEMIUS_"
 DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
 OFFLINE_PROVIDER = "offline"
 
 type SettingSource = Literal["env", "saved", "default"]
-type OutputFormat = Literal["wav", "m4a", "mp3", "mp4"]
 type AccessMode = Literal["local", "network", "proxy"]
 type WatchOnChange = Literal["mark", "regenerate"]
 
@@ -43,6 +43,13 @@ class EnvVar:
 
 def _lower(value: object) -> object:
     return value.lower() if isinstance(value, str) else value
+
+
+def _output_format(value: object) -> object:
+    # `mp4` was an output format before M4A replaced it; both are AAC in an MPEG-4
+    # container, so a saved or exported `mp4` keeps working as `m4a`.
+    value = _lower(value)
+    return "m4a" if value == "mp4" else value
 
 
 def _expand_user(path: Path | None) -> Path | None:
@@ -87,7 +94,7 @@ class Settings(BaseModel):
         WatchOnChange, BeforeValidator(_lower), EnvVar("PHEMIUS_WATCH_ON_CHANGE")
     ] = "mark"
     output_format: Annotated[
-        OutputFormat, BeforeValidator(_lower), EnvVar("PHEMIUS_FORMAT")
+        AudioFormat, BeforeValidator(_output_format), EnvVar("PHEMIUS_FORMAT")
     ] = "wav"
     script_max_tokens: Annotated[
         int, Field(gt=0), EnvVar("PHEMIUS_SCRIPT_MAX_TOKENS")

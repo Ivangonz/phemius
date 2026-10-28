@@ -260,3 +260,44 @@ def test_migrated_audio_reads_its_status_from_its_job(isolated_env: Path) -> Non
         AUDIO_BEFORE_JOBS[1][3],
         "teacher",
     )
+
+
+def _library_before_audio_formats(db_path: Path, paths: list[str | None]) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(db_path)
+    with connection:
+        for migration in MIGRATIONS[:7]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=7")
+        connection.executemany(
+            "INSERT INTO audio (doc_id, tone, path, created)"
+            " VALUES (1, 'teacher', ?, 1)",
+            [(path,) for path in paths],
+        )
+    connection.close()
+
+
+def test_existing_audio_gets_its_format_and_size_from_the_file(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    wav_path = isolated_env / "audio" / "1.wav"
+    wav_path.parent.mkdir(parents=True)
+    wav_path.write_bytes(b"RIFF" + bytes(40))
+    missing_mp4 = isolated_env / "audio" / "2.mp4"
+    _library_before_audio_formats(
+        db_path, [str(wav_path), str(missing_mp4), "3.ogg", None]
+    )
+
+    database.init_database(db_path)
+
+    with database.transaction() as connection:
+        rows = connection.execute(
+            "SELECT format, size_bytes, conversion_note FROM audio ORDER BY id"
+        ).fetchall()
+    assert [tuple(row) for row in rows] == [
+        ("wav", 44, None),
+        ("m4a", None, None),
+        (None, None, None),
+        (None, None, None),
+    ]

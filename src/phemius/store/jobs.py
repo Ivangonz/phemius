@@ -4,8 +4,8 @@ The job vocabulary below is the one every screen and endpoint reuses:
 
 - `state`: `queued` (waiting for a worker), `running`, `done`, `failed` or
   `cancelled`.
-- `stage`: the step a job is waiting for or running, `writing_script` then
-  `narrating`.
+- `stage`: the step a job is waiting for or running, `writing_script`, then
+  `narrating`, then `converting` when a compressed output format is set.
 
 Workers fence their writes with `attempts`: a retry bumps it, so a worker that
 was cancelled mid-call and finishes late cannot overwrite the new attempt.
@@ -20,7 +20,8 @@ from phemius.store.database import transaction
 
 type JobType = Literal["audio"]
 type JobState = Literal["queued", "running", "done", "failed", "cancelled"]
-type JobStage = Literal["writing_script", "narrating"]
+type JobStage = Literal["writing_script", "narrating", "converting"]
+type AudioFormat = Literal["wav", "m4a", "mp3"]
 
 INTERRUPTED_MESSAGE = "Interrupted by a restart"
 INTERRUPTED_HINT = "Retry the job to run it again."
@@ -58,6 +59,15 @@ class JobPage:
 class QueuedAudio:
     audio_id: int
     job_id: int
+
+
+@dataclass(frozen=True)
+class AudioFile:
+    path: str
+    format: AudioFormat
+    size_bytes: int
+    # Why the audio is WAV when another format was configured.
+    conversion_note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -156,15 +166,32 @@ def finish_script(job: ClaimedJob, script: str) -> bool:
     return True
 
 
-def finish_audio(job: ClaimedJob, path: str) -> bool:
-    """Save the audio file path and mark the job done. False if superseded."""
+def queue_conversion(job: ClaimedJob, wav: AudioFile) -> bool:
+    """Save the narrated WAV and queue the job for conversion. False if superseded."""
+    return _save_audio_file(
+        job, wav, "state = 'queued', stage = 'converting', progress = 0"
+    )
+
+
+def finish_audio(job: ClaimedJob, file: AudioFile) -> bool:
+    """Save the final audio file and mark the job done. False if superseded."""
+    return _save_audio_file(job, file, "state = 'done', progress = 1, finished = :now")
+
+
+def _save_audio_file(job: ClaimedJob, file: AudioFile, assignments: str) -> bool:
     with transaction() as connection:
-        if not _advance(
-            connection, job, "state = 'done', progress = 1, finished = :now"
-        ):
+        if not _advance(connection, job, assignments):
             return False
         connection.execute(
-            "UPDATE audio SET path = ? WHERE id = ?", (path, job.audio_id)
+            "UPDATE audio SET path = ?, format = ?, size_bytes = ?,"
+            " conversion_note = ? WHERE id = ?",
+            (
+                file.path,
+                file.format,
+                file.size_bytes,
+                file.conversion_note,
+                job.audio_id,
+            ),
         )
     return True
 

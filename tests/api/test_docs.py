@@ -47,6 +47,8 @@ def test_upload_then_generate_audio_with_stub_engine(client: TestClient) -> None
     assert audio["script"]
     assert audio_file.status_code == 200
     assert audio_file.headers["content-type"] == "audio/wav"
+    assert (audio["format"], audio["conversion_note"]) == ("wav", None)
+    assert audio["size_bytes"] == len(audio_file.content)
 
 
 def test_reuploading_same_content_is_a_duplicate(client: TestClient) -> None:
