@@ -1,8 +1,9 @@
 """Categorizes documents and rewrites them as listening-friendly scripts.
 
-Uses OpenRouter when OPENROUTER_API_KEY is set; otherwise falls back to heuristics
-so the pipeline still runs end to end offline. A failed model call also falls back,
-and the error is kept in `last_error` so the UI can show it.
+Uses the configured script model when there is one; otherwise offline rules keep
+the pipeline running end to end. A failed script raises `ModelError` so the audio
+fails with a hint. A failed analysis falls back to the rules, and the error is kept
+in `last_error` so the UI can show it.
 """
 
 import json
@@ -12,6 +13,7 @@ from typing import TypedDict
 import structlog
 
 from phemius.config import load_config
+from phemius.errors import ModelError
 from phemius.models.openrouter import OpenRouterClient, get_client
 
 log = structlog.get_logger(__name__)
@@ -68,7 +70,7 @@ up...").
 ANALYSIS_TEXT_LIMIT = 6000
 SCRIPT_TEXT_LIMIT = 40000
 
-# Most recent model failure, shown in the UI so a bad key or model is not silent.
+# Most recent analysis failure, shown in the UI so a bad key or model is not silent.
 last_error: str | None = None
 
 
@@ -85,10 +87,10 @@ def _model_client() -> OpenRouterClient | None:
     return get_client(config.openrouter_api_key, config.model)
 
 
-def _record_failure(error: Exception) -> None:
+def _record_analysis_failure(error: ModelError | ValueError) -> None:
     global last_error
-    last_error = f"{type(error).__name__}: {error}"[:300]
-    log.warning("model_call_failed", error_type=type(error).__name__)
+    last_error = error.message if isinstance(error, ModelError) else str(error)
+    log.warning("analysis_fell_back", error_type=type(error).__name__)
 
 
 def analyze(title: str, text: str) -> DocumentAnalysis:
@@ -96,8 +98,8 @@ def analyze(title: str, text: str) -> DocumentAnalysis:
     if client:
         try:
             return _analyze_with_model(client, title, text)
-        except Exception as error:  # fall back to heuristics and surface the error
-            _record_failure(error)
+        except (ModelError, ValueError) as error:  # analysis may fall back (#23)
+            _record_analysis_failure(error)
     return heuristic_analyze(text)
 
 
@@ -112,6 +114,10 @@ def _analyze_with_model(
         f"Title: {title}\n\nDocument (truncated):\n{text[:ANALYSIS_TEXT_LIMIT]}",
         max_tokens=300,
     )
+    return _parse_analysis(output)
+
+
+def _parse_analysis(output: str) -> DocumentAnalysis:
     match = re.search(r"\{.*\}", output, re.S)
     if not match:
         raise ValueError("Model reply contained no JSON object")
@@ -145,13 +151,11 @@ def heuristic_analyze(text: str) -> DocumentAnalysis:
 
 
 def make_script(title: str, text: str, tone: str) -> str:
+    """Write a spoken script. Raises `ModelError` if the configured model fails."""
     client = _model_client()
-    if client:
-        try:
-            return _script_with_model(client, title, text, tone)
-        except Exception as error:  # fall back to heuristics and surface the error
-            _record_failure(error)
-    return heuristic_script(title, text, tone)
+    if client is None:
+        return heuristic_script(title, text, tone)
+    return _script_with_model(client, title, text, tone)
 
 
 def _script_with_model(

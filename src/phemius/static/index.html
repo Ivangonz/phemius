@@ -135,8 +135,7 @@ function renderDoc(d) {
     <div class="summary">${esc(d.summary)}</div>
     <div class="row"><select id="tone-${d.id}" title="Tone">${opts}</select>
       <select id="voice-${d.id}" title="Voice">${voiceOpts}</select>
-      <button class="primary" onclick="gen(${d.id})">Generate audio</button>
-      <button onclick="removeDoc(${d.id})" title="Delete this document and its audio">Delete</button></div>
+      <button class="primary" onclick="gen(${d.id})">Generate audio</button></div>
     ${audios}</div>`;
 }
 
@@ -150,12 +149,6 @@ async function loadScript(id, el) {
 async function gen(id) {
   const tone = $('#tone-' + id).value, voice = $('#voice-' + id).value;
   await fetch(`/api/docs/${id}/audio`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tone, voice }) });
-  refresh();
-}
-
-async function removeDoc(id) {
-  if (!confirm('Delete this document and all of its audio?')) return;
-  await fetch('/api/docs/' + id, { method: 'DELETE' });
   refresh();
 }
 

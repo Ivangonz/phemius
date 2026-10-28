@@ -8,7 +8,7 @@ from pathlib import Path
 import structlog
 
 from phemius.config import load_config
-from phemius.errors import NotFoundError
+from phemius.errors import NotFoundError, PhemiusError
 from phemius.services import agent, ingest
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
@@ -69,9 +69,15 @@ def generate_audio(audio_id: int, document: Document, tone: str, voice: str) -> 
         audio_store.mark_done(audio_id, str(_convert(out_path)))
     except Exception as error:  # stored on the audio row and shown in the UI
         log.warning("audio_failed", audio_id=audio_id, error_type=type(error).__name__)
-        audio_store.mark_failed(audio_id, str(error))
+        audio_store.mark_failed(audio_id, _error_text(error))
         return
     log.info("audio_finished", audio_id=audio_id)
+
+
+def _error_text(error: Exception) -> str:
+    if isinstance(error, PhemiusError) and error.hint:
+        return f"{error.message} {error.hint}"
+    return str(error)
 
 
 def _synthesize(audio_id: int, script: str, voice: str) -> Path:

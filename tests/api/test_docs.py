@@ -2,7 +2,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
+
+from phemius.services import agent
+from tests.services.test_agent import FailingModel
 
 SAMPLES = Path(__file__).parents[2] / "samples"
 
@@ -83,3 +87,17 @@ def test_audio_file_not_ready_returns_hint(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["hint"]
+
+
+def test_failing_script_model_fails_audio_with_hint(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    uploaded = _upload_sample(client, "deploy-guide.md")
+    monkeypatch.setattr(agent, "_model_client", lambda: FailingModel())
+
+    created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    audio = _wait_for_audio(client, created.json()["audio_id"])
+
+    assert audio["status"] == "error"
+    assert audio["error"] == "OpenRouter returned 402. Add OpenRouter credits."
+    assert audio["path"] is None

@@ -1,6 +1,7 @@
 """Documents in the library. Deduplicated by content hash."""
 
 import hashlib
+import sqlite3
 import time
 from dataclasses import dataclass
 from typing import TypedDict, cast
@@ -55,21 +56,27 @@ def add_document(document: NewDocument) -> tuple[int, bool]:
         ).fetchone()
         if existing:
             return int(existing["id"]), False
-        cursor = connection.execute(
-            "INSERT INTO docs (title, source, content_hash, text, category, summary,"
-            " suggested_tone, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                document.title,
-                document.source,
-                content_hash,
-                document.text,
-                document.category,
-                document.summary,
-                document.suggested_tone,
-                time.time(),
-            ),
-        )
-        return cast(int, cursor.lastrowid), True
+        return _insert_document(connection, document, content_hash), True
+
+
+def _insert_document(
+    connection: sqlite3.Connection, document: NewDocument, content_hash: str
+) -> int:
+    cursor = connection.execute(
+        "INSERT INTO docs (title, source, content_hash, text, category, summary,"
+        " suggested_tone, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            document.title,
+            document.source,
+            content_hash,
+            document.text,
+            document.category,
+            document.summary,
+            document.suggested_tone,
+            time.time(),
+        ),
+    )
+    return cast(int, cursor.lastrowid)
 
 
 def list_documents() -> list[DocumentSummary]:
