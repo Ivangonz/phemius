@@ -156,3 +156,31 @@ OpenAI-compatible speech and ElevenLabs are planned.
 **When to revisit.** If a provider needs a fundamentally different interaction
 than the protocols allow (for example streaming audio or multi-step tool use),
 extend the protocol through a new ADR rather than special-casing the provider.
+
+### ADR-003: Piper is an optional extra, never bundled by default
+
+- **Status:** Accepted
+- **Date:** 2026-10-28
+
+**Context.** Piper is a small, fast voice engine that suits low-power machines.
+`piper-tts` 1.3 and later is licensed GPL-3.0-or-later, while Phemius is
+Apache-2.0. The last MIT release, 1.2.0, depends on `piper-phonemize`, which has
+no Python 3.12 wheels, so it cannot be installed alongside Kokoro.
+
+**Decision.** Piper is available only through the optional `piper` extra
+(`uv sync --extra piper`). It is never part of the default install, the wheel's
+required dependencies or the Docker image (#18). Kokoro stays the default
+engine. The Piper adapter imports `piper` lazily, so Phemius runs without it.
+
+**Consequences.**
+
+- The default install and the Docker image ship only Apache-2.0-compatible
+  dependencies.
+- Users who want Piper install it themselves and accept its license.
+- Docker users who want Piper build their own image or install the extra in the
+  container.
+- Piper voices download on demand with their own dataset licenses; the default
+  Piper voice is CC0, and the README lists each voice's license.
+
+**When to revisit.** If a permissively licensed Piper release supports Python
+3.12, or if the project decides to ship a separately licensed Piper image.

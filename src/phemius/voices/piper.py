@@ -59,24 +59,11 @@ class CatalogueVoice:
 
 
 # Licenses come from each voice's MODEL_CARD; keep the README table in sync.
+# The first voice is the default, so it must carry no usage restriction (CC0).
 CATALOGUE = [
     CatalogueVoice(
-        name="en_US-lessac-medium",
-        label="Lessac, female (default)",
-        accent="American English",
-        license="Blizzard 2013 Lessac license (non-commercial)",
-        model=VoiceFile(
-            "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
-            63201294,
-        ),
-        config=VoiceFile(
-            "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0",
-            4885,
-        ),
-    ),
-    CatalogueVoice(
         name="en_US-joe-medium",
-        label="Joe, male",
+        label="Joe, male (default)",
         accent="American English",
         license="CC0",
         model=VoiceFile(
@@ -86,6 +73,20 @@ CATALOGUE = [
         config=VoiceFile(
             "3d6d5410b3795cb1950595247ef8f06190719e6fdbfa3a2356d8ec368e1aad33",
             4794,
+        ),
+    ),
+    CatalogueVoice(
+        name="en_US-lessac-medium",
+        label="Lessac, female (non-commercial use only)",
+        accent="American English",
+        license="Blizzard 2013 Lessac license (non-commercial)",
+        model=VoiceFile(
+            "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
+            63201294,
+        ),
+        config=VoiceFile(
+            "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0",
+            4885,
         ),
     ),
     CatalogueVoice(

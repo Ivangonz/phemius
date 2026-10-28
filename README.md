@@ -239,7 +239,7 @@ engine.
 | Engine (`PHEMIUS_TTS`) | Voices |
 | --- | --- |
 | `kokoro` (default) | `kokoro:af_heart` (default), `af_bella`, `af_nicole`, `af_sarah`, `af_sky`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`. The first letter is the accent (American or British), the second the gender. |
-| `piper` | `piper:en_US-lessac-medium` (default), `en_US-joe-medium`, `en_GB-cori-medium`, `en_GB-northern_english_male-medium`. See [Piper](#piper). |
+| `piper` | `piper:en_US-joe-medium` (default), `en_US-lessac-medium` (non-commercial use only), `en_GB-cori-medium`, `en_GB-northern_english_male-medium`. See [Piper](#piper). |
 | `stub` | `stub:silent`, silent audio for testing |
 
 `GET /api/config` lists the voices of the configured engine (`voices`), the
@@ -272,13 +272,14 @@ audio beyond personal listening:
 
 | Voice | Accent | Dataset license |
 | --- | --- | --- |
-| `piper:en_US-lessac-medium` | American English, female | [Blizzard 2013 Lessac license](https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html) (non-commercial) |
-| `piper:en_US-joe-medium` | American English, male | CC0 |
+| `piper:en_US-joe-medium` (default) | American English, male | CC0 |
+| `piper:en_US-lessac-medium` | American English, female | [Blizzard 2013 Lessac license](https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html): **non-commercial use only** |
 | `piper:en_GB-cori-medium` | British English, female | Public domain (LibriVox recordings) |
 | `piper:en_GB-northern_english_male-medium` | British English, male | [CC BY-SA 4.0](http://www.openslr.org/83/) |
 
-The `piper-tts` package itself is licensed GPL-3.0-or-later. It is an optional
-extra and is not bundled with Phemius.
+The `piper-tts` package itself is licensed GPL-3.0-or-later, so it is an
+optional extra and is never bundled with the default install or the Docker image
+(see ADR-003 in [docs/architecture.md](docs/architecture.md)).
 
 ## Watched folder
 
