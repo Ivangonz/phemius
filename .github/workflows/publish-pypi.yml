@@ -1,0 +1,92 @@
+name: Publish to PyPI
+
+# A `v*` tag publishes that version. PyPI trusted publishing authenticates the
+# upload, so the repository holds no PyPI token.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the sdist and wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.10.4"
+
+      - name: Build the UI into src/phemius/static
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Build the sdist and wheel
+        run: uv build --python 3.12
+
+      - name: Check the built UI is in the sdist and wheel
+        run: |
+          unzip -l dist/phemius-*.whl | grep -q ' phemius/static/index.html$' \
+            || { echo "::error::The wheel is missing phemius/static/index.html"; exit 1; }
+          tar -tzf dist/phemius-*.tar.gz | grep -q '/src/phemius/static/index.html$' \
+            || { echo "::error::The sdist is missing src/phemius/static/index.html"; exit 1; }
+
+      # A tag that disagrees with phemius.__version__ would publish the wrong
+      # version under the right name, and PyPI never lets a version be reused.
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          expected="dist/phemius-${GITHUB_REF_NAME#v}-py3-none-any.whl"
+          ls "$expected" > /dev/null \
+            || { echo "::error::Tag $GITHUB_REF_NAME does not match the built version: $(ls dist)"; exit 1; }
+
+      - name: Check the wheel installs and runs
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" dist/phemius-*.whl
+          "$RUNNER_TEMP/venv/bin/phemius" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/phemius
+    permissions:
+      # Trusted publishing exchanges this OIDC token for a short-lived upload token.
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -63,7 +63,44 @@ Node.
 
 ## Quick start with uv tool install
 
-Coming soon.
+Install the `phemius` command with [uv](https://docs.astral.sh/uv/getting-started/installation/).
+uv downloads Python 3.12 if you do not have it. The package ships the built web
+UI, so you do not need Node.
+
+```bash
+uv tool install 'phemius[kokoro]'
+phemius serve
+```
+
+Open <http://127.0.0.1:8000>. Your library is in `~/.phemius`. The first
+narration downloads the Kokoro voice model (about 300 MB, see
+[First run](#first-run)).
+
+With [pipx](https://pipx.pypa.io) instead, point it at Python 3.12:
+
+```bash
+pipx install --python python3.12 'phemius[kokoro]'
+```
+
+Pick the extra for the voice engine you want:
+
+| Install | Voice engine |
+| --- | --- |
+| `'phemius[kokoro]'` | Kokoro, the default (`PHEMIUS_TTS=kokoro`) |
+| `'phemius[piper]'` | Piper, lighter, for small machines; set `PHEMIUS_TTS=piper`. GPL-3.0, see [Piper](#piper) |
+| `phemius` | No local voice: use a hosted voice (see [Hosted voices](#hosted-voices)) or `PHEMIUS_TTS=stub` |
+
+`phemius serve` options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--port` | `8000` | Port to listen on. |
+| `--data-dir` | `PHEMIUS_DATA_DIR`, else `~/.phemius` | Library folder. |
+| `--host` | from `PHEMIUS_ACCESS_MODE` | Address to listen on. In `local` mode only this computer's addresses (`127.0.0.1`, `localhost`, `::1`) are allowed; see [Access from other devices](#access-from-other-devices). |
+| `--reload` | off | Restart on code changes (development). |
+
+`phemius --version` prints the installed version. To upgrade, run
+`uv tool upgrade phemius` (or `pipx upgrade phemius`); your library is kept.
 
 ## Run from source
 
@@ -426,8 +463,10 @@ the library, so `PHEMIUS_ACCESS_MODE` decides who can reach it:
 | `proxy` | `127.0.0.1`, for a reverse proxy on the same computer that adds HTTPS or a domain; trusts its `X-Forwarded-*` headers | Required |
 
 `phemius serve` (and `make run`) pick the address from the mode, so start the
-server through them rather than calling `uvicorn` with your own `--host`. The
-mode is read when the server starts; restart after changing it.
+server through them rather than calling `uvicorn` with your own `--host`.
+`phemius serve --host` changes the address, but in `local` mode it refuses
+anything beyond this computer (such as `0.0.0.0`), because nothing would ask for
+a token. The mode is read when the server starts; restart after changing it.
 
 Send the token with every API request as `Authorization: Bearer <token>`;
 without it, requests get `401 unauthorized`. An `<audio>` element cannot send

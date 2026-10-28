@@ -113,8 +113,9 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Builds the sdist and wheel as a release would, then proves the wheel serves
-  # the UI from a clean virtualenv with no Node, as `uv tool install` would.
+  # Builds the sdist and wheel as a release would, then proves the `phemius`
+  # command serves the UI from a clean virtualenv with no Node, as
+  # `uv tool install` would.
   package:
     name: Package
     runs-on: ubuntu-latest
@@ -161,12 +162,12 @@ jobs:
       - name: Serve the UI and API from the installed wheel without Node
         working-directory: ${{ runner.temp }}
         env:
-          PHEMIUS_DATA_DIR: ${{ runner.temp }}/phemius-data
           PHEMIUS_TTS: stub
         run: |
           export PATH="$RUNNER_TEMP/venv/bin:/usr/bin:/bin"
           if command -v node; then echo "::error::Node is on PATH"; exit 1; fi
-          python -m uvicorn phemius.app:app --port 8000 > server.log 2>&1 &
+          phemius --version
+          phemius serve --port 8000 --data-dir "$RUNNER_TEMP/phemius-data" > server.log 2>&1 &
           for attempt in $(seq 30); do
             curl -fsS http://127.0.0.1:8000/api/health > /dev/null && break
             sleep 1

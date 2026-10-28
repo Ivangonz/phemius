@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from phemius.config import AccessMode
+from phemius.errors import PhemiusError
 from phemius.services import access
 from phemius.services.access import BindOptions
 from phemius.store import access as access_store
@@ -26,6 +27,39 @@ def test_bind_options_follow_the_access_mode(
     mode: AccessMode, expected: BindOptions
 ) -> None:
     assert access.bind_options(mode) == expected
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "127.0.0.2", "localhost", "::1"])
+def test_local_mode_accepts_a_loopback_host(host: str) -> None:
+    assert access.bind_options("local", host).host == host
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.1.20", "phemius.lan"])
+def test_local_mode_refuses_a_host_beyond_this_computer(host: str) -> None:
+    with pytest.raises(PhemiusError) as raised:
+        access.bind_options("local", host)
+
+    assert host in raised.value.message
+    assert raised.value.hint is not None
+    assert "PHEMIUS_ACCESS_MODE=network" in raised.value.hint
+
+
+def test_local_mode_refuses_a_public_host_even_with_an_env_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Local mode never checks the token, so setting one would not protect it.
+    monkeypatch.setenv("PHEMIUS_ACCESS_TOKEN", "a" * 32)
+
+    with pytest.raises(PhemiusError):
+        access.bind_options("local", "0.0.0.0")
+
+
+@pytest.mark.parametrize("mode", ["network", "proxy"])
+def test_modes_that_require_a_token_accept_any_host(mode: AccessMode) -> None:
+    bind = access.bind_options(mode, "0.0.0.0")
+
+    assert bind.host == "0.0.0.0"
+    assert bind.is_proxy_trusted is (mode == "proxy")
 
 
 @pytest.mark.parametrize(
