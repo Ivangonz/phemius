@@ -2,7 +2,11 @@ import pytest
 
 from phemius.errors import ModelError
 from phemius.services import agent
-from tests.models.fakes import FailingScriptModel, UseScriptModel
+from tests.models.fakes import (
+    FailingScriptModel,
+    RecordingScriptModel,
+    UseScriptModel,
+)
 
 
 @pytest.fixture
@@ -17,6 +21,27 @@ def test_no_model_configured_writes_offline_script() -> None:
     script = agent.make_script("Setup", "# Setup\n\nInstall it.", "executive")
 
     assert script.startswith("Here's the brief on Setup.")
+
+
+def test_model_receives_text_with_code_and_urls_made_speakable(
+    use_script_model: UseScriptModel,
+) -> None:
+    model = RecordingScriptModel()
+    use_script_model(model)
+    text = "Read [the guide](https://example.com).\n\n```sh\nmake run\n```"
+
+    agent.make_script("Setup", text, "neutral")
+
+    [sent] = model.script_texts
+    assert "https://" not in sent and "```" not in sent
+    assert sent.startswith("Read the guide.\n\n[Code example in sh, 1 line.")
+
+
+def test_offline_script_says_a_code_example_instead_of_reading_it() -> None:
+    script = agent.make_script("Setup", "Run:\n\n    make run\n", "neutral")
+
+    assert "make run" not in script
+    assert "code example" in script
 
 
 @pytest.mark.usefixtures("failing_model")

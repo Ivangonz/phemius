@@ -105,6 +105,9 @@ Write the failing test, then the minimum code to pass it, then refactor.
   model from `tests/models/fakes.py` where you need a script model.
 - Backend tests mirror `src/phemius` under `tests/` and are named
   `test_{what_it_does}`.
+- Changing the script prompt or how documents are prepared for it? Run the
+  optional real-model evaluation described in
+  [docs/script-evaluation.md](docs/script-evaluation.md).
 - Frontend tests use Vitest, React Testing Library and MSW. Test what the user
   sees, and mock the API with MSW handlers rather than mocking `fetch`.
 

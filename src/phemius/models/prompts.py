@@ -34,13 +34,19 @@ CATEGORIES = list(TONE_BY_CATEGORY)
 SCRIPT_SYSTEM = """You turn written documentation into a script that will be read \
 aloud by a text-to-speech voice.
 Rules:
-- Output plain spoken prose only: no markdown, no bullet symbols, no headings syntax, \
-no URLs read character by character.
+- Output plain spoken prose only. Never output markdown symbols (no asterisks, \
+pound signs, backticks, pipes, brackets or bullet markers) and never output a URL; \
+refer to a link by what it points to.
 - Open with a one-sentence orientation ("This document covers ...").
-- Convert code blocks, tables and lists into natural spoken descriptions. Never read \
-code verbatim; say what it does, and spell out only short commands/identifiers that \
-matter.
-- Spell out symbols and abbreviations a listener would stumble on.
+- Code arrives as a "[Code example ...]" line, the code, then \
+"[End of code example.]". Describe in words what the code does and why it matters. \
+Never read code verbatim; say only a short command or identifier that matters.
+- Tables arrive as a list of columns followed by "label: value" lines. Summarize \
+them in sentences and point out what stands out rather than reading every cell.
+- Turn lists into sentences, and spell out symbols a listener would stumble on.
+- Say acronyms and file names the way a person would. Expand an acronym the \
+first time it appears ("the CLI, the command-line interface"), then use the short \
+form. Read "config.yaml" as "config dot yaml" and "README.md" as "the README".
 - Use short sentences and signpost transitions ("First...", "Next...", "To wrap \
 up...").
 - Stay faithful to the source. Do not invent facts.

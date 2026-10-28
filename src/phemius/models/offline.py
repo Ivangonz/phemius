@@ -9,6 +9,7 @@ import re
 from phemius.config import Config
 from phemius.models.base import Analysis, ScriptModelCheck
 from phemius.models.prompts import TONE_BY_CATEGORY
+from phemius.models.spoken_text import CODE_EXAMPLE
 
 # Category rules, checked in order.
 CATEGORY_PATTERNS = [
@@ -19,6 +20,8 @@ CATEGORY_PATTERNS = [
     ("meeting notes / status", r"attendees|action items|standup|status"),
     ("proposal / spec", r"proposal|requirements|goals|non-goals|rfc"),
 ]
+
+CODE_MENTION = " (a code example appears here in the written version.) "
 
 
 class OfflineModel:
@@ -71,12 +74,8 @@ def _match_category(lowered: str) -> str:
 
 
 def _strip_markdown(text: str) -> str:
-    text = re.sub(
-        r"```.*?```",
-        " (a code example appears here in the written version.) ",
-        text,
-        flags=re.S,
-    )
+    text = re.sub(r"```.*?```", CODE_MENTION, text, flags=re.S)
+    text = CODE_EXAMPLE.sub(CODE_MENTION, text)
     text = re.sub(r"`([^`]+)`", r"\1", text)
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)

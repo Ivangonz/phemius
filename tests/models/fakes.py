@@ -36,3 +36,15 @@ class FailingScriptModel(FakeScriptModel):
 
     def write_script(self, title: str, text: str, tone: str) -> str:
         raise self.error
+
+
+class RecordingScriptModel(FakeScriptModel):
+    """Keeps the text each script request received."""
+
+    def __init__(self, script: str = "A fake spoken script.") -> None:
+        super().__init__(script)
+        self.script_texts: list[str] = []
+
+    def write_script(self, title: str, text: str, tone: str) -> str:
+        self.script_texts.append(text)
+        return self.script
