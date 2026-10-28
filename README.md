@@ -22,7 +22,8 @@ keeps its library in one folder, and works fully offline.
   [OpenRouter](https://openrouter.ai), OpenAI, or a local server such as LM
   Studio, vLLM or LiteLLM. Offline rules need no model at all.
 - **Narrate locally** with [Kokoro](https://github.com/hexgrad/kokoro) and one of
-  11 American and British English voices.
+  11 American and British English voices, or with hosted voices from OpenAI, a
+  self-hosted OpenAI-compatible speech server, or ElevenLabs.
 - **Keep a library** of documents and their audio, with more versions per
   document in another tone or voice.
 - **Save settings** through `PATCH /api/settings`, with environment variables
@@ -32,8 +33,8 @@ The web UI is in early development. Its Library, Sources, Queue and Settings
 pages are placeholders, so for now you add documents and play audio through the
 API (see [Hear your first document](#hear-your-first-document)).
 
-Not available yet: Docker and `uv tool install` installs, other voice engines,
-GitHub and Confluence
+Not available yet: Docker and `uv tool install` installs, the Piper voice
+engine, GitHub and Confluence
 sources, and the access token. Until the access token exists, keep Phemius bound
 to `127.0.0.1`, as `make run` does.
 
@@ -292,6 +293,8 @@ engine.
 | Engine (`PHEMIUS_TTS`) | Voices |
 | --- | --- |
 | `kokoro` (default) | `kokoro:af_heart` (default), `af_bella`, `af_nicole`, `af_sarah`, `af_sky`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`. The first letter is the accent (American or British), the second the gender. |
+| `openai_speech` | The names in `PHEMIUS_OPENAI_SPEECH_VOICES`, by default OpenAI's `alloy` (default), `ash`, `coral`, `echo`, `fable`, `nova`, `onyx`, `sage` and `shimmer`, for example `openai_speech:nova` |
+| `elevenlabs` | The voice ids in `PHEMIUS_ELEVENLABS_VOICES`, by default the premade voices George (`elevenlabs:JBFqnCBsd6RMkjVDRZzb`, default) and Sarah (`elevenlabs:EXAVITQu4vr4xnSDxMaL`) |
 | `stub` | `stub:silent`, silent audio for testing |
 
 `GET /api/config` lists the voices of the configured engine (`voices`), the
@@ -301,6 +304,59 @@ default voice (`default_voice`) and whether the engine is ready
 ```json
 "tts_status": {"is_ready": false, "message": "Kokoro is not installed.", "hint": "Run `uv sync --extra kokoro`, or set PHEMIUS_TTS=stub to test."}
 ```
+
+### Hosted voices
+
+Hosted voices send the script, never the source document, to the provider.
+Kokoro stays the default; choose a hosted engine with `PHEMIUS_TTS`.
+
+**OpenAI or an OpenAI-compatible speech server** (`openai_speech`) calls
+`POST {PHEMIUS_OPENAI_SPEECH_BASE_URL}/audio/speech`:
+
+```bash
+# OpenAI
+PHEMIUS_TTS=openai_speech PHEMIUS_OPENAI_SPEECH_API_KEY=sk-... make run
+
+# A self-hosted server that needs no key
+PHEMIUS_TTS=openai_speech \
+PHEMIUS_OPENAI_SPEECH_BASE_URL=http://127.0.0.1:8880/v1 \
+PHEMIUS_OPENAI_SPEECH_MODEL=kokoro \
+PHEMIUS_OPENAI_SPEECH_VOICES=af_heart,am_adam \
+make run
+```
+
+The server must support `"response_format": "wav"`. `tts_status` is ready when
+`{base URL}/models` answers; a server that does not list models (404) counts as
+reachable.
+
+**ElevenLabs** (`elevenlabs`) uses the `eleven_multilingual_v2` model:
+
+```bash
+PHEMIUS_TTS=elevenlabs ELEVENLABS_API_KEY=... \
+PHEMIUS_ELEVENLABS_VOICES=JBFqnCBsd6RMkjVDRZzb,your-cloned-voice-id make run
+```
+
+Voice ids come from the ElevenLabs voice library ("Copy voice ID"). `tts_status`
+is ready when the key can read the first voice in the list.
+
+How long scripts are narrated:
+
+- Each request stays under the provider's limit: 4,096 characters for
+  `openai_speech`, 5,000 for `elevenlabs` (below its 10,000 limit, so a failed
+  request is cheaper to retry). The script is split at paragraph and sentence
+  boundaries; only a single sentence longer than the limit is split between
+  words.
+- The parts are joined into one WAV file without ffmpeg: OpenAI-compatible
+  servers return WAV and ElevenLabs returns raw 24 kHz PCM. `PHEMIUS_FORMAT`
+  then converts the file as for any engine.
+- A bad key, an exhausted quota or a rate limit fails the audio with a hint, for
+  example `ElevenLabs returned 401. Your ElevenLabs credits are used up; upgrade
+  or wait for the reset.` Provider messages are not shown, because they can
+  echo part of the key.
+
+The API keys are write-only, like the OpenRouter key: save them with
+`PATCH /api/settings` (`openai_speech_api_key`, `elevenlabs_api_key`) or set
+them as environment variables. They are never returned or logged.
 
 ## Watched folder
 
@@ -351,8 +407,14 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_OLLAMA_URL` | `ollama_url` | `http://localhost:11434` | Ollama server address. Used only by the `ollama` provider. |
 | `PHEMIUS_OLLAMA_MODEL` | `ollama_model` | `llama3.2` | Ollama model name, as shown by `ollama list`. |
 | `PHEMIUS_OLLAMA_TIMEOUT` | `ollama_timeout` | `600` | Seconds to wait for one Ollama reply. A positive whole number. |
-| `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro` or `stub` (silent audio, no model download). |
+| `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro`, `openai_speech`, `elevenlabs` or `stub` (silent audio, no model download). See [Voices](#voices). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
+| `PHEMIUS_OPENAI_SPEECH_BASE_URL` | `openai_speech_base_url` | `https://api.openai.com/v1` | Base URL of an OpenAI-compatible speech server. See [Hosted voices](#hosted-voices). |
+| `PHEMIUS_OPENAI_SPEECH_API_KEY` | `openai_speech_api_key` | not set | API key for the speech server; leave unset for a server that needs none. Write-only through the API. |
+| `PHEMIUS_OPENAI_SPEECH_MODEL` | `openai_speech_model` | `tts-1` | Speech model name sent to the server. |
+| `PHEMIUS_OPENAI_SPEECH_VOICES` | `openai_speech_voices` | `alloy,ash,coral,echo,fable,nova,onyx,sage,shimmer` | Comma-separated voice names the server offers; the first is the engine's default. |
+| `ELEVENLABS_API_KEY` | `elevenlabs_api_key` | not set | ElevenLabs API key. Write-only through the API. |
+| `PHEMIUS_ELEVENLABS_VOICES` | `elevenlabs_voices` | `JBFqnCBsd6RMkjVDRZzb,EXAVITQu4vr4xnSDxMaL` | Comma-separated ElevenLabs voice ids; the first is the engine's default. |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
 | `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a`, `mp4` or `mp3`. Formats other than WAV need `ffmpeg` on your `PATH`; without it, Phemius keeps the WAV file. |
 
@@ -361,7 +423,7 @@ Invalid values are reported as follows:
 | Problem | What happens |
 | --- | --- |
 | A value of the wrong type or outside the allowed list, for example `PHEMIUS_FORMAT=ogg` or `PHEMIUS_SCRIPT_MAX_TOKENS=abc` | The server does not start. The log shows `Setting output_format has an invalid value.` (the setting key from the table) and `Application startup failed`. Through `PATCH /api/settings`, the same values are rejected with `422`. |
-| Unknown `PHEMIUS_TTS` | The server starts and logs `voice_engine_not_ready`. Creating audio fails with `Unknown voice engine '...'. Set PHEMIUS_TTS to one of: kokoro, stub.` |
+| Unknown `PHEMIUS_TTS` | The server starts and logs `voice_engine_not_ready`. Creating audio fails with `Unknown voice engine '...'. Set PHEMIUS_TTS to one of: kokoro, stub, openai_speech, elevenlabs.` |
 | `PHEMIUS_VOICE` that the engine does not offer | Creating audio fails with `PHEMIUS_VOICE '...' is not a kokoro voice.` and a list of valid ids. |
 | Unknown `PHEMIUS_SCRIPT_PROVIDER` | Categorizing falls back to the offline rules; scripts fail with `Unknown script provider '...'.` and the valid names. |
 | `PHEMIUS_SCRIPT_PROVIDER=openrouter` without a key | Scripts fail with `OpenRouter needs an API key.` |

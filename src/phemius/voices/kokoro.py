@@ -1,9 +1,11 @@
 """Local narration with Kokoro (optional `kokoro` extra, Python 3.12)."""
 
+from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
+from phemius.config import Config
 from phemius.errors import VoiceError
 from phemius.voices.base import Voice, VoiceCheck
 from phemius.voices.text import split_chunks
@@ -77,3 +79,13 @@ class KokoroEngine:
         if not parts:
             raise VoiceError("Kokoro produced no audio for this script.")
         soundfile.write(str(out_path), np.concatenate(parts), SAMPLE_RATE)
+
+
+def from_config(config: Config) -> KokoroEngine:
+    return _shared_engine()
+
+
+# One shared engine so each accent's KPipeline loads only once.
+@lru_cache(maxsize=1)
+def _shared_engine() -> KokoroEngine:
+    return KokoroEngine()

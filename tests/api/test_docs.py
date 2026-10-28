@@ -101,7 +101,7 @@ def test_upload_keeps_document_when_voice_engine_is_unknown(
     result = response.json()[0]
     assert response.status_code == 200
     assert result["doc_id"] is not None
-    assert "Set PHEMIUS_TTS to one of: kokoro, stub." in result["error"]
+    assert "Set PHEMIUS_TTS to one of:" in result["error"]
 
 
 def test_missing_document_returns_not_found(client: TestClient) -> None:

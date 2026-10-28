@@ -111,3 +111,18 @@ def test_invalid_env_value_names_the_variable(monkeypatch: pytest.MonkeyPatch) -
     assert raised.value.field == "output_format"
     assert raised.value.hint is not None
     assert "PHEMIUS_FORMAT" in raised.value.hint
+
+
+def test_voice_list_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PHEMIUS_OPENAI_SPEECH_VOICES", " nova ,, onyx ")
+
+    assert load_config().openai_speech_voices == "nova,onyx"
+
+
+def test_voice_list_without_ids_is_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PHEMIUS_ELEVENLABS_VOICES", " , ")
+
+    with pytest.raises(PhemiusError) as raised:
+        load_config()
+
+    assert raised.value.field == "elevenlabs_voices"
