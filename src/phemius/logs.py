@@ -19,4 +19,3 @@ def configure_logging(level: str) -> None:
         # Uncached so structlog.testing.capture_logs works in tests.
         cache_logger_on_first_use=False,
     )
-import os
