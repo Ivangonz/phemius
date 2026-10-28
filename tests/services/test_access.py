@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from freezegun import freeze_time
 
 from phemius.config import AccessMode
 from phemius.errors import PhemiusError
@@ -120,3 +121,33 @@ def test_invalid_tokens_are_rejected(candidate: str | None) -> None:
 
 def test_no_token_is_valid_before_one_exists() -> None:
     assert not access.is_valid_token("phm_anything")
+
+
+def test_signed_audio_url_is_valid_until_it_expires() -> None:
+    access.regenerate_token()
+    with freeze_time() as frozen:
+        signed = access.sign_audio_url(3)
+        expires = str(signed.expires)
+        is_valid_now = access.is_valid_audio_signature(3, expires, signed.signature)
+        frozen.tick(access.AUDIO_URL_LIFETIME_SECONDS + 1)
+        is_valid_later = access.is_valid_audio_signature(3, expires, signed.signature)
+
+    assert is_valid_now
+    assert not is_valid_later
+
+
+@pytest.mark.parametrize("expires", [None, "", "soon", "-1"])
+def test_audio_signature_with_a_malformed_expiry_is_rejected(
+    expires: str | None,
+) -> None:
+    access.regenerate_token()
+    signed = access.sign_audio_url(3)
+
+    assert not access.is_valid_audio_signature(3, expires, signed.signature)
+
+
+def test_audio_url_is_unsigned_without_a_token() -> None:
+    signed = access.sign_audio_url(3)
+
+    assert signed.signature is None
+    assert not access.is_valid_audio_signature(3, str(signed.expires), "")

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import ipaddress
 import secrets
+import time
 from dataclasses import dataclass
 
 import structlog
@@ -17,8 +18,17 @@ LOOPBACK_HOST = "127.0.0.1"
 ALL_INTERFACES_HOST = "0.0.0.0"
 ENV_TOKEN_NAME = "ACCESS_TOKEN"
 MIN_ENV_TOKEN_LENGTH = 16
+# Long enough for a long listen; the player fetches a fresh URL when one expires.
+AUDIO_URL_LIFETIME_SECONDS = 6 * 60 * 60
+AUDIO_URL_KEY_LABEL = b"phemius-audio-url-v1"
 
 log = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class AudioUrlSignature:
+    expires: int
+    signature: str | None
 
 
 @dataclass(frozen=True)
@@ -122,6 +132,40 @@ def is_valid_token(candidate: str | None) -> bool:
     if not candidate or stored_hash is None:
         return False
     return hmac.compare_digest(_hash(candidate), stored_hash)
+
+
+def sign_audio_url(audio_id: int) -> AudioUrlSignature:
+    """Sign one audio file's URL until it expires.
+
+    Without a token there is nothing to sign with, so the signature is None.
+    """
+    expires = int(time.time()) + AUDIO_URL_LIFETIME_SECONDS
+    stored_hash = access_store.read_token_hash()
+    if stored_hash is None:
+        return AudioUrlSignature(expires=expires, signature=None)
+    signature = _audio_signature(stored_hash, audio_id, expires)
+    return AudioUrlSignature(expires=expires, signature=signature)
+
+
+def is_valid_audio_signature(
+    audio_id: int, expires: str | None, signature: str | None
+) -> bool:
+    if not expires or not expires.isdigit() or not signature:
+        return False
+    if int(expires) < time.time():
+        return False
+    stored_hash = access_store.read_token_hash()
+    if stored_hash is None:
+        return False
+    expected = _audio_signature(stored_hash, audio_id, int(expires))
+    return hmac.compare_digest(expected, signature)
+
+
+def _audio_signature(token_hash: str, audio_id: int, expires: int) -> str:
+    # Keyed from the token hash, so regenerating the token revokes every URL.
+    key = hmac.new(token_hash.encode(), AUDIO_URL_KEY_LABEL, hashlib.sha256)
+    message = f"{audio_id}:{expires}".encode()
+    return hmac.new(key.digest(), message, hashlib.sha256).hexdigest()
 
 
 def _new_token() -> str:

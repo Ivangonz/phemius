@@ -311,6 +311,24 @@
         "title": "AudioSummary",
         "type": "object"
       },
+      "AudioUrl": {
+        "properties": {
+          "expires": {
+            "title": "Expires",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires"
+        ],
+        "title": "AudioUrl",
+        "type": "object"
+      },
       "Body_upload_documents_api_docs_post": {
         "properties": {
           "files": {
@@ -1606,6 +1624,49 @@
           }
         },
         "summary": "Get Audio File",
+        "tags": [
+          "audio"
+        ]
+      }
+    },
+    "/api/audio/{audio_id}/url": {
+      "get": {
+        "description": "A short-lived URL for the audio file that works without the token header.",
+        "operationId": "get_audio_url_api_audio__audio_id__url_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "audio_id",
+            "required": true,
+            "schema": {
+              "title": "Audio Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioUrl"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Audio Url",
         "tags": [
           "audio"
         ]

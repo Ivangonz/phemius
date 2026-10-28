@@ -67,18 +67,105 @@ def test_health_and_ui_load_without_a_token(anonymous_client: TestClient) -> Non
     assert anonymous_client.get("/").status_code == 200
 
 
-def test_audio_file_accepts_a_query_string_token(
-    anonymous_client: TestClient, token: str
-) -> None:
+@pytest.fixture
+def audio_id(anonymous_client: TestClient, token: str) -> int:
     anonymous_client.headers.update(_bearer(token))
     uploaded = _upload_sample(anonymous_client, "deploy-guide.md")
     created = anonymous_client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
     audio = _wait_for_audio(anonymous_client, created.json()["audio_id"])
     del anonymous_client.headers["Authorization"]
-    file_url = f"/api/audio/{audio['id']}/file"
+    return int(audio["id"])
 
-    assert anonymous_client.get(file_url).status_code == 401
-    assert anonymous_client.get(file_url, params={"token": token}).status_code == 200
+
+def _signed_url(client: TestClient, token: str, audio_id: int) -> str:
+    response = client.get(f"/api/audio/{audio_id}/url", headers=_bearer(token))
+    assert response.status_code == 200
+    return str(response.json()["url"])
+
+
+def test_audio_url_endpoint_requires_the_token(
+    anonymous_client: TestClient, audio_id: int
+) -> None:
+    assert anonymous_client.get(f"/api/audio/{audio_id}/url").status_code == 401
+
+
+def test_signed_url_plays_the_audio_file_without_a_token(
+    anonymous_client: TestClient, token: str, audio_id: int
+) -> None:
+    signed_url = _signed_url(anonymous_client, token, audio_id)
+
+    assert signed_url.startswith(f"/api/audio/{audio_id}/file?expires=")
+    assert token not in signed_url
+    assert anonymous_client.get(signed_url).status_code == 200
+
+
+def test_audio_file_without_a_signature_or_token_is_rejected(
+    anonymous_client: TestClient, audio_id: int
+) -> None:
+    assert anonymous_client.get(f"/api/audio/{audio_id}/file").status_code == 401
+
+
+def test_audio_file_still_accepts_the_bearer_token(
+    anonymous_client: TestClient, token: str, audio_id: int
+) -> None:
+    response = anonymous_client.get(
+        f"/api/audio/{audio_id}/file", headers=_bearer(token)
+    )
+
+    assert response.status_code == 200
+
+
+def test_audio_file_rejects_a_query_string_token(
+    anonymous_client: TestClient, token: str, audio_id: int
+) -> None:
+    file_url = f"/api/audio/{audio_id}/file"
+
+    assert anonymous_client.get(file_url, params={"token": token}).status_code == 401
+
+
+def test_tampered_signed_url_is_rejected(
+    anonymous_client: TestClient, token: str, audio_id: int
+) -> None:
+    signed_url = _signed_url(anonymous_client, token, audio_id)
+    path, _, query = signed_url.partition("?")
+    params = dict(part.split("=") for part in query.split("&"))
+    later = int(params["expires"]) + 3600
+    tampered_expiry = f"{path}?expires={later}&sig={params['sig']}"
+    tampered_signature = f"{path}?expires={params['expires']}&sig={'0' * 64}"
+
+    assert anonymous_client.get(tampered_expiry).status_code == 401
+    assert anonymous_client.get(tampered_signature).status_code == 401
+
+
+def test_signed_url_is_only_valid_for_its_own_audio(
+    anonymous_client: TestClient, token: str, audio_id: int
+) -> None:
+    signed_url = _signed_url(anonymous_client, token, audio_id)
+    other_audio = signed_url.replace(
+        f"/api/audio/{audio_id}/", f"/api/audio/{audio_id + 1}/"
+    )
+
+    assert anonymous_client.get(other_audio).status_code == 401
+
+
+def test_regenerating_the_token_revokes_signed_urls(
+    anonymous_client: TestClient, token: str, audio_id: int
+) -> None:
+    signed_url = _signed_url(anonymous_client, token, audio_id)
+    access.regenerate_token()
+
+    assert anonymous_client.get(signed_url).status_code == 401
+
+
+def test_local_mode_audio_url_plays_without_a_token(client: TestClient) -> None:
+    uploaded = _upload_sample(client, "deploy-guide.md")
+    created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    audio = _wait_for_audio(client, created.json()["audio_id"])
+
+    response = client.get(f"/api/audio/{audio['id']}/url")
+
+    assert response.status_code == 200
+    assert client.get(response.json()["url"]).status_code == 200
 
 
 def test_query_string_token_is_rejected_outside_audio_files(
@@ -131,7 +218,7 @@ def test_token_never_appears_in_logs(
                 "/api/access/token", headers=_bearer(started_token)
             ).json()["token"]
             test_client.get("/api/docs", headers=_bearer(regenerated))
-            test_client.get("/api/audio/1/file", params={"token": regenerated})
+            test_client.get("/api/audio/1/url", headers=_bearer(regenerated))
 
     assert "access_token_created" in startup.out
     assert started_token not in startup.out
