@@ -6,6 +6,7 @@ from pathlib import Path
 
 ENV_PREFIX = "PHEMIUS_"
 DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
+OFFLINE_PROVIDER = "offline"
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class Config:
     output_format: str
     script_max_tokens: int
     log_level: str
+    script_provider: str
     openrouter_api_key: str | None = field(default=None, repr=False)
 
     @property
@@ -37,7 +39,13 @@ def _optional_path(value: str | None) -> Path | None:
     return Path(value).expanduser() if value else None
 
 
+def _default_script_provider(openrouter_api_key: str | None) -> str:
+    # Existing installs only set the key, so it keeps selecting OpenRouter.
+    return "openrouter" if openrouter_api_key else OFFLINE_PROVIDER
+
+
 def load_config() -> Config:
+    openrouter_api_key = os.environ.get("OPENROUTER_API_KEY") or None
     return Config(
         data_dir=_optional_path(read_env("DATA_DIR")) or Path.home() / ".phemius",
         model=read_env("MODEL") or DEFAULT_MODEL,
@@ -47,5 +55,8 @@ def load_config() -> Config:
         output_format=(read_env("FORMAT") or "wav").lower(),
         script_max_tokens=int(read_env("SCRIPT_MAX_TOKENS") or "8000"),
         log_level=(read_env("LOG_LEVEL") or "info").upper(),
-        openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
+        script_provider=(
+            read_env("SCRIPT_PROVIDER") or _default_script_provider(openrouter_api_key)
+        ).lower(),
+        openrouter_api_key=openrouter_api_key,
     )

@@ -32,3 +32,22 @@ def test_missing_kokoro_reports_install_hint_without_crashing(
         "message": "Kokoro is not installed.",
         "hint": INSTALL_HINT,
     }
+
+
+def test_config_reports_offline_rules_without_a_model(client: TestClient) -> None:
+    body = client.get("/api/config").json()
+
+    assert body["llm"] is False
+    assert body["script_provider"] == "offline"
+
+
+def test_config_reports_configured_provider_without_the_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-secret")
+
+    response = client.get("/api/config")
+
+    assert response.json()["llm"] is True
+    assert response.json()["script_provider"] == "openrouter"
+    assert "sk-or-secret" not in response.text
