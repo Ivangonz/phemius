@@ -1548,6 +1548,57 @@
         ],
         "type": "string"
       },
+      "TodayStats": {
+        "properties": {
+          "audio_files": {
+            "title": "Audio Files",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          },
+          "narration_minutes": {
+            "title": "Narration Minutes",
+            "type": "number"
+          },
+          "scripts_written": {
+            "title": "Scripts Written",
+            "type": "integer"
+          },
+          "unpriced_scripts": {
+            "title": "Unpriced Scripts",
+            "type": "integer"
+          },
+          "utc_offset_minutes": {
+            "title": "Utc Offset Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "utc_offset_minutes",
+          "scripts_written",
+          "audio_files",
+          "narration_minutes",
+          "estimated_cost_usd",
+          "unpriced_scripts"
+        ],
+        "title": "TodayStats",
+        "type": "object"
+      },
       "UploadResult": {
         "properties": {
           "doc_id": {
@@ -2647,6 +2698,52 @@
         "summary": "Update Settings",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/stats/today": {
+      "get": {
+        "description": "Work done today: the calendar day at `utc_offset_minutes` (default UTC).\n\nBrowsers can send `-new Date().getTimezoneOffset()`.",
+        "operationId": "today_api_stats_today_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 840,
+              "minimum": -720,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Today",
+        "tags": [
+          "stats"
         ]
       }
     }
