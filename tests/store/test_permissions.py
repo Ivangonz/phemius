@@ -16,7 +16,7 @@ def test_new_library_is_private_to_its_owner(isolated_env: Path) -> None:
     database.init_database(db_path)
 
     with database.transaction() as connection:
-        connection.execute("INSERT INTO docs (title) VALUES ('Deploy guide')")
+        connection.execute("INSERT INTO docs (source) VALUES ('deploy-guide.md')")
         assert mode_of(Path(f"{db_path}-wal")) == 0o600
         assert mode_of(Path(f"{db_path}-shm")) == 0o600
     assert mode_of(isolated_env) == 0o700
