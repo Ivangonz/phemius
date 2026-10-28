@@ -12,7 +12,7 @@ from phemius.errors import NotFoundError, PhemiusError
 from phemius.services import agent, ingest, voices
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
-from phemius.store.documents import Document, NewDocument
+from phemius.store.documents import Document, NewDocument, StoredVersion
 from phemius.voices import get_engine
 
 log = structlog.get_logger(__name__)
@@ -28,8 +28,8 @@ FORMATS = {
 }
 
 
-def import_file(path: Path, source: str | None = None) -> tuple[int, bool]:
-    """Extract, categorize and store a document. Returns `(document_id, is_created)`."""
+def import_file(path: Path, source: str | None = None) -> StoredVersion:
+    """Extract, categorize and store a document, or a new version of it."""
     text = ingest.extract_text(path)
     if not text.strip():
         raise ValueError(f"No text found in {path.name}")
@@ -38,9 +38,14 @@ def import_file(path: Path, source: str | None = None) -> tuple[int, bool]:
     document = NewDocument(
         title=title, source=source or str(path), text=text, **analysis
     )
-    document_id, is_created = document_store.add_document(document)
-    log.info("document_imported", document_id=document_id, is_created=is_created)
-    return document_id, is_created
+    stored = document_store.add_document(document)
+    log.info(
+        "document_imported",
+        document_id=stored.document_id,
+        version=stored.version,
+        outcome=stored.outcome,
+    )
+    return stored
 
 
 def build_audio(
@@ -56,7 +61,9 @@ def build_audio(
         raise NotFoundError(f"Document {document_id} not found")
     tone = tone or document["suggested_tone"]
     voice = voices.resolve_voice(voice)
-    audio_id = audio_store.create_audio(document_id, tone, voice)
+    audio_id = audio_store.create_audio(
+        document_id, document["version_id"], tone, voice
+    )
     threading.Thread(
         target=generate_audio, args=(audio_id, document, tone, voice), daemon=True
     ).start()

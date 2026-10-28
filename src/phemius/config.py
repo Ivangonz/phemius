@@ -29,6 +29,7 @@ OFFLINE_PROVIDER = "offline"
 
 type SettingSource = Literal["env", "saved", "default"]
 type OutputFormat = Literal["wav", "m4a", "mp3", "mp4"]
+type WatchOnChange = Literal["mark", "regenerate"]
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,11 @@ class Settings(BaseModel):
     watch_dir: Annotated[
         Path | None, AfterValidator(_expand_user), EnvVar("PHEMIUS_WATCH_DIR")
     ] = None
+    # "mark" by default: editors save often, and regenerating on every save would
+    # spend model credits and voice time on drafts.
+    watch_on_change: Annotated[
+        WatchOnChange, BeforeValidator(_lower), EnvVar("PHEMIUS_WATCH_ON_CHANGE")
+    ] = "mark"
     output_format: Annotated[
         OutputFormat, BeforeValidator(_lower), EnvVar("PHEMIUS_FORMAT")
     ] = "wav"

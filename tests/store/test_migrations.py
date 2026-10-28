@@ -1,7 +1,9 @@
 import sqlite3
 from pathlib import Path
 
-from phemius.store import database
+import pytest
+
+from phemius.store import database, migrations
 from phemius.store.migrations import MIGRATIONS
 
 
@@ -45,3 +47,142 @@ def test_voice_migration_leaves_namespaced_ids_alone_on_restart(
     database.init_database(db_path)
 
     assert _stored_voices() == ["kokoro:af_heart", "stub:silent"]
+
+
+LEGACY_DOCS = [
+    (
+        1,
+        "Deploy guide",
+        "deploy.md",
+        "hash-1",
+        "Ship it.",
+        "how-to",
+        "Steps.",
+        "teacher",
+        100.0,
+    ),
+    (
+        2,
+        "Notes",
+        "notes.md",
+        "hash-2",
+        "Old notes.",
+        "notes",
+        "Recap.",
+        "podcast",
+        200.0,
+    ),
+    (
+        3,
+        "Notes",
+        "notes.md",
+        "hash-3",
+        "New notes.",
+        "notes",
+        "Recap 2.",
+        "podcast",
+        300.0,
+    ),
+]
+LEGACY_AUDIO = [
+    (
+        1,
+        1,
+        "teacher",
+        "kokoro:af_heart",
+        "Script one.",
+        "/audio/1.wav",
+        "done",
+        None,
+        110.0,
+    ),
+    (2, 3, "podcast", "kokoro:bm_george", None, None, "error", "402", 310.0),
+]
+
+
+def _library_before_versions(db_path: Path) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(db_path)
+    with connection:
+        for migration in MIGRATIONS[:3]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=3")
+        connection.executemany(
+            "INSERT INTO docs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", LEGACY_DOCS
+        )
+        connection.executemany(
+            "INSERT INTO audio VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", LEGACY_AUDIO
+        )
+        connection.execute(
+            "INSERT INTO settings VALUES ('output_format', '\"mp3\"', 1.0)"
+        )
+    connection.close()
+
+
+def test_existing_documents_become_version_one_without_loss(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_versions(db_path)
+
+    database.init_database(db_path)
+
+    with database.transaction() as connection:
+        documents = connection.execute(
+            "SELECT d.id, v.title, d.source, v.content_hash, v.text, v.category,"
+            " v.summary, v.suggested_tone, d.created, v.number"
+            " FROM docs d JOIN doc_versions v ON v.doc_id = d.id ORDER BY d.id"
+        ).fetchall()
+        audio = connection.execute(
+            "SELECT a.id, a.doc_id, a.tone, a.voice, a.script, a.path, a.status,"
+            " a.error, a.created, v.doc_id AS version_doc_id"
+            " FROM audio a JOIN doc_versions v ON v.id = a.version_id ORDER BY a.id"
+        ).fetchall()
+        settings = connection.execute("SELECT key FROM settings").fetchall()
+    assert [tuple(row) for row in documents] == [(*doc, 1) for doc in LEGACY_DOCS]
+    assert [tuple(row)[:-1] for row in audio] == LEGACY_AUDIO
+    assert [row["version_doc_id"] for row in audio] == [1, 3]
+    assert [row["key"] for row in settings] == ["output_format"]
+
+
+def test_version_migration_keeps_rows_with_missing_values(isolated_env: Path) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_versions(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("INSERT INTO docs (id) VALUES (4)")
+        connection.execute("INSERT INTO audio (id, doc_id) VALUES (3, 99)")
+    connection.close()
+
+    database.init_database(db_path)
+
+    with database.transaction() as connection:
+        bare_versions = connection.execute(
+            "SELECT number FROM doc_versions WHERE doc_id = 4"
+        ).fetchall()
+        orphan = connection.execute(
+            "SELECT doc_id, version_id FROM audio WHERE id = 3"
+        ).fetchone()
+    assert [row["number"] for row in bare_versions] == [1]
+    assert tuple(orphan) == (99, None)
+
+
+def test_failed_migration_leaves_the_library_unchanged(
+    isolated_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_versions(db_path)
+
+    def fail(connection: sqlite3.Connection) -> None:
+        raise sqlite3.OperationalError("disk full")
+
+    monkeypatch.setattr(migrations, "MIGRATIONS", [*MIGRATIONS, fail])
+
+    with pytest.raises(sqlite3.OperationalError):
+        database.init_database(db_path)
+
+    with sqlite3.connect(db_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        titles = connection.execute("SELECT title FROM docs ORDER BY id").fetchall()
+    connection.close()
+    assert version == 3
+    assert [title for (title,) in titles] == ["Deploy guide", "Notes", "Notes"]

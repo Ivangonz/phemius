@@ -37,11 +37,17 @@ def _connect() -> sqlite3.Connection:
 
 
 @contextmanager
-def transaction() -> Iterator[sqlite3.Connection]:
-    """One connection and one transaction: commit on success, roll back on error."""
+def transaction(is_immediate: bool = False) -> Iterator[sqlite3.Connection]:
+    """One connection and one transaction: commit on success, roll back on error.
+
+    `is_immediate` takes the write lock up front, so a read-then-write sequence
+    cannot race another writer.
+    """
     connection = _connect()
     try:
         with connection:
+            if is_immediate:
+                connection.execute("BEGIN IMMEDIATE")
             yield connection
     finally:
         connection.close()

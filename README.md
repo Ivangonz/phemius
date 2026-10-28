@@ -259,12 +259,15 @@ PHEMIUS_WATCH_DIR=~/Documents/listen make run
 - The folder is created if it does not exist, and subfolders are included.
 - On startup, every supported file already in the folder is imported.
 - While the server runs, new and changed files are imported about a second after
-  they are written, and their audio is generated automatically.
+  they are written. New files get their audio generated automatically.
 - Hidden files (names starting with `.`) and unsupported types are skipped.
-- Documents are deduplicated by content: a file whose text is already in the
-  library is not imported again, and no new audio is generated for it.
-- Editing a file imports its new text as a new document. The earlier version
-  and its audio stay in the library.
+- A document is identified by its path. Editing a file adds a new version of the
+  same document; earlier versions and their audio stay in the library. Saving a
+  file without changing its text adds nothing.
+- `PHEMIUS_WATCH_ON_CHANGE` decides what happens when a file changes: `mark`
+  (default) only marks the document as changed (`is_changed` in `GET /api/docs`)
+  so you can generate audio when the edit is finished; `regenerate` generates
+  audio for every new version, which spends model credits on each save.
 - The folder is read at startup, so restart after changing it, including when
   you change a saved `watch_dir` setting.
 
@@ -294,6 +297,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro` or `stub` (silent audio, no model download). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
+| `PHEMIUS_WATCH_ON_CHANGE` | `watch_on_change` | `mark` | What a changed watched file does: `mark` (mark the document as changed) or `regenerate` (generate audio for the new version). |
 | `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a`, `mp4` or `mp3`. Formats other than WAV need `ffmpeg` on your `PATH`; without it, Phemius keeps the WAV file. |
 
 Invalid values are reported as follows:
@@ -323,8 +327,8 @@ Every endpoint is listed with its schema in the interactive docs at
 | `GET /api/settings` | Every setting with its value, `source` (`env`, `saved` or `default`) and `is_locked`; secrets only as `has_key` |
 | `PATCH /api/settings` | Save some settings (only the fields sent; `null` removes a saved value). `409` if a field is locked by an environment variable, `422` for invalid values |
 | `GET /api/docs` | Library: all documents, newest first, each with its audio |
-| `POST /api/docs` | Upload one or more files (multipart field `files`). Generates audio unless `?auto_audio=false` |
-| `GET /api/docs/{id}` | One document, including its extracted text |
+| `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false` |
+| `GET /api/docs/{id}` | One document's latest version, including its extracted text |
 | `POST /api/docs/{id}/audio` | Generate another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional |
 | `GET /api/audio/{id}` | One audio, including its status, script and error |
 | `GET /api/audio/{id}/file` | The audio file, once its status is `done` |

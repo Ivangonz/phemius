@@ -59,14 +59,72 @@ def _create_settings_table(connection: sqlite3.Connection) -> None:
     )
 
 
+_DOCUMENT_VERSION_STATEMENTS = [
+    "ALTER TABLE docs RENAME TO legacy_docs",
+    """
+    CREATE TABLE docs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT,
+        created REAL
+    )
+    """,
+    "INSERT INTO docs (id, source, created)"
+    " SELECT id, source, created FROM legacy_docs",
+    "CREATE INDEX docs_source ON docs (source)",
+    """
+    CREATE TABLE doc_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_id INTEGER NOT NULL REFERENCES docs (id),
+        number INTEGER NOT NULL,
+        title TEXT,
+        content_hash TEXT,
+        text TEXT,
+        category TEXT,
+        summary TEXT,
+        suggested_tone TEXT,
+        created REAL,
+        UNIQUE (doc_id, number)
+    )
+    """,
+    """
+    INSERT INTO doc_versions (doc_id, number, title, content_hash, text, category,
+        summary, suggested_tone, created)
+    SELECT id, 1, title, content_hash, text, category, summary, suggested_tone,
+        created
+    FROM legacy_docs ORDER BY id
+    """,
+    "ALTER TABLE audio ADD COLUMN version_id INTEGER REFERENCES doc_versions (id)",
+    """
+    UPDATE audio SET version_id =
+        (SELECT id FROM doc_versions WHERE doc_versions.doc_id = audio.doc_id)
+    """,
+    "DROP TABLE legacy_docs",
+]
+
+
+def _add_document_versions(connection: sqlite3.Connection) -> None:
+    """Split docs into an identity (source) and its versions; each doc becomes v1.
+
+    The docs table is rebuilt because SQLite cannot drop its UNIQUE content_hash
+    column. Several legacy docs may share a source (each edit used to create a new
+    doc), so source is indexed but not unique; lookups take the newest doc.
+    """
+    for statement in _DOCUMENT_VERSION_STATEMENTS:
+        connection.execute(statement)
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
     _create_settings_table,
+    _add_document_versions,
 ]
 
 
 def run_migrations(connection: sqlite3.Connection) -> None:
+    # sqlite3 opens no implicit transaction before DDL, so without this a failed
+    # migration would leave a half-rebuilt table behind.
+    connection.execute("BEGIN IMMEDIATE")
     current_version: int = connection.execute("PRAGMA user_version").fetchone()[0]
     for version, migration in enumerate(MIGRATIONS, start=1):
         if version > current_version:

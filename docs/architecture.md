@@ -28,9 +28,11 @@ flowchart LR
    (`PHEMIUS_SCRIPT_PROVIDER`) for a category, a one-sentence summary and a
    suggested tone. If the model fails, it falls back to the offline rules and
    keeps the error for `GET /api/config`.
-3. **Library.** `store/documents.py` saves the document. Documents are
-   deduplicated by a SHA-256 hash of their text, so the same content is stored
-   once.
+3. **Library.** `store/documents.py` saves the document. A document is
+   identified by its source (path or upload filename) and has versions: new text
+   from the same source, compared by a SHA-256 hash, adds a version, and the
+   same text adds nothing. Each audio belongs to one version, so earlier audio is
+   kept.
 4. **Script.** For each audio (one per tone and voice), `services/pipeline.py`
    resolves the voice through `services/voices.py` and starts a background
    thread, which asks the script model for a spoken script. A model failure,

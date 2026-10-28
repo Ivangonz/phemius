@@ -166,6 +166,8 @@ export interface components {
             status: components["schemas"]["AudioStatus"];
             /** Tone */
             tone: string;
+            /** Version Id */
+            version_id: number | null;
             /** Voice */
             voice: string | null;
         };
@@ -192,6 +194,8 @@ export interface components {
             status: components["schemas"]["AudioStatus"];
             /** Tone */
             tone: string;
+            /** Version */
+            version: number | null;
             /** Voice */
             voice: string | null;
         };
@@ -220,6 +224,10 @@ export interface components {
             text: string;
             /** Title */
             title: string;
+            /** Version */
+            version: number;
+            /** Version Id */
+            version_id: number;
         };
         /** DocumentSummary */
         DocumentSummary: {
@@ -231,6 +239,8 @@ export interface components {
             created: number;
             /** Id */
             id: number;
+            /** Is Changed */
+            is_changed: boolean;
             /** Source */
             source: string;
             /** Suggested Tone */
@@ -239,6 +249,8 @@ export interface components {
             summary: string;
             /** Title */
             title: string;
+            /** Version */
+            version: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -295,6 +307,8 @@ export interface components {
             voice_engine?: string;
             /** Watch Dir */
             watch_dir?: string | null;
+            /** @default mark */
+            watch_on_change?: components["schemas"]["WatchOnChange"];
         };
         /** SettingsOverview */
         SettingsOverview: {
@@ -317,6 +331,8 @@ export interface components {
             error?: string | null;
             /** File */
             file: string;
+            /** Version */
+            version?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -331,6 +347,8 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** @enum {string} */
+        WatchOnChange: "mark" | "regenerate";
     };
     responses: never;
     parameters: never;

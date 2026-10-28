@@ -55,6 +55,17 @@
             "title": "Tone",
             "type": "string"
           },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
           "voice": {
             "anyOf": [
               {
@@ -70,6 +81,7 @@
         "required": [
           "id",
           "doc_id",
+          "version_id",
           "tone",
           "voice",
           "script",
@@ -156,6 +168,17 @@
             "title": "Tone",
             "type": "string"
           },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
           "voice": {
             "anyOf": [
               {
@@ -170,6 +193,7 @@
         },
         "required": [
           "id",
+          "version",
           "tone",
           "voice",
           "status",
@@ -232,10 +256,20 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "integer"
           }
         },
         "required": [
           "id",
+          "version_id",
+          "version",
           "title",
           "source",
           "content_hash",
@@ -269,6 +303,10 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_changed": {
+            "title": "Is Changed",
+            "type": "boolean"
+          },
           "source": {
             "title": "Source",
             "type": "string"
@@ -284,16 +322,22 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
           }
         },
         "required": [
           "id",
+          "version",
           "title",
           "source",
           "category",
           "summary",
           "suggested_tone",
           "created",
+          "is_changed",
           "audio"
         ],
         "title": "DocumentSummary",
@@ -466,6 +510,10 @@
               }
             ],
             "title": "Watch Dir"
+          },
+          "watch_on_change": {
+            "$ref": "#/components/schemas/WatchOnChange",
+            "default": "mark"
           }
         },
         "title": "Settings",
@@ -533,6 +581,17 @@
           "file": {
             "title": "File",
             "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
           }
         },
         "required": [
@@ -580,6 +639,13 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "WatchOnChange": {
+        "enum": [
+          "mark",
+          "regenerate"
+        ],
+        "type": "string"
       }
     }
   },
