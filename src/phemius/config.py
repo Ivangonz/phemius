@@ -13,7 +13,7 @@ class Config:
     data_dir: Path
     model: str
     voice_engine: str
-    default_voice: str
+    default_voice: str | None  # None means the engine's first voice
     watch_dir: Path | None
     output_format: str
     script_max_tokens: int
@@ -42,7 +42,7 @@ def load_config() -> Config:
         data_dir=_optional_path(read_env("DATA_DIR")) or Path.home() / ".phemius",
         model=read_env("MODEL") or DEFAULT_MODEL,
         voice_engine=(read_env("TTS") or "kokoro").lower(),
-        default_voice=read_env("VOICE") or "af_heart",
+        default_voice=read_env("VOICE"),
         watch_dir=_optional_path(read_env("WATCH_DIR")),
         output_format=(read_env("FORMAT") or "wav").lower(),
         script_max_tokens=int(read_env("SCRIPT_MAX_TOKENS") or "8000"),

@@ -41,6 +41,7 @@ def test_upload_then_generate_audio_with_stub_engine(client: TestClient) -> None
     audio_file = client.get(f"/api/audio/{audio['id']}/file")
 
     assert audio["status"] == "done", audio["error"]
+    assert audio["voice"] == "stub:silent"
     assert audio["script"]
     assert audio_file.status_code == 200
     assert audio_file.headers["content-type"] == "audio/wav"
@@ -73,6 +74,35 @@ def test_unknown_tone_returns_standard_error(client: TestClient) -> None:
     body = response.json()
     assert body["code"] == "invalid_input"
     assert body["errors"][0]["field"] == "tone"
+
+
+def test_unknown_voice_returns_standard_error(client: TestClient) -> None:
+    uploaded = _upload_sample(client, "deploy-guide.md")
+
+    response = client.post(
+        f"/api/docs/{uploaded['doc_id']}/audio", json={"voice": "af_typo"}
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "invalid_input"
+    assert body["errors"][0]["field"] == "voice"
+
+
+def test_upload_keeps_document_when_voice_engine_is_unknown(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_TTS", "espeak")
+    content = (SAMPLES / "deploy-guide.md").read_bytes()
+
+    response = client.post(
+        "/api/docs", files=[("files", ("deploy.md", content, "text/markdown"))]
+    )
+
+    result = response.json()[0]
+    assert response.status_code == 200
+    assert result["doc_id"] is not None
+    assert "Set PHEMIUS_TTS to one of: kokoro, stub." in result["error"]
 
 
 def test_missing_document_returns_not_found(client: TestClient) -> None:

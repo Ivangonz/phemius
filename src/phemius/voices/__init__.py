@@ -1,21 +1,43 @@
-"""Voice engines. Select one with PHEMIUS_TTS (kokoro or stub)."""
+"""Voice engines, selected with PHEMIUS_TTS.
 
+Adding an engine means adding one module and one line to `ENGINES`.
+"""
+
+from collections.abc import Callable
 from functools import lru_cache
-from pathlib import Path
-from typing import Protocol
 
-from phemius.voices.kokoro import VOICES, KokoroEngine
+from phemius.config import Config
+from phemius.errors import VoiceError
+from phemius.voices.base import Voice, VoiceCheck, VoiceEngine, namespace_voice
+from phemius.voices.kokoro import KokoroEngine
 from phemius.voices.stub import StubEngine
 
-__all__ = ["VOICES", "VoiceEngine", "get_engine"]
+__all__ = [
+    "ENGINES",
+    "Voice",
+    "VoiceCheck",
+    "VoiceEngine",
+    "get_engine",
+    "namespace_voice",
+]
+
+ENGINES: dict[str, Callable[[], VoiceEngine]] = {
+    "kokoro": KokoroEngine,
+    "stub": StubEngine,
+}
 
 
-class VoiceEngine(Protocol):
-    extension: str
+def get_engine(config: Config) -> VoiceEngine:
+    """The configured engine. Raises `VoiceError` for an unknown engine name."""
+    return _engine_named(config.voice_engine)
 
-    def synthesize(self, script: str, out_path: Path, voice: str) -> None: ...
 
-
-@lru_cache(maxsize=2)
-def get_engine(name: str) -> VoiceEngine:
-    return StubEngine() if name == "stub" else KokoroEngine()
+# Engines are cached so heavy models (one KPipeline per accent) load only once.
+@lru_cache(maxsize=len(ENGINES))
+def _engine_named(name: str) -> VoiceEngine:
+    if name not in ENGINES:
+        raise VoiceError(
+            f"Unknown voice engine '{name}'.",
+            hint=f"Set PHEMIUS_TTS to one of: {', '.join(ENGINES)}.",
+        )
+    return ENGINES[name]()

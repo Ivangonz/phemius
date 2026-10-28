@@ -17,6 +17,7 @@ from phemius.api import audio, docs, health, library_config
 from phemius.api.errors import register_exception_handlers
 from phemius.config import load_config
 from phemius.logs import configure_logging
+from phemius.services.voices import check_engine
 from phemius.sources.folder import start_watcher
 from phemius.store.database import init_database
 
@@ -33,10 +34,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config.audio_dir.mkdir(parents=True, exist_ok=True)
     observer = start_watcher(config.watch_dir) if config.watch_dir else None
     log.info("phemius_started", version=__version__, data_dir=str(config.data_dir))
+    _warn_if_voice_engine_not_ready()
     yield
     if observer:
         observer.stop()
         observer.join()
+
+
+def _warn_if_voice_engine_not_ready() -> None:
+    status = check_engine()
+    if not status.is_ready:
+        log.warning("voice_engine_not_ready", message=status.message, hint=status.hint)
 
 
 async def log_requests(

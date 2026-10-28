@@ -9,7 +9,7 @@ import structlog
 
 from phemius.config import load_config
 from phemius.errors import NotFoundError, PhemiusError
-from phemius.services import agent, ingest
+from phemius.services import agent, ingest, voices
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
 from phemius.store.documents import Document, NewDocument
@@ -46,12 +46,16 @@ def import_file(path: Path, source: str | None = None) -> tuple[int, bool]:
 def build_audio(
     document_id: int, tone: str | None = None, voice: str | None = None
 ) -> int:
-    """Create an audio record and generate it in a background thread."""
+    """Create an audio record and generate it in a background thread.
+
+    Raises `InvalidInputError` for a voice the configured engine does not offer
+    and `VoiceError` when PHEMIUS_TTS or PHEMIUS_VOICE is misconfigured.
+    """
     document = document_store.get_document(document_id)
     if document is None:
         raise NotFoundError(f"Document {document_id} not found")
     tone = tone or document["suggested_tone"]
-    voice = voice or load_config().default_voice
+    voice = voices.resolve_voice(voice)
     audio_id = audio_store.create_audio(document_id, tone, voice)
     threading.Thread(
         target=generate_audio, args=(audio_id, document, tone, voice), daemon=True
@@ -69,12 +73,12 @@ def generate_audio(audio_id: int, document: Document, tone: str, voice: str) -> 
         audio_store.mark_done(audio_id, str(_convert(out_path)))
     except Exception as error:  # stored on the audio row and shown in the UI
         log.warning("audio_failed", audio_id=audio_id, error_type=type(error).__name__)
-        audio_store.mark_failed(audio_id, _error_text(error))
+        audio_store.mark_failed(audio_id, error_text(error))
         return
     log.info("audio_finished", audio_id=audio_id)
 
 
-def _error_text(error: Exception) -> str:
+def error_text(error: Exception) -> str:
     if isinstance(error, PhemiusError) and error.hint:
         return f"{error.message} {error.hint}"
     return str(error)
@@ -84,7 +88,7 @@ def _synthesize(audio_id: int, script: str, voice: str) -> Path:
     config = load_config()
     config.audio_dir.mkdir(parents=True, exist_ok=True)
     with _synthesis_lock:
-        engine = get_engine(config.voice_engine)
+        engine = get_engine(config)
         out_path = config.audio_dir / f"{audio_id}.{engine.extension}"
         engine.synthesize(script, out_path, voice)
     return out_path

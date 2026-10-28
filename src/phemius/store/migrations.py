@@ -39,8 +39,17 @@ def _create_initial_schema(connection: sqlite3.Connection) -> None:
     )
 
 
+def _namespace_voice_ids(connection: sqlite3.Connection) -> None:
+    # Before voice engines were pluggable, every voice id was a bare Kokoro id.
+    connection.execute(
+        "UPDATE audio SET voice = 'kokoro:' || voice"
+        " WHERE voice IS NOT NULL AND voice != '' AND instr(voice, ':') = 0"
+    )
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
+    _namespace_voice_ids,
 ]
 
 
