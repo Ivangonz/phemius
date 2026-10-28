@@ -22,7 +22,8 @@ keeps its library in one folder, and works fully offline.
   [OpenRouter](https://openrouter.ai), or with offline rules that need no model
   at all.
 - **Narrate locally** with [Kokoro](https://github.com/hexgrad/kokoro) and one of
-  11 American and British English voices.
+  11 American and British English voices, or with the lighter
+  [Piper](https://github.com/OHF-Voice/piper1-gpl) for small machines.
 - **Keep a library** of documents and their audio, with more versions per
   document in another tone or voice.
 - **Save settings** through `PATCH /api/settings`, with environment variables
@@ -33,7 +34,7 @@ pages are placeholders, so for now you add documents and play audio through the
 API (see [Hear your first document](#hear-your-first-document)).
 
 Not available yet: Docker and `uv tool install` installs, other model providers
-(OpenAI-compatible servers, Ollama), other voice engines, GitHub and Confluence
+(OpenAI-compatible servers, Ollama), hosted voice engines, GitHub and Confluence
 sources, and the access token. Until the access token exists, keep Phemius bound
 to `127.0.0.1`, as `make run` does.
 
@@ -238,6 +239,7 @@ engine.
 | Engine (`PHEMIUS_TTS`) | Voices |
 | --- | --- |
 | `kokoro` (default) | `kokoro:af_heart` (default), `af_bella`, `af_nicole`, `af_sarah`, `af_sky`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`. The first letter is the accent (American or British), the second the gender. |
+| `piper` | `piper:en_US-lessac-medium` (default), `en_US-joe-medium`, `en_GB-cori-medium`, `en_GB-northern_english_male-medium`. See [Piper](#piper). |
 | `stub` | `stub:silent`, silent audio for testing |
 
 `GET /api/config` lists the voices of the configured engine (`voices`), the
@@ -247,6 +249,36 @@ default voice (`default_voice`) and whether the engine is ready
 ```json
 "tts_status": {"is_ready": false, "message": "Kokoro is not installed.", "hint": "Run `uv sync --extra kokoro`, or set PHEMIUS_TTS=stub to test."}
 ```
+
+### Piper
+
+Piper is small and fast and runs on low-power machines such as a small VPS or a
+Raspberry Pi. It does not need Kokoro. Install it and select it:
+
+```bash
+uv sync --extra piper
+PHEMIUS_TTS=piper make run backend
+```
+
+Each voice is about 63 MB. A voice downloads the first time you narrate with it,
+into `<data folder>/voices/piper`, and its SHA-256 checksum is verified before
+it is kept; a failed or corrupted download leaves no file behind. `tts_status`
+reports `Piper is not installed.`, `Piper voice not downloaded yet.` or
+`Piper is ready.`
+
+The voices come from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices).
+Each was trained on a dataset with its own license; check it before you use the
+audio beyond personal listening:
+
+| Voice | Accent | Dataset license |
+| --- | --- | --- |
+| `piper:en_US-lessac-medium` | American English, female | [Blizzard 2013 Lessac license](https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html) (non-commercial) |
+| `piper:en_US-joe-medium` | American English, male | CC0 |
+| `piper:en_GB-cori-medium` | British English, female | Public domain (LibriVox recordings) |
+| `piper:en_GB-northern_english_male-medium` | British English, male | [CC BY-SA 4.0](http://www.openslr.org/83/) |
+
+The `piper-tts` package itself is licensed GPL-3.0-or-later. It is an optional
+extra and is not bundled with Phemius.
 
 ## Watched folder
 
@@ -291,7 +323,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | OpenRouter model slug. Used only by the `openrouter` provider. |
 | `PHEMIUS_SCRIPT_MAX_TOKENS` | `script_max_tokens` | `8000` | Maximum tokens a model may write for one script. A positive whole number. |
 | `OPENROUTER_API_KEY` | `openrouter_api_key` | not set | OpenRouter API key. Write-only through the API. See [API keys](#api-keys). |
-| `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro` or `stub` (silent audio, no model download). |
+| `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro`, `piper` or `stub` (silent audio, no model download). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
 | `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a`, `mp4` or `mp3`. Formats other than WAV need `ffmpeg` on your `PATH`; without it, Phemius keeps the WAV file. |
@@ -301,7 +333,7 @@ Invalid values are reported as follows:
 | Problem | What happens |
 | --- | --- |
 | A value of the wrong type or outside the allowed list, for example `PHEMIUS_FORMAT=ogg` or `PHEMIUS_SCRIPT_MAX_TOKENS=abc` | The server does not start. The log shows `Setting output_format has an invalid value.` (the setting key from the table) and `Application startup failed`. Through `PATCH /api/settings`, the same values are rejected with `422`. |
-| Unknown `PHEMIUS_TTS` | The server starts and logs `voice_engine_not_ready`. Creating audio fails with `Unknown voice engine '...'. Set PHEMIUS_TTS to one of: kokoro, stub.` |
+| Unknown `PHEMIUS_TTS` | The server starts and logs `voice_engine_not_ready`. Creating audio fails with `Unknown voice engine '...'. Set PHEMIUS_TTS to one of: kokoro, stub, piper.` |
 | `PHEMIUS_VOICE` that the engine does not offer | Creating audio fails with `PHEMIUS_VOICE '...' is not a kokoro voice.` and a list of valid ids. |
 | Unknown `PHEMIUS_SCRIPT_PROVIDER` | Categorizing falls back to the offline rules; scripts fail with `Unknown script provider '...'.` and the valid names. |
 | `PHEMIUS_SCRIPT_PROVIDER=openrouter` without a key | Scripts fail with `OpenRouter needs an API key.` |

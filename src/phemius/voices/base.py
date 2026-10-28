@@ -9,12 +9,18 @@ SAMPLE_TEXT = "Hi there. This is how your documentation will sound."
 
 @dataclass(frozen=True)
 class Voice:
-    """A voice an engine offers. `id` is namespaced, for example `kokoro:af_heart`."""
+    """A voice an engine offers. `id` is namespaced, for example `kokoro:af_heart`.
+
+    A voice that is not installed downloads on first use; `size_bytes` is its
+    download size when the engine knows it.
+    """
 
     id: str
     label: str
     accent: str | None
     sample_text: str = SAMPLE_TEXT
+    is_installed: bool = True
+    size_bytes: int | None = None
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ from phemius.config import Config
 from phemius.errors import VoiceError
 from phemius.voices.base import Voice, VoiceCheck, VoiceEngine, namespace_voice
 from phemius.voices.kokoro import KokoroEngine
+from phemius.voices.piper import PiperEngine
 from phemius.voices.stub import StubEngine
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
 ENGINES: dict[str, Callable[[], VoiceEngine]] = {
     "kokoro": KokoroEngine,
     "stub": StubEngine,
+    "piper": PiperEngine,
 }
 
 
