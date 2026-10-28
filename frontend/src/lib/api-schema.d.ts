@@ -124,6 +124,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["get_settings_api_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Settings
+         * @description Partial update: only the fields sent are saved; `null` clears a saved value.
+         */
+        patch: operations["update_settings_api_settings_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -223,6 +244,68 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** @enum {string} */
+        OutputFormat: "wav" | "m4a" | "mp3" | "mp4";
+        /** SecretStatus */
+        SecretStatus: {
+            /** Has Key */
+            has_key: boolean;
+            /** Is Locked */
+            is_locked: boolean;
+            source: components["schemas"]["SettingSource"];
+        };
+        /** @enum {string} */
+        SettingSource: "env" | "saved" | "default";
+        /** SettingStatus */
+        SettingStatus: {
+            /** Is Locked */
+            is_locked: boolean;
+            source: components["schemas"]["SettingSource"];
+            value: components["schemas"]["SettingValue"];
+        };
+        SettingValue: string | number | boolean | null;
+        /**
+         * Settings
+         * @description Options a user can save. Adding one is one field here, with its `EnvVar`.
+         */
+        Settings: {
+            /** Default Voice */
+            default_voice?: string | null;
+            /**
+             * Model
+             * @default anthropic/claude-sonnet-4.5
+             */
+            model?: string;
+            /** Openrouter Api Key */
+            openrouter_api_key?: string | null;
+            /** @default wav */
+            output_format?: components["schemas"]["OutputFormat"];
+            /**
+             * Script Max Tokens
+             * @default 8000
+             */
+            script_max_tokens?: number;
+            /** Script Provider */
+            script_provider?: string | null;
+            /**
+             * Voice Engine
+             * @default kokoro
+             */
+            voice_engine?: string;
+            /** Watch Dir */
+            watch_dir?: string | null;
+        };
+        /** SettingsOverview */
+        SettingsOverview: {
+            /** Secrets */
+            secrets: {
+                [key: string]: components["schemas"]["SecretStatus"];
+            };
+            /** Values */
+            values: {
+                [key: string]: components["schemas"]["SettingStatus"];
+            };
         };
         /** UploadResult */
         UploadResult: {
@@ -478,6 +561,59 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    get_settings_api_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOverview"];
+                };
+            };
+        };
+    };
+    update_settings_api_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

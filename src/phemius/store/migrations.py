@@ -47,9 +47,22 @@ def _namespace_voice_ids(connection: sqlite3.Connection) -> None:
     )
 
 
+def _create_settings_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated REAL NOT NULL
+        )
+        """
+    )
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
+    _create_settings_table,
 ]
 
 

@@ -73,7 +73,9 @@ def from_config(config: Config) -> OpenRouterModel:
             hint="Set OPENROUTER_API_KEY, or set PHEMIUS_SCRIPT_PROVIDER=offline.",
         )
     return _cached_model(
-        config.openrouter_api_key, config.model, config.script_max_tokens
+        config.openrouter_api_key.get_secret_value(),
+        config.model,
+        config.script_max_tokens,
     )
 
 

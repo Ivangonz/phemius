@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import Scope
 
 from phemius import __version__
-from phemius.api import audio, docs, health, library_config
+from phemius.api import audio, docs, health, library_config, settings
 from phemius.api.errors import register_exception_handlers
 from phemius.config import load_config
 from phemius.logs import configure_logging
@@ -31,9 +31,10 @@ log = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    environment_config = load_config()
+    configure_logging(environment_config.log_level)
+    init_database(environment_config.db_path)
     config = load_config()
-    configure_logging(config.log_level)
-    init_database(config.db_path)
     config.audio_dir.mkdir(parents=True, exist_ok=True)
     observer = start_watcher(config.watch_dir) if config.watch_dir else None
     log.info("phemius_started", version=__version__, data_dir=str(config.data_dir))
@@ -85,7 +86,7 @@ def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
     app = FastAPI(title="Phemius", version=__version__, lifespan=lifespan)
     register_exception_handlers(app)
     app.middleware("http")(log_requests)
-    for module in (health, library_config, docs, audio):
+    for module in (health, library_config, settings, docs, audio):
         app.include_router(module.router)
     if static_dir.is_dir():
         app.mount("/", SinglePageApp(directory=static_dir), name="static")

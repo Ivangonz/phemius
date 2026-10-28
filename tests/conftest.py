@@ -8,6 +8,7 @@ from phemius import config
 from phemius.app import create_app
 from phemius.models import SCRIPT_MODELS
 from phemius.models.base import ScriptModel
+from phemius.store import database
 
 ENV_NAMES = [
     "DATA_DIR",
@@ -17,6 +18,7 @@ ENV_NAMES = [
     "VOICE",
     "WATCH_DIR",
     "FORMAT",
+    "SCRIPT_MAX_TOKENS",
     "LOG_LEVEL",
 ]
 
@@ -27,6 +29,8 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
     for name in ENV_NAMES:
         monkeypatch.delenv(config.ENV_PREFIX + name, raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    # Without this, saved settings from an earlier test's library would leak in.
+    monkeypatch.setattr(database, "_db_path", None)
     data_dir = tmp_path / "data"
     monkeypatch.setenv("PHEMIUS_DATA_DIR", str(data_dir))
     monkeypatch.setenv("PHEMIUS_TTS", "stub")
