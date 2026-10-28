@@ -6,13 +6,14 @@ catalogue into `<data folder>/voices/piper`.
 
 import wave
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
 import structlog
 
-from phemius.config import load_config
+from phemius.config import Config, load_config
 from phemius.errors import VoiceError
 from phemius.voices.base import Voice, VoiceCheck
 from phemius.voices.downloads import Fetch, Progress, download_verified, fetch_url
@@ -245,3 +246,13 @@ class PiperEngine:
     def _directory(self) -> Path:
         # Resolved per call: the engine is cached but the data folder can change.
         return self._voices_dir or load_config().data_dir / "voices" / ENGINE_NAME
+
+
+def from_config(config: Config) -> PiperEngine:
+    return _shared_engine()
+
+
+# One shared engine so each loaded voice model stays in memory between jobs.
+@lru_cache(maxsize=1)
+def _shared_engine() -> PiperEngine:
+    return PiperEngine()

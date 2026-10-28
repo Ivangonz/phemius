@@ -1213,6 +1213,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "openai" },
     { name = "pydantic" },
     { name = "pypdf" },
@@ -1247,6 +1248,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx2", specifier = ">=2.16" },
     { name = "kokoro", marker = "extra == 'kokoro'", specifier = ">=0.9" },
     { name = "numpy", marker = "extra == 'kokoro'", specifier = ">=1.26" },
     { name = "openai", specifier = ">=1.50" },

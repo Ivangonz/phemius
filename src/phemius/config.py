@@ -47,6 +47,18 @@ def _expand_user(path: Path | None) -> Path | None:
     return path.expanduser() if path else None
 
 
+def _comma_list(value: str) -> str:
+    items = [item.strip() for item in value.split(",") if item.strip()]
+    if not items:
+        raise ValueError("List at least one id, separated by commas.")
+    return ",".join(items)
+
+
+# Stored as one comma-separated string so it reads the same from an environment
+# variable and fits the scalar values of the settings API.
+type CommaList = Annotated[str, AfterValidator(_comma_list)]
+
+
 class Settings(BaseModel):
     """Options a user can save. Adding one is one field here, with its `EnvVar`."""
 
@@ -77,6 +89,46 @@ class Settings(BaseModel):
         Annotated[SecretStr, Field(min_length=1)] | None,
         EnvVar("OPENROUTER_API_KEY", is_secret=True),
     ] = None
+    openai_api_key: Annotated[
+        Annotated[SecretStr, Field(min_length=1)] | None,
+        EnvVar("OPENAI_API_KEY", is_secret=True),
+    ] = None
+    script_base_url: Annotated[
+        Annotated[str, Field(pattern=r"^https?://\S+$")] | None,
+        EnvVar("PHEMIUS_SCRIPT_BASE_URL"),
+    ] = None
+    script_api_key: Annotated[
+        Annotated[SecretStr, Field(min_length=1)] | None,
+        EnvVar("PHEMIUS_SCRIPT_API_KEY", is_secret=True),
+    ] = None
+    ollama_url: Annotated[str, Field(min_length=1), EnvVar("PHEMIUS_OLLAMA_URL")] = (
+        "http://localhost:11434"
+    )
+    ollama_model: Annotated[
+        str, Field(min_length=1), EnvVar("PHEMIUS_OLLAMA_MODEL")
+    ] = "llama3.2"
+    # Local models on a CPU can take minutes to write a long script.
+    ollama_timeout: Annotated[int, Field(gt=0), EnvVar("PHEMIUS_OLLAMA_TIMEOUT")] = 600
+    openai_speech_base_url: Annotated[
+        str, Field(min_length=1), EnvVar("PHEMIUS_OPENAI_SPEECH_BASE_URL")
+    ] = "https://api.openai.com/v1"
+    openai_speech_api_key: Annotated[
+        Annotated[SecretStr, Field(min_length=1)] | None,
+        EnvVar("PHEMIUS_OPENAI_SPEECH_API_KEY", is_secret=True),
+    ] = None
+    openai_speech_model: Annotated[
+        str, Field(min_length=1), EnvVar("PHEMIUS_OPENAI_SPEECH_MODEL")
+    ] = "tts-1"
+    openai_speech_voices: Annotated[
+        CommaList, EnvVar("PHEMIUS_OPENAI_SPEECH_VOICES")
+    ] = "alloy,ash,coral,echo,fable,nova,onyx,sage,shimmer"
+    elevenlabs_api_key: Annotated[
+        Annotated[SecretStr, Field(min_length=1)] | None,
+        EnvVar("ELEVENLABS_API_KEY", is_secret=True),
+    ] = None
+    elevenlabs_voices: Annotated[CommaList, EnvVar("PHEMIUS_ELEVENLABS_VOICES")] = (
+        "JBFqnCBsd6RMkjVDRZzb,EXAVITQu4vr4xnSDxMaL"
+    )
 
 
 class Config(Settings):
