@@ -328,6 +328,48 @@
         "title": "Body_upload_documents_api_docs_post",
         "type": "object"
       },
+      "CheckId": {
+        "enum": [
+          "python",
+          "script_model",
+          "voice_engine",
+          "library",
+          "watch_folder",
+          "ffmpeg"
+        ],
+        "type": "string"
+      },
+      "CheckStatus": {
+        "enum": [
+          "ok",
+          "optional",
+          "needs_attention"
+        ],
+        "type": "string"
+      },
+      "CheckSummary": {
+        "properties": {
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "integer"
+          },
+          "optional": {
+            "title": "Optional",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "optional",
+          "needs_attention"
+        ],
+        "title": "CheckSummary",
+        "type": "object"
+      },
       "CommaList": {
         "type": "string"
       },
@@ -1181,6 +1223,69 @@
         "title": "SettingsOverview",
         "type": "object"
       },
+      "SetupCheck": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckStatus"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "detail",
+          "status"
+        ],
+        "title": "SetupCheck",
+        "type": "object"
+      },
+      "SetupCheckRun": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/SetupCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "ran_at": {
+            "format": "date-time",
+            "title": "Ran At",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CheckSummary"
+          }
+        },
+        "required": [
+          "checks",
+          "summary",
+          "ran_at"
+        ],
+        "title": "SetupCheckRun",
+        "type": "object"
+      },
       "SuitabilitySource": {
         "enum": [
           "model",
@@ -1503,6 +1608,55 @@
         "summary": "Get Audio File",
         "tags": [
           "audio"
+        ]
+      }
+    },
+    "/api/checks": {
+      "get": {
+        "description": "The last run of the setup checks, or null before the first run.",
+        "operationId": "last_checks_api_checks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SetupCheckRun"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Last Checks Api Checks Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Last Checks",
+        "tags": [
+          "checks"
+        ]
+      },
+      "post": {
+        "operationId": "run_checks_api_checks_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupCheckRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run Checks",
+        "tags": [
+          "checks"
         ]
       }
     },

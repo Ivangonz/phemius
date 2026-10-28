@@ -110,6 +110,21 @@ come only from the environment, because the database that holds saved settings
 lives in the data folder. A setting fixed by an environment variable is locked
 against changes through `PATCH /api/settings`.
 
+### Setup checks
+
+`POST /api/checks` (`services/checks.py`) runs the setup checks for S7 and
+the C3 summary: Python version against Kokoro's range, script model
+reachability (the adapter's `check()`, with latency), voice engine readiness,
+library folder writable with at least 1 GB free, watched folder readable, and
+ffmpeg. Each returns `status` `ok`, `optional` or `needs_attention`, with a
+`detail` and a `hint`. Each check runs in its own daemon thread. One that has
+not answered within 3 seconds is reported as `needs_attention`, and the response
+does not wait for it. The last run and a count per status are kept in memory and
+returned by `GET /api/checks` (null before the first run). They describe
+the running process's environment, which a restart can change, so they are not
+stored. There are no connector checks until the GitHub and Confluence
+connectors exist.
+
 ## Components
 
 | Package | Responsibility |

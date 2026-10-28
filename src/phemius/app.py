@@ -20,6 +20,7 @@ from phemius import __version__
 from phemius.api import (
     access,
     audio,
+    checks,
     docs,
     health,
     library_config,
@@ -140,7 +141,16 @@ def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
     # The last middleware added runs first, so rejected requests are logged too.
     app.middleware("http")(access.require_access_token)
     app.middleware("http")(log_requests)
-    for module in (health, library_config, settings, docs, audio, queue, access):
+    for module in (
+        health,
+        library_config,
+        settings,
+        docs,
+        audio,
+        queue,
+        checks,
+        access,
+    ):
         app.include_router(module.router)
     if static_dir.is_dir():
         app.mount("/", SinglePageApp(directory=static_dir), name="static")
