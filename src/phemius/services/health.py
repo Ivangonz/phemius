@@ -1,6 +1,7 @@
 """Liveness check: the database is readable and the data folder is writable."""
 
 import tempfile
+from pathlib import Path
 
 from phemius.config import load_config
 from phemius.errors import ServiceUnavailableError
@@ -16,11 +17,17 @@ def check_health() -> None:
             hint="Check the file permissions of the data folder.",
         ) from error
     data_dir = load_config().data_dir
-    try:
-        with tempfile.TemporaryFile(dir=data_dir):
-            pass
-    except OSError as error:
+    if not is_writable(data_dir):
         raise ServiceUnavailableError(
             "The data folder is not writable.",
             hint=f"Make {data_dir} writable or set PHEMIUS_DATA_DIR.",
-        ) from error
+        )
+
+
+def is_writable(folder: Path) -> bool:
+    try:
+        with tempfile.TemporaryFile(dir=folder):
+            pass
+    except OSError:
+        return False
+    return True

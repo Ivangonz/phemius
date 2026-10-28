@@ -58,6 +58,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Last Checks
+         * @description The last run of the setup checks, or null before the first run.
+         */
+        get: operations["last_checks_api_checks_get"];
+        put?: never;
+        /** Run Checks */
+        post: operations["run_checks_api_checks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/config": {
         parameters: {
             query?: never;
@@ -352,6 +373,19 @@ export interface components {
             /** Files */
             files: string[];
         };
+        /** @enum {string} */
+        CheckId: "python" | "script_model" | "voice_engine" | "library" | "watch_folder" | "ffmpeg";
+        /** @enum {string} */
+        CheckStatus: "ok" | "optional" | "needs_attention";
+        /** CheckSummary */
+        CheckSummary: {
+            /** Needs Attention */
+            needs_attention: number;
+            /** Ok */
+            ok: number;
+            /** Optional */
+            optional: number;
+        };
         CommaList: string;
         /** Document */
         Document: {
@@ -616,6 +650,28 @@ export interface components {
                 [key: string]: components["schemas"]["SettingStatus"];
             };
         };
+        /** SetupCheck */
+        SetupCheck: {
+            /** Detail */
+            detail: string;
+            /** Hint */
+            hint?: string | null;
+            id: components["schemas"]["CheckId"];
+            /** Label */
+            label: string;
+            status: components["schemas"]["CheckStatus"];
+        };
+        /** SetupCheckRun */
+        SetupCheckRun: {
+            /** Checks */
+            checks: components["schemas"]["SetupCheck"][];
+            /**
+             * Ran At
+             * Format: date-time
+             */
+            ran_at: string;
+            summary: components["schemas"]["CheckSummary"];
+        };
         /** @enum {string} */
         SuitabilitySource: "model" | "heuristic";
         /** UploadResult */
@@ -763,6 +819,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    last_checks_api_checks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupCheckRun"] | null;
+                };
+            };
+        };
+    };
+    run_checks_api_checks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupCheckRun"];
                 };
             };
         };

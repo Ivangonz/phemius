@@ -11,6 +11,8 @@ from phemius.voices.base import Voice, VoiceCheck
 from phemius.voices.text import split_chunks
 
 ENGINE_NAME = "kokoro"
+# Kokoro supports only these Python versions (inclusive).
+SUPPORTED_PYTHON = ((3, 10), (3, 12))
 SAMPLE_RATE = 24000
 PAUSE_SECONDS = 0.25
 REQUIRED_MODULES = ("kokoro", "soundfile", "numpy")
