@@ -25,6 +25,8 @@ type AudioFormat = Literal["wav", "m4a", "mp3"]
 
 INTERRUPTED_MESSAGE = "Interrupted by a restart"
 INTERRUPTED_HINT = "Retry the job to run it again."
+AUDIO_DELETED_MESSAGE = "Audio file deleted"
+AUDIO_DELETED_HINT = "Retry the job to narrate it again from its saved script."
 
 
 class Job(TypedDict):
@@ -285,6 +287,38 @@ def fail_interrupted_jobs() -> int:
             (INTERRUPTED_MESSAGE, INTERRUPTED_HINT, now, now),
         )
     return cursor.rowcount
+
+
+def clear_audio_files() -> list[str]:
+    """Detach every audio file from its row; return the paths to remove.
+
+    Scripts stay. Done and queued jobs become cancelled, so nothing recreates
+    the files unasked, and a retry narrates the saved script without a new
+    model call. Files are left for the caller to remove after this commits.
+    """
+    now = time.time()
+    with transaction(is_immediate=True) as connection:
+        rows = connection.execute(
+            "SELECT path FROM audio WHERE path IS NOT NULL ORDER BY id"
+        ).fetchall()
+        connection.execute(
+            "UPDATE jobs SET state = 'cancelled', error_message = ?, error_hint = ?,"
+            " updated = ?, finished = ? WHERE state IN ('queued', 'done')",
+            (AUDIO_DELETED_MESSAGE, AUDIO_DELETED_HINT, now, now),
+        )
+        connection.execute(
+            "UPDATE audio SET path = NULL, format = NULL, size_bytes = NULL,"
+            " conversion_note = NULL"
+        )
+    return [row["path"] for row in rows]
+
+
+def has_running_jobs() -> bool:
+    with transaction() as connection:
+        row = connection.execute(
+            "SELECT 1 FROM jobs WHERE state = 'running' LIMIT 1"
+        ).fetchone()
+    return row is not None
 
 
 def is_queue_paused() -> bool:
