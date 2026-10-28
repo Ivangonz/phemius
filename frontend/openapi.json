@@ -312,6 +312,189 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "OutputFormat": {
+        "enum": [
+          "wav",
+          "m4a",
+          "mp3",
+          "mp4"
+        ],
+        "type": "string"
+      },
+      "SecretStatus": {
+        "properties": {
+          "has_key": {
+            "title": "Has Key",
+            "type": "boolean"
+          },
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SettingSource"
+          }
+        },
+        "required": [
+          "has_key",
+          "source",
+          "is_locked"
+        ],
+        "title": "SecretStatus",
+        "type": "object"
+      },
+      "SettingSource": {
+        "enum": [
+          "env",
+          "saved",
+          "default"
+        ],
+        "type": "string"
+      },
+      "SettingStatus": {
+        "properties": {
+          "is_locked": {
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SettingSource"
+          },
+          "value": {
+            "$ref": "#/components/schemas/SettingValue"
+          }
+        },
+        "required": [
+          "value",
+          "source",
+          "is_locked"
+        ],
+        "title": "SettingStatus",
+        "type": "object"
+      },
+      "SettingValue": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "Settings": {
+        "additionalProperties": false,
+        "description": "Options a user can save. Adding one is one field here, with its `EnvVar`.",
+        "properties": {
+          "default_voice": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Voice"
+          },
+          "model": {
+            "default": "anthropic/claude-sonnet-4.5",
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "openrouter_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openrouter Api Key"
+          },
+          "output_format": {
+            "$ref": "#/components/schemas/OutputFormat",
+            "default": "wav"
+          },
+          "script_max_tokens": {
+            "default": 8000,
+            "exclusiveMinimum": 0.0,
+            "title": "Script Max Tokens",
+            "type": "integer"
+          },
+          "script_provider": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Provider"
+          },
+          "voice_engine": {
+            "default": "kokoro",
+            "minLength": 1,
+            "title": "Voice Engine",
+            "type": "string"
+          },
+          "watch_dir": {
+            "anyOf": [
+              {
+                "format": "path",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watch Dir"
+          }
+        },
+        "title": "Settings",
+        "type": "object"
+      },
+      "SettingsOverview": {
+        "properties": {
+          "secrets": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SecretStatus"
+            },
+            "title": "Secrets",
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SettingStatus"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values",
+          "secrets"
+        ],
+        "title": "SettingsOverview",
+        "type": "object"
+      },
       "UploadResult": {
         "properties": {
           "doc_id": {
@@ -702,6 +885,67 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "operationId": "get_settings_api_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Partial update: only the fields sent are saved; `null` clears a saved value.",
+        "operationId": "update_settings_api_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Settings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Settings",
+        "tags": [
+          "settings"
         ]
       }
     }

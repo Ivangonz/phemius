@@ -37,7 +37,10 @@ def error_body(
 
 async def _handle_phemius_error(request: Request, error: Exception) -> JSONResponse:
     assert isinstance(error, PhemiusError)
-    errors = [{"field": error.field, "message": error.message}] if error.field else None
+    errors = [
+        {"field": field, "message": message}
+        for field, message in error.field_errors.items()
+    ]
     log.info("request_failed", path=request.url.path, code=error.code)
     return JSONResponse(
         error_body(error.message, error.code, error.hint, errors),

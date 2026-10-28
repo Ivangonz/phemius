@@ -22,6 +22,10 @@ def init_database(db_path: Path) -> None:
         run_migrations(connection)
 
 
+def is_initialized() -> bool:
+    return _db_path is not None
+
+
 def _connect() -> sqlite3.Connection:
     if _db_path is None:
         raise RuntimeError("init_database() must run before the store is used")
