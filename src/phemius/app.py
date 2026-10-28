@@ -1,6 +1,7 @@
 """FastAPI app: routes, error handlers, startup and the static UI.
 
-Run with `make run` (uvicorn phemius.app:app).
+Run with `make run backend` (uvicorn phemius.app:app). The UI in `static/` is
+built from `frontend/` with `make build frontend`.
 """
 
 import time
@@ -11,6 +12,8 @@ from pathlib import Path
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
+from starlette.types import Scope
 
 from phemius import __version__
 from phemius.api import audio, docs, health, library_config
@@ -63,14 +66,29 @@ async def log_requests(
     return response
 
 
-def create_app() -> FastAPI:
+class SinglePageApp(StaticFiles):
+    """Serves the built UI, falling back to index.html for client-side routes."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        # Unmatched /api paths must keep the JSON error shape instead of HTML.
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as error:
+            if error.status_code != 404:
+                raise
+            return await super().get_response("index.html", scope)
+
+
+def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
     app = FastAPI(title="Phemius", version=__version__, lifespan=lifespan)
     register_exception_handlers(app)
     app.middleware("http")(log_requests)
     for module in (health, library_config, docs, audio):
         app.include_router(module.router)
-    if STATIC_DIR.is_dir():
-        app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+    if static_dir.is_dir():
+        app.mount("/", SinglePageApp(directory=static_dir), name="static")
     return app
 
 

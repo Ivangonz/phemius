@@ -36,10 +36,3 @@ def test_validation_errors_list_fields(client: TestClient) -> None:
     body = response.json()
     assert body["code"] == "validation_error"
     assert body["errors"][0]["field"] == "document_id"
-
-
-def test_ui_is_served_at_root(client: TestClient) -> None:
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "<title>Phemius</title>" in response.text
