@@ -1,8 +1,10 @@
-import { act, fireEvent, screen, within } from "@testing-library/react"
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { http, HttpResponse } from "msw"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { usePlayer } from "@/hooks/usePlayer"
 import { setAccessToken } from "@/lib/accessToken"
+import { server } from "@/test/mocks/server"
 import { renderAppAt } from "@/test/renderApp"
 
 const TRACK = {
@@ -46,6 +48,7 @@ async function startPlayback() {
   const rendered = renderAppAt("/", <PlayerHarness />)
   await screen.findByRole("heading", { level: 1, name: "Library" })
   await user.click(screen.getByRole("button", { name: "Start test track" }))
+  await waitFor(() => expect(audioElement().paused).toBe(false))
   return { user, ...rendered }
 }
 
@@ -71,13 +74,59 @@ describe("player bar", () => {
     expect(audioElement().getAttribute("src")).toBe("/api/audio/7/file")
   })
 
-  it("passes the access token in the audio URL", async () => {
+  it("plays with a stored token through a signed URL without the token", async () => {
     setAccessToken("s3cret token")
+    server.use(
+      http.get("/api/audio/:audioId/url", ({ request }) =>
+        request.headers.get("Authorization") === "Bearer s3cret token"
+          ? HttpResponse.json({
+              url: "/api/audio/7/file?expires=1900000000&sig=abc123",
+              expires: 1_900_000_000,
+            })
+          : HttpResponse.json(
+              { detail: "Access token required", code: "unauthorized" },
+              { status: 401 },
+            ),
+      ),
+    )
     await startPlayback()
 
-    expect(audioElement().getAttribute("src")).toBe(
-      "/api/audio/7/file?token=s3cret%20token",
+    const src = audioElement().getAttribute("src") ?? ""
+    expect(src).toBe("/api/audio/7/file?expires=1900000000&sig=abc123")
+    expect(src).not.toContain("s3cret")
+    expect(src).not.toContain("token")
+  })
+
+  it("fetches a fresh URL and resumes in place when the URL expires", async () => {
+    let issued = 0
+    server.use(
+      http.get("/api/audio/:audioId/url", () => {
+        issued += 1
+        return HttpResponse.json({
+          url: `/api/audio/7/file?expires=${issued}&sig=s${issued}`,
+          expires: issued,
+        })
+      }),
     )
+    await startPlayback()
+    const audio = audioElement()
+    audio.currentTime = 90
+
+    fireEvent.error(audio)
+
+    await waitFor(() =>
+      expect(audio.getAttribute("src")).toBe(
+        "/api/audio/7/file?expires=2&sig=s2",
+      ),
+    )
+    expect(audio.currentTime).toBe(90)
+    expect(audio.paused).toBe(false)
+
+    fireEvent.error(audio)
+    expect(
+      await within(playerBar()).findByText("This audio could not be loaded."),
+    ).toBeInTheDocument()
+    expect(issued).toBe(2)
   })
 
   it("keeps playing while navigating between screens", async () => {

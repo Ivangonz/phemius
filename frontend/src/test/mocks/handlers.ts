@@ -15,4 +15,10 @@ export const libraryConfig = {
 
 export const handlers = [
   http.get("/api/config", () => HttpResponse.json(libraryConfig)),
+  http.get("/api/audio/:audioId/url", ({ params }) =>
+    HttpResponse.json({
+      url: `/api/audio/${String(params.audioId)}/file`,
+      expires: 1_900_000_000,
+    }),
+  ),
 ]
