@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-ink: #12151c;
+  --color-muted: #566073;
+  --color-page: #f3f4f7;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #fafafc;
+  --color-line: #e2e5eb;
+  --color-line-control: #cbd1dc;
+  --color-line-dashed: #aeb6c6;
+
+  --color-primary: #3451c7;
+  --color-primary-hover: #2a41a8;
+  --color-primary-tint: #e9edfb;
+  --color-primary-tint-ink: #22348f;
+  --color-selected: #f3f5fd;
+  --color-highlight: #d6defa;
+
+  --color-chip: #eef0f5;
+  --color-chip-ink: #2b3340;
+
+  --color-success: #ddf3e4;
+  --color-success-ink: #14532d;
+  --color-good: #e4f2ea;
+  --color-good-ink: #1e5b36;
+  --color-warning: #fbebcb;
+  --color-warning-ink: #7a3e0b;
+  --color-danger: #fbdada;
+  --color-danger-ink: #991b1b;
+  --color-danger-line: #e2b4b4;
+
+  --color-sidebar: #12151c;
+  --color-sidebar-ink: #c9ced9;
+  --color-sidebar-active: #262c40;
+  --color-sidebar-card: #1b2030;
+  --color-sidebar-label: #9aa3b5;
+  --color-sidebar-value: #e3e6ee;
+
+  --text-title: 28px;
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.01em;
+  --text-title--font-weight: 600;
+  --text-wordmark: 17px;
+  --text-wordmark--letter-spacing: -0.01em;
+  --text-body: 14px;
+  --text-secondary: 13px;
+  --text-small: 12px;
+  --text-label: 11px;
+  --text-label--letter-spacing: 0.06em;
+
+  --radius-nav: 8px;
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-panel: 14px;
+  --radius-pill: 99px;
+}
+
+@layer base {
+  body {
+    @apply bg-page font-sans text-body text-ink antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
