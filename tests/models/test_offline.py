@@ -21,3 +21,11 @@ def test_write_script_removes_markdown_and_code() -> None:
     assert "Section: Setup." in script
     assert "https://" not in script
     assert "```" not in script and "`" not in script
+
+
+def test_summary_skips_the_title_heading() -> None:
+    text = "# Deploying the Billing Service\n\nThis guide explains it.\nMore here."
+
+    analysis = OfflineModel().analyze("Deploying the Billing Service", text)
+
+    assert analysis["summary"] == "This guide explains it."

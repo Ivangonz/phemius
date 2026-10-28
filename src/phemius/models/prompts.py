@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from phemius.errors import ModelError
 from phemius.models.base import Analysis
 
 TONES = {
@@ -67,7 +68,15 @@ def script_system(tone: str) -> str:
 
 
 def script_prompt(title: str, text: str) -> str:
-    return f"Title: {title}\n\nDocument:\n{text[:SCRIPT_TEXT_LIMIT]}"
+    """The script request. Raises `ModelError` rather than trimming a long document."""
+    if len(text) > SCRIPT_TEXT_LIMIT:
+        raise ModelError(
+            f"This document has {len(text):,} characters; one script covers up to"
+            f" {SCRIPT_TEXT_LIMIT:,}.",
+            hint="Split it into smaller documents for now; narrating long documents"
+            " in chapters is planned.",
+        )
+    return f"Title: {title}\n\nDocument:\n{text}"
 
 
 def parse_analysis(reply: str) -> Analysis:

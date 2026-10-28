@@ -26,11 +26,9 @@ class OfflineModel:
 
     def analyze(self, title: str, text: str) -> Analysis:
         category = _match_category(text.lower())
-        plain = re.sub(r"[#*`>]", "", text).strip()
-        first_sentence = re.split(r"(?<=[.!?])\s", plain, maxsplit=1)[0]
         return Analysis(
             category=category,
-            summary=first_sentence[:200],
+            summary=_first_sentence(text)[:200],
             suggested_tone=TONE_BY_CATEGORY[category],
         )
 
@@ -50,6 +48,15 @@ class OfflineModel:
 
 def from_config(config: Config) -> OfflineModel:
     return OfflineModel()
+
+
+def _first_sentence(text: str) -> str:
+    """The first sentence of the body, skipping headings such as the title."""
+    body = "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
+    plain = " ".join(re.sub(r"[*`>]", "", body).split())
+    return re.split(r"(?<=[.!?])\s", plain, maxsplit=1)[0]
 
 
 def _match_category(lowered: str) -> str:
