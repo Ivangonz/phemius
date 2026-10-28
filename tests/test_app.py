@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from structlog.testing import capture_logs
 
 from phemius.app import create_app
+from tests.conftest import LOCAL_URL
 
 INDEX_HTML = "<!doctype html><title>Phemius</title><div id='root'></div>"
 
@@ -23,7 +24,9 @@ def static_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def ui_client(static_dir: Path) -> Iterator[TestClient]:
-    with TestClient(create_app(static_dir=static_dir)) as test_client:
+    with TestClient(
+        create_app(static_dir=static_dir), base_url=LOCAL_URL
+    ) as test_client:
         yield test_client
 
 
@@ -59,7 +62,9 @@ def test_unknown_api_paths_keep_the_error_shape(
 
 
 def test_app_starts_without_a_built_ui(tmp_path: Path) -> None:
-    with TestClient(create_app(static_dir=tmp_path / "missing")) as test_client:
+    with TestClient(
+        create_app(static_dir=tmp_path / "missing"), base_url=LOCAL_URL
+    ) as test_client:
         assert test_client.get("/api/health").status_code == 200
         assert test_client.get("/").json()["code"] == "not_found"
 

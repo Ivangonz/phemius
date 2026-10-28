@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from phemius.app import create_app
 from phemius.voices.kokoro import INSTALL_HINT
+from tests.conftest import LOCAL_URL
 from tests.services.fakes import FakeFfmpeg, UseFfmpeg
 
 
@@ -24,7 +25,7 @@ def test_missing_kokoro_reports_install_hint_without_crashing(
     monkeypatch.setenv("PHEMIUS_TTS", "kokoro")
     monkeypatch.setitem(sys.modules, "kokoro", None)
 
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(), base_url=LOCAL_URL) as client:
         body = client.get("/api/config").json()
 
     assert body["default_voice"] == "kokoro:af_heart"

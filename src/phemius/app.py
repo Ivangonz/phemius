@@ -25,6 +25,7 @@ from phemius.api import (
     health,
     library_config,
     queue,
+    request_guard,
     settings,
 )
 from phemius.api.errors import register_exception_handlers
@@ -138,8 +139,10 @@ class SinglePageApp(StaticFiles):
 def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
     app = FastAPI(title="Phemius", version=__version__, lifespan=lifespan)
     register_exception_handlers(app)
-    # The last middleware added runs first, so rejected requests are logged too.
+    # The last middleware added runs first, so rejected requests are logged too,
+    # and a rebinding or cross-site request is refused before any token lookup.
     app.middleware("http")(access.require_access_token)
+    app.middleware("http")(request_guard.guard_request)
     app.middleware("http")(log_requests)
     for module in (
         health,
