@@ -1,16 +1,24 @@
 import { http, HttpResponse } from "msw"
+import type { LibraryConfig } from "@/hooks/useLibraryConfig"
 
-export const libraryConfig = {
-  tones: ["teacher", "narrator"],
-  voices: { af_heart: "Heart" },
+export const libraryConfig: LibraryConfig = {
+  tones: { teacher: "Patient and structured." },
+  voices: { "kokoro:af_heart": "Heart" },
   default_voice: "af_heart",
-  tts_status: { ok: true },
+  tts_status: { is_ready: true, message: "Kokoro is ready." },
   watch_dir: null,
   llm: true,
   script_provider: "openrouter",
   model: "anthropic/claude-haiku-5.5",
   llm_error: null,
+  llm_hint: null,
   tts: "kokoro",
+  ffmpeg: {
+    is_present: false,
+    version: null,
+    status: "optional",
+    message: "ffmpeg is not installed; audio stays WAV.",
+  },
 }
 
 export const handlers = [

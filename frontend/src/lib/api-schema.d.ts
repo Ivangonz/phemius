@@ -477,6 +477,23 @@ export interface components {
             version: number;
         };
         DocumentStatus: components["schemas"]["JobState"] | "no_audio";
+        /** @enum {string} */
+        FfmpegCheckStatus: "ok" | "optional";
+        /**
+         * FfmpegStatus
+         * @description Whether ffmpeg can convert audio; missing is optional, WAV is kept.
+         */
+        FfmpegStatus: {
+            /** Hint */
+            hint?: string | null;
+            /** Is Present */
+            is_present: boolean;
+            /** Message */
+            message: string;
+            status: components["schemas"]["FfmpegCheckStatus"];
+            /** Version */
+            version: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -524,6 +541,35 @@ export interface components {
         JobState: "queued" | "running" | "done" | "failed" | "cancelled";
         /** @constant */
         JobType: "audio";
+        /** LibraryConfig */
+        LibraryConfig: {
+            /** Default Voice */
+            default_voice: string | null;
+            ffmpeg: components["schemas"]["FfmpegStatus"];
+            /** Llm */
+            llm: boolean;
+            /** Llm Error */
+            llm_error: string | null;
+            /** Llm Hint */
+            llm_hint: string | null;
+            /** Model */
+            model: string;
+            /** Script Provider */
+            script_provider: string;
+            /** Tones */
+            tones: {
+                [key: string]: string;
+            };
+            /** Tts */
+            tts: string;
+            tts_status: components["schemas"]["VoiceEngineStatus"];
+            /** Voices */
+            voices: {
+                [key: string]: string;
+            };
+            /** Watch Dir */
+            watch_dir: string | null;
+        };
         /** Page[DocumentListItem] */
         Page_DocumentListItem_: {
             /** Items */
@@ -759,6 +805,18 @@ export interface components {
             /** Tone Rationale */
             tone_rationale: string | null;
         };
+        /**
+         * VoiceEngineStatus
+         * @description Whether the configured voice engine can synthesize, and how to fix it.
+         */
+        VoiceEngineStatus: {
+            /** Hint */
+            hint?: string | null;
+            /** Is Ready */
+            is_ready: boolean;
+            /** Message */
+            message: string;
+        };
         /** @enum {string} */
         WatchOnChange: "mark" | "regenerate";
     };
@@ -936,9 +994,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["LibraryConfig"];
                 };
             };
         };
