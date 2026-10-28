@@ -44,6 +44,8 @@ phemius/
 └── CLAUDE.md
 ```
 
+This is the target layout. Some adapters, routers and connectors are added by later issues; check `src/phemius` for what exists today. The repository root also has `README.md`, `CONTRIBUTING.md` and `LICENSE` (Apache-2.0).
+
 ## Backend
 
 **Language:** Python 3.12 (Kokoro supports only 3.10 to 3.12, so never raise the floor or ceiling without an ADR)
