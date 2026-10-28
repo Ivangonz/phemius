@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.models.fakes import FailingScriptModel, FakeScriptModel, UseScriptModel
