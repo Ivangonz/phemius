@@ -61,7 +61,7 @@ against changes through `PATCH /api/settings`.
 
 | Package | Responsibility |
 | --- | --- |
-| `src/phemius/app.py` | FastAPI app: startup (logging, database, audio folder, folder watcher, voice engine check), request logging, routers, and the built UI with a fallback to `index.html` for client-side routes |
+| `src/phemius/app.py` | FastAPI app: startup (logging, library permissions, database, audio folder, folder watcher, voice engine check), request logging, routers, and the built UI with a fallback to `index.html` for client-side routes |
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
@@ -70,13 +70,26 @@ against changes through `PATCH /api/settings`.
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openrouter.py`. `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra) and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
-| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings |
+| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings. `permissions.py` keeps the library folder and database owner-only |
 | `frontend/` | React, Vite and TypeScript UI with TanStack Router and Query and Tailwind CSS. `make build` writes it to `src/phemius/static` (not committed); in development, Vite serves it on port 5173 and proxies `/api`. API types in `src/lib/api-schema.d.ts` are generated from `frontend/openapi.json`. Node is needed only to develop or build it |
 
 The library is one folder (`PHEMIUS_DATA_DIR`, default `~/.phemius`) holding
 `library.db` (documents, audio records and saved settings, including any saved
 API key) and `audio/`. Back it up by copying the folder while Phemius is
 stopped.
+
+A saved API key sits in `library.db` in plain text, as it would in a `.env`
+file, so the library is private to its owner. `store/permissions.py` creates
+the folder `0700` and the database `0600` with those modes from the start
+(never a chmod after the fact, which would leave a window where another user
+could open them), and SQLite gives the `-wal` and `-shm` files the database's
+mode. Startup removes group and other access from an existing folder and
+database and logs one `library_permissions_tightened` warning with the paths.
+`audio/` is created `0700` too, but the folder's mode already makes it
+unreachable. A watched folder belongs to the user and is never changed. On
+Windows (no POSIX modes) the tightening is skipped. Deployments should pass keys
+as environment variables or a `.env` file given to Docker; those take
+precedence and are never written to the library.
 
 ## Decision log
 

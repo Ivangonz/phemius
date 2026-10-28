@@ -23,6 +23,10 @@ from phemius.logs import configure_logging
 from phemius.services.voices import check_engine
 from phemius.sources.folder import start_watcher
 from phemius.store.database import init_database
+from phemius.store.permissions import (
+    create_private_dir,
+    tighten_library_permissions,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -33,9 +37,12 @@ log = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     environment_config = load_config()
     configure_logging(environment_config.log_level)
+    _tighten_library_permissions(
+        environment_config.data_dir, environment_config.db_path
+    )
     init_database(environment_config.db_path)
     config = load_config()
-    config.audio_dir.mkdir(parents=True, exist_ok=True)
+    create_private_dir(config.audio_dir)
     observer = start_watcher(config.watch_dir) if config.watch_dir else None
     log.info("phemius_started", version=__version__, data_dir=str(config.data_dir))
     _warn_if_voice_engine_not_ready()
@@ -43,6 +50,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if observer:
         observer.stop()
         observer.join()
+
+
+def _tighten_library_permissions(data_dir: Path, db_path: Path) -> None:
+    tightened = tighten_library_permissions(data_dir, db_path)
+    if tightened:
+        log.warning(
+            "library_permissions_tightened",
+            paths=[str(path) for path in tightened],
+            hint="Group and other access to the library was removed.",
+        )
 
 
 def _warn_if_voice_engine_not_ready() -> None:
