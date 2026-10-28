@@ -4,31 +4,22 @@ The job runner (`services/runner.py`) calls the stages; it runs a single
 narration worker, so synthesis happens one audio at a time.
 """
 
-import shutil
-import subprocess
 from pathlib import Path
 
 import structlog
 
 from phemius.config import load_config
 from phemius.errors import NotFoundError, PhemiusError
-from phemius.services import agent, ingest, queue, voices
+from phemius.services import agent, ffmpeg, ingest, queue, voices
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
 from phemius.store.documents import NewDocument, StoredVersion
-from phemius.store.jobs import ClaimedJob, QueuedAudio
+from phemius.store.jobs import AudioFile, AudioFormat, ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
 
 log = structlog.get_logger(__name__)
-
-# output format -> (extension, ffmpeg codec arguments)
-FORMATS = {
-    "m4a": ("m4a", ["-c:a", "aac", "-b:a", "96k"]),
-    "mp4": ("mp4", ["-c:a", "aac", "-b:a", "96k"]),
-    "mp3": ("mp3", ["-c:a", "libmp3lame", "-b:a", "96k"]),
-}
 
 
 def import_file(path: Path, source: str | None = None) -> StoredVersion:
@@ -86,15 +77,55 @@ def write_script(job: ClaimedJob) -> bool:
 
 
 def narrate(job: ClaimedJob) -> bool:
-    """The `narrating` stage. False if the job was cancelled meanwhile."""
+    """The `narrating` stage. False if the job was cancelled meanwhile.
+
+    The job is done with the WAV, or queued for `converting` when another
+    output format is set.
+    """
     audio = audio_store.get_audio(job.audio_id)
     if audio is None or not audio["script"] or not audio["voice"]:
         raise NotFoundError("This audio has no script to narrate.")
-    out_path = _convert(_synthesize(job.audio_id, audio["script"], audio["voice"]))
-    if job_store.finish_audio(job, str(out_path)):
+    wav_path = _synthesize(job.audio_id, audio["script"], audio["voice"])
+    wav = _audio_file(wav_path, "wav")
+    is_wav_output = load_config().output_format == "wav"
+    save = job_store.finish_audio if is_wav_output else job_store.queue_conversion
+    if save(job, wav):
         return True
-    out_path.unlink(missing_ok=True)
+    wav_path.unlink(missing_ok=True)
     return False
+
+
+def convert(job: ClaimedJob) -> bool:
+    """The `converting` stage. False if the job was cancelled meanwhile.
+
+    A conversion that cannot run keeps the WAV and records why on the audio;
+    the job still finishes. The WAV is deleted only once the converted file is
+    saved.
+    """
+    audio = audio_store.get_audio(job.audio_id)
+    if audio is None or not audio["path"] or not Path(audio["path"]).is_file():
+        raise NotFoundError(
+            "The narrated audio file is missing.",
+            hint="Retry the job to narrate it again.",
+        )
+    wav_path = Path(audio["path"])
+    conversion = ffmpeg.convert(wav_path, load_config().output_format)
+    saved = _audio_file(conversion.path, conversion.format, conversion.note)
+    is_converted = conversion.path != wav_path
+    if not job_store.finish_audio(job, saved):
+        if is_converted:
+            conversion.path.unlink(missing_ok=True)
+        return False
+    if is_converted:
+        wav_path.unlink(missing_ok=True)
+    log.info(
+        "audio_converted",
+        audio_id=job.audio_id,
+        format=conversion.format,
+        size_bytes=saved.size_bytes,
+        is_converted=is_converted,
+    )
+    return True
 
 
 def error_text(error: Exception) -> str:
@@ -112,17 +143,7 @@ def _synthesize(audio_id: int, script: str, voice: str) -> Path:
     return out_path
 
 
-def _convert(wav_path: Path) -> Path:
-    """Convert to the configured format with ffmpeg; keep the WAV if unavailable."""
-    output_format = load_config().output_format
-    if output_format not in FORMATS or not shutil.which("ffmpeg"):
-        return wav_path
-    extension, codec = FORMATS[output_format]
-    out_path = wav_path.with_suffix(f".{extension}")
-    subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav_path), *codec]
-        + ["-movflags", "+faststart", str(out_path)],
-        check=True,
-    )
-    wav_path.unlink()
-    return out_path
+def _audio_file(
+    path: Path, audio_format: AudioFormat, conversion_note: str | None = None
+) -> AudioFile:
+    return AudioFile(str(path), audio_format, path.stat().st_size, conversion_note)

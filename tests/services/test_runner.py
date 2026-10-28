@@ -19,6 +19,7 @@ from phemius.store.jobs import Job, JobState
 from phemius.voices import ENGINES, VoiceEngine, stub
 from phemius.voices.stub import StubEngine
 from tests.models.fakes import FailingScriptModel, FakeScriptModel, UseScriptModel
+from tests.services.fakes import FakeFfmpeg, UseFfmpeg
 
 type StartRunner = Callable[[], JobRunner]
 
@@ -270,3 +271,102 @@ def test_scripts_are_written_in_parallel(
     jobs = [_wait_until_finished(job_id) for job_id in job_ids]
 
     assert [job["state"] for job in jobs] == ["done", "done"], jobs
+
+
+def test_wav_output_finishes_at_narration_with_format_and_size(
+    start_runner: StartRunner,
+) -> None:
+    start_runner()
+
+    job = _wait_until_finished(_queue_audio())
+
+    audio = _audio_of(job)
+    assert audio["path"] is not None
+    assert (job["stage"], audio["format"], audio["conversion_note"]) == (
+        "narrating",
+        "wav",
+        None,
+    )
+    assert audio["size_bytes"] == Path(audio["path"]).stat().st_size
+
+
+def test_compressed_output_converts_and_deletes_the_wav(
+    start_runner: StartRunner,
+    use_ffmpeg: UseFfmpeg,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "m4a")
+    use_ffmpeg(FakeFfmpeg())
+    start_runner()
+
+    job = _wait_until_finished(_queue_audio())
+
+    audio = _audio_of(job)
+    assert job["state"] == "done", job["error"]
+    assert audio["path"] is not None
+    path = Path(audio["path"])
+    assert (job["stage"], path.suffix, audio["format"]) == ("converting", ".m4a", "m4a")
+    assert audio["size_bytes"] == path.stat().st_size
+    assert audio["conversion_note"] is None
+    assert not path.with_suffix(".wav").exists()
+
+
+def test_missing_ffmpeg_finishes_with_the_wav_and_a_reason(
+    start_runner: StartRunner,
+    use_ffmpeg: UseFfmpeg,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "mp3")
+    use_ffmpeg(None)
+    start_runner()
+
+    job = _wait_until_finished(_queue_audio())
+
+    audio = _audio_of(job)
+    assert job["state"] == "done", job["error"]
+    assert audio["path"] is not None and Path(audio["path"]).exists()
+    assert audio["format"] == "wav"
+    assert audio["conversion_note"] is not None
+    assert "ffmpeg is not installed" in audio["conversion_note"]
+
+
+def test_failed_conversion_keeps_the_wav_and_a_reason(
+    start_runner: StartRunner,
+    use_ffmpeg: UseFfmpeg,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "m4a")
+    use_ffmpeg(FakeFfmpeg(exit_code=187, stderr=b"Conversion failed!\n"))
+    start_runner()
+
+    job = _wait_until_finished(_queue_audio())
+
+    audio = _audio_of(job)
+    assert job["state"] == "done", job["error"]
+    assert audio["path"] is not None and audio["path"].endswith(".wav")
+    assert Path(audio["path"]).exists()
+    assert audio["format"] == "wav"
+    assert audio["conversion_note"] is not None
+    assert "Conversion failed!" in audio["conversion_note"]
+
+
+def test_conversion_finishing_after_a_cancel_keeps_only_the_wav(
+    use_ffmpeg: UseFfmpeg, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "m4a")
+    use_ffmpeg(FakeFfmpeg())
+    job_id = _queue_audio()
+    assert runner.run_next("writing_script") and runner.run_next("narrating")
+    claimed = job_store.claim_next("converting")
+    assert claimed is not None
+
+    queue.cancel_job(job_id)
+    is_current = pipeline.convert(claimed)
+
+    audio = _audio_of(_job(job_id))
+    assert audio["path"] is not None
+    wav_path = Path(audio["path"])
+    assert is_current is False
+    assert (wav_path.suffix, audio["format"]) == (".wav", "wav")
+    assert wav_path.exists()
+    assert not wav_path.with_suffix(".m4a").exists()

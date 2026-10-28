@@ -109,7 +109,7 @@ in `.env` and run `docker compose up -d` again.
 
 | Image | Download / on disk | Voices | Audio formats |
 | --- | --- | --- | --- |
-| `ghcr.io/ivangonz/phemius:latest` | about 620 MB / 2.1 GB | Kokoro (local), hosted voices, stub | WAV, M4A, MP4, MP3 |
+| `ghcr.io/ivangonz/phemius:latest` | about 620 MB / 2.1 GB | Kokoro (local), hosted voices, stub | WAV, M4A, MP3 |
 | `ghcr.io/ivangonz/phemius:slim` | about 70 MB / 260 MB | Hosted voices (`openai_speech`, `elevenlabs`), stub | WAV only |
 
 Kokoro and its PyTorch, spaCy and transformers libraries take about 1.4 GB of
@@ -622,7 +622,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_ACCESS_MODE` | `access_mode` | `local` | Who can reach the server: `local`, `network` or `proxy`. See [Access from other devices](#access-from-other-devices). Applies on the next start. |
 | `PHEMIUS_ACCESS_TOKEN` | environment only | not set (a token is generated) | Access token for `network` and `proxy` modes, at least 16 characters. Write-only: never shown or logged. See [Set your own token](#set-your-own-token-recommended-for-deployments). |
 | `PHEMIUS_WATCH_ON_CHANGE` | `watch_on_change` | `mark` | What a changed watched file does: `mark` (mark the document as changed) or `regenerate` (generate audio for the new version). |
-| `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a`, `mp4` or `mp3`. Formats other than WAV need `ffmpeg` on your `PATH`; without it, Phemius keeps the WAV file. |
+| `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a` or `mp3` (`mp4` is still read as `m4a`). Formats other than WAV need `ffmpeg` on your `PATH`; without it, or if a conversion fails, Phemius keeps the WAV file and the audio says why. |
 
 Invalid values are reported as follows:
 
@@ -761,8 +761,11 @@ for that key in the [configuration table](#configuration) and fix or unset it.
 
 ### Audio stays WAV when I set `PHEMIUS_FORMAT`
 
-ffmpeg is not on your `PATH`. Install it (for example `brew install ffmpeg` or
-`sudo apt install ffmpeg`) and restart the server.
+ffmpeg is not on your `PATH`, or the conversion failed. The audio's
+`conversion_note` (in `GET /api/audio/{id}`) gives the reason, and
+`GET /api/config` reports whether ffmpeg was found under `ffmpeg`. Install it
+(for example `brew install ffmpeg` or `sudo apt install ffmpeg`) and restart the
+server.
 
 ## Contributing
 

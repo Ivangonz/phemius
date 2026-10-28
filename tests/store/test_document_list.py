@@ -160,3 +160,23 @@ def test_signature_is_stable_until_a_visible_field_changes() -> None:
 
     assert first["signature"] == again["signature"]
     assert cancelled["signature"] != first["signature"]
+
+
+def test_finished_audio_reports_its_format_and_size() -> None:
+    _add("Silent")
+    queued = _enqueue(_add("Narrated"))
+    claimed = job_store.claim_next("writing_script")
+    assert claimed is not None
+    job_store.finish_audio(
+        claimed, job_store.AudioFile("/audio/1.m4a", "m4a", size_bytes=2048)
+    )
+
+    files = {
+        item["title"]: (item["audio_id"], item["format"], item["size_bytes"])
+        for item in _list()
+    }
+
+    assert files == {
+        "Narrated": (queued.audio_id, "m4a", 2048),
+        "Silent": (None, None, None),
+    }

@@ -8,7 +8,9 @@ from phemius import config
 from phemius.app import create_app
 from phemius.models import SCRIPT_MODELS
 from phemius.models.base import ScriptModel
+from phemius.services import ffmpeg
 from phemius.store import database
+from tests.services.fakes import FAKE_EXECUTABLE, FakeFfmpeg, UseFfmpeg
 
 ENV_NAMES = [
     "DATA_DIR",
@@ -57,6 +59,20 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
 def client() -> Iterator[TestClient]:
     with TestClient(create_app()) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def use_ffmpeg(monkeypatch: pytest.MonkeyPatch) -> UseFfmpeg:
+    """Replaces the ffmpeg binary with `fake`, or removes it when `fake` is None."""
+
+    def use(fake: FakeFfmpeg | None) -> FakeFfmpeg:
+        executable = None if fake is None else FAKE_EXECUTABLE
+        monkeypatch.setattr(ffmpeg, "find_ffmpeg", lambda: executable)
+        fake = fake or FakeFfmpeg()
+        monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake.run)
+        return fake
+
+    return use
 
 
 @pytest.fixture

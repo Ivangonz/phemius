@@ -45,15 +45,20 @@ flowchart LR
 5. **Narration.** The configured voice engine (`PHEMIUS_TTS`) writes a WAV file.
    A single narration worker keeps synthesis to one audio at a time, because
    local voice models are heavy.
-6. **Convert.** If `PHEMIUS_FORMAT` asks for M4A, MP4 or MP3 and `ffmpeg` is on
-   the `PATH`, the WAV is converted, still in the `narrating` stage. Otherwise
-   the WAV is kept.
+6. **Convert.** If `PHEMIUS_FORMAT` asks for M4A or MP3, the job moves to the
+   `converting` stage, and a converting worker runs `ffmpeg` (no shell, a
+   timeout, stderr kept out of the logs) through `services/ffmpeg.py`. The WAV
+   is deleted only after the converted file is saved. Without ffmpeg, or when
+   it fails, the job still finishes `done` with the WAV, and the audio's
+   `conversion_note` says why. Each audio records its `format` and
+   `size_bytes`. ffmpeg is optional: `GET /api/config` reports it under
+   `ffmpeg` (presence, version, status `ok` or `optional`, hint).
 
 ### Job queue
 
 Background work is persisted in the `jobs` table (`store/jobs.py`) and run by
 `services/runner.py`: `PHEMIUS_SCRIPT_WORKERS` threads (default 2) write scripts
-in parallel and one thread narrates. Workers poll the table and are woken when
+in parallel, one thread narrates and one converts. Workers poll the table and are woken when
 work is queued, retried or resumed. There is no broker (ADR-001).
 
 Every screen and endpoint uses one vocabulary:
@@ -61,16 +66,16 @@ Every screen and endpoint uses one vocabulary:
 | Field | Values |
 | --- | --- |
 | `state` | `queued` (waiting for a worker), `running`, `done`, `failed`, `cancelled` |
-| `stage` | `writing_script`, then `narrating`: the step a job is running or waiting for |
+| `stage` | `writing_script`, then `narrating`, then `converting` when the output format is M4A or MP3: the step a job is running or waiting for |
 | `progress` | Fraction of the current stage, 0 to 1. Engines do not report partial progress yet, so it moves from 0 to 1 at the end of a stage |
 | `error`, `hint` | Message and hint of the `ModelError` or `VoiceError` that failed the job, stored separately |
 | `attempts` | 1, plus one per retry |
 
 An audio has exactly one job, and its `status`, `stage`, `error` and `hint` in
 `GET /api/audio/{id}` are read from that job; the audio row stores only the
-script and the file path, so the two cannot disagree. A document's `status` in
-`GET /api/docs` is the state of its latest version's newest audio job, or
-`no_audio` when that version has none.
+script and the file (path, format, size and any conversion note), so the two
+cannot disagree. A document's `status` in `GET /api/docs` is the state of its
+latest version's newest audio job, or `no_audio` when that version has none.
 
 - **Stages.** A worker claims the oldest job queued for its stage and marks it
   `running`. When the script is written the job goes back to `queued` at
@@ -82,7 +87,7 @@ script and the file path, so the two cannot disagree. A document's `status` in
   interrupted, so it finishes and its result is discarded.
 - **Retry** applies to `failed` and `cancelled` jobs. A job whose script was
   written resumes at `narrating`, so a voice failure does not pay for a second
-  script. Re-running a stage overwrites that job's script or file.
+  script. A job interrupted while `converting` also resumes at `narrating`. Re-running a stage overwrites that job's script or file.
 - **Restart.** On startup every `running` job becomes `failed` with "Interrupted
   by a restart" and can be retried; `queued` jobs resume.
 - **Fencing.** Workers write a stage's result only if the job is still

@@ -5,7 +5,7 @@ from fastapi import APIRouter
 
 from phemius.config import OFFLINE_PROVIDER, load_config
 from phemius.models.prompts import TONES
-from phemius.services import agent, script_models, voices
+from phemius.services import agent, ffmpeg, script_models, voices
 
 router = APIRouter(prefix="/api", tags=["config"])
 
@@ -26,4 +26,5 @@ def library_config() -> dict[str, Any]:
         "llm_error": script_model.error or agent.last_error,
         "llm_hint": script_model.hint,
         "tts": config.voice_engine,
+        "ffmpeg": asdict(ffmpeg.check_ffmpeg()),
     }

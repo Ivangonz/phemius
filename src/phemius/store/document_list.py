@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Literal, TypedDict, cast
 
 from phemius.store.database import transaction
-from phemius.store.jobs import JobStage, JobState
+from phemius.store.jobs import AudioFormat, JobStage, JobState
 
 type DocumentStatus = JobState | Literal["no_audio"]
 type DocumentOrder = Literal["-created", "created", "title", "-updated"]
@@ -32,7 +32,7 @@ WITH latest AS (
 ),
 summaries AS (
     SELECT l.id, l.title, l.source, l.category, l.suggested_tone, l.version,
-        l.created, l.updated, a.id AS audio_id,
+        l.created, l.updated, a.id AS audio_id, a.format, a.size_bytes,
         COALESCE(j.state, 'no_audio') AS status, j.stage,
         a.id IS NULL AND EXISTS (SELECT 1 FROM audio WHERE doc_id = l.id)
             AS is_changed
@@ -56,6 +56,8 @@ class DocumentListItem(TypedDict):
     created: float
     updated: float
     audio_id: int | None
+    format: AudioFormat | None
+    size_bytes: int | None
     status: DocumentStatus
     stage: JobStage | None
     is_changed: bool

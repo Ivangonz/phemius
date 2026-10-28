@@ -6,6 +6,7 @@ inside the caller's transaction, so a failure leaves the library unchanged.
 
 import sqlite3
 from collections.abc import Callable
+from pathlib import Path
 
 type Migration = Callable[[sqlite3.Connection], None]
 
@@ -224,6 +225,29 @@ def _index_document_list(connection: sqlite3.Connection) -> None:
         connection.execute(statement)
 
 
+# An `.mp4` file came from the old `mp4` output format: AAC audio in the same
+# container as `.m4a`, so it is recorded as m4a.
+_FORMATS_BY_SUFFIX = {".wav": "wav", ".m4a": "m4a", ".mp4": "m4a", ".mp3": "mp3"}
+
+
+def _add_audio_format_and_size(connection: sqlite3.Connection) -> None:
+    """Record each audio file's format and size, read from existing files."""
+    for column in ["format TEXT", "size_bytes INTEGER", "conversion_note TEXT"]:
+        connection.execute(f"ALTER TABLE audio ADD COLUMN {column}")
+    rows = connection.execute(
+        "SELECT id, path FROM audio WHERE path IS NOT NULL"
+    ).fetchall()
+    connection.executemany(
+        "UPDATE audio SET format = ?, size_bytes = ? WHERE id = ?",
+        [(*_audio_file_facts(Path(path)), audio_id) for audio_id, path in rows],
+    )
+
+
+def _audio_file_facts(path: Path) -> tuple[str | None, int | None]:
+    size_bytes = path.stat().st_size if path.is_file() else None
+    return _FORMATS_BY_SUFFIX.get(path.suffix.lower()), size_bytes
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -232,6 +256,7 @@ MIGRATIONS: list[Migration] = [
     _add_document_versions,
     _add_job_queue,
     _index_document_list,
+    _add_audio_format_and_size,
 ]
 
 

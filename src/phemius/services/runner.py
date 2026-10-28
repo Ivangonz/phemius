@@ -1,8 +1,9 @@
 """Background workers that run queued jobs, one stage at a time.
 
 `script_workers` threads write scripts in parallel; a single thread narrates,
-because local voice models are heavy. Each worker claims the oldest job waiting
-for its stage, so a job moves from one pool to the other between stages.
+because local voice models are heavy, and another converts finished narrations
+with ffmpeg so the next narration need not wait for it. Each worker claims the
+oldest job waiting for its stage, so a job moves between pools between stages.
 """
 
 import threading
@@ -27,6 +28,7 @@ type StageHandler = Callable[[ClaimedJob], bool]
 STAGE_HANDLERS: dict[JobStage, StageHandler] = {
     "writing_script": pipeline.write_script,
     "narrating": pipeline.narrate,
+    "converting": pipeline.convert,
 }
 
 
@@ -34,7 +36,7 @@ class JobRunner:
     def __init__(self, script_workers: int) -> None:
         self._is_stopping = threading.Event()
         script_stages: list[JobStage] = ["writing_script"] * script_workers
-        stages = [*script_stages, "narrating"]
+        stages = [*script_stages, "narrating", "converting"]
         self._threads = [
             threading.Thread(
                 target=self._work, args=(stage,), name=f"job-{stage}", daemon=True

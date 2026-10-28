@@ -113,6 +113,13 @@ def test_invalid_env_value_names_the_variable(monkeypatch: pytest.MonkeyPatch) -
     assert "PHEMIUS_FORMAT" in raised.value.hint
 
 
+def test_saved_legacy_mp4_format_loads_as_m4a(isolated_env: Path) -> None:
+    database.init_database(isolated_env / "library.db")
+    settings_store.save_settings({"output_format": "mp4"})
+
+    assert load_config().output_format == "m4a"
+
+
 def test_voice_list_is_normalized(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PHEMIUS_OPENAI_SPEECH_VOICES", " nova ,, onyx ")
 
