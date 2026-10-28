@@ -91,6 +91,14 @@ export const api = {
   },
 }
 
+// An <audio> element cannot send headers, so the server also accepts the
+// token as a query parameter on this route.
+export function audioFileUrl(audioId: number): string {
+  const url = `${API_BASE}/audio/${audioId}/file`
+  const token = getAccessToken()
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError)
     return error.errors[0]?.message ?? error.message

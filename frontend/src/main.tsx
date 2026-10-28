@@ -1,7 +1,8 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient } from "@tanstack/react-query"
 import { RouterProvider } from "@tanstack/react-router"
+import { AppProviders } from "./components/AppProviders"
 import { createAppRouter } from "./lib/router"
 import "./index.css"
 
@@ -21,8 +22,8 @@ if (!rootElement) throw new Error("Root element not found")
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <AppProviders queryClient={queryClient}>
       <RouterProvider router={router} />
-    </QueryClientProvider>
+    </AppProviders>
   </StrictMode>,
 )
