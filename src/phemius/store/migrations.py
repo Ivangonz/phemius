@@ -208,6 +208,22 @@ def _add_job_queue(connection: sqlite3.Connection) -> None:
         connection.execute(statement)
 
 
+_DOCUMENT_LIST_INDEXES = [
+    "CREATE INDEX docs_created ON docs (created)",
+    "CREATE INDEX doc_versions_category ON doc_versions (category)",
+    "CREATE INDEX doc_versions_suggested_tone ON doc_versions (suggested_tone)",
+    "CREATE INDEX audio_version ON audio (version_id, created)",
+    "CREATE INDEX audio_doc ON audio (doc_id)",
+]
+
+
+def _index_document_list(connection: sqlite3.Connection) -> None:
+    # doc_versions (doc_id, number) and jobs (audio_id) are already indexed by
+    # their UNIQUE constraints.
+    for statement in _DOCUMENT_LIST_INDEXES:
+        connection.execute(statement)
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -215,6 +231,7 @@ MIGRATIONS: list[Migration] = [
     _create_access_token_table,
     _add_document_versions,
     _add_job_queue,
+    _index_document_list,
 ]
 
 

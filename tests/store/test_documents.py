@@ -57,7 +57,7 @@ def test_another_source_is_another_document() -> None:
     assert other.document_id != first.document_id
 
 
-def test_new_version_keeps_earlier_audio_and_marks_document_changed() -> None:
+def test_new_version_keeps_earlier_audio() -> None:
     first = document_store.add_document(_document("Install it."))
     document = document_store.get_document(first.document_id)
     assert document is not None
@@ -67,12 +67,13 @@ def test_new_version_keeps_earlier_audio_and_marks_document_changed() -> None:
 
     document_store.add_document(_document("Install it with uv."))
 
-    [summary] = document_store.list_documents()
-    assert summary["version"] == 2
-    assert summary["is_changed"] is True
-    assert [(item["id"], item["version"]) for item in summary["audio"]] == [
-        (audio_id, 1)
-    ]
+    page = document_store.list_versions(first.document_id, limit=25, offset=0)
+    assert page is not None
+    audio_ids = {
+        version["number"]: [audio["id"] for audio in version["audio"]]
+        for version in page.items
+    }
+    assert audio_ids == {2: [], 1: [audio_id]}
 
 
 def test_list_versions_pages_newest_first_with_their_audio() -> None:

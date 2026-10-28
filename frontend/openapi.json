@@ -343,14 +343,18 @@
         "title": "Document",
         "type": "object"
       },
-      "DocumentSummary": {
+      "DocumentListItem": {
         "properties": {
-          "audio": {
-            "items": {
-              "$ref": "#/components/schemas/AudioSummary"
-            },
-            "title": "Audio",
-            "type": "array"
+          "audio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Id"
           },
           "category": {
             "title": "Category",
@@ -368,21 +372,38 @@
             "title": "Is Changed",
             "type": "boolean"
           },
+          "signature": {
+            "title": "Signature",
+            "type": "string"
+          },
           "source": {
             "title": "Source",
             "type": "string"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentStatus"
           },
           "suggested_tone": {
             "title": "Suggested Tone",
             "type": "string"
           },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          },
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "number"
           },
           "version": {
             "title": "Version",
@@ -391,18 +412,32 @@
         },
         "required": [
           "id",
-          "version",
           "title",
           "source",
           "category",
-          "summary",
           "suggested_tone",
+          "version",
           "created",
+          "updated",
+          "audio_id",
+          "status",
+          "stage",
           "is_changed",
-          "audio"
+          "signature"
         ],
-        "title": "DocumentSummary",
+        "title": "DocumentListItem",
         "type": "object"
+      },
+      "DocumentStatus": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/JobState"
+          },
+          {
+            "const": "no_audio",
+            "type": "string"
+          }
+        ]
       },
       "HTTPValidationError": {
         "properties": {
@@ -611,6 +646,37 @@
           "mp4"
         ],
         "type": "string"
+      },
+      "Page_DocumentListItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[DocumentListItem]",
+        "type": "object"
       },
       "Page_VersionSummary_": {
         "properties": {
@@ -1280,20 +1346,135 @@
     "/api/docs": {
       "get": {
         "operationId": "list_documents_api_docs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "description": "Suggested tone",
+            "in": "query",
+            "name": "tone",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Suggested tone",
+              "title": "Tone"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DocumentStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Search titles",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search titles",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order_by",
+            "required": false,
+            "schema": {
+              "default": "-created",
+              "enum": [
+                "-created",
+                "created",
+                "title",
+                "-updated"
+              ],
+              "title": "Order By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DocumentSummary"
-                  },
-                  "title": "Response List Documents Api Docs Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_DocumentListItem_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Documents",

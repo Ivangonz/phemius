@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Query, UploadFile
 from pydantic import BaseModel
 
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
@@ -8,8 +8,15 @@ from phemius.errors import InvalidInputError, NotFoundError
 from phemius.models.prompts import TONES
 from phemius.services import pipeline
 from phemius.services.uploads import UploadResult, import_upload
+from phemius.store import document_list
 from phemius.store import documents as document_store
-from phemius.store.documents import Document, DocumentSummary, VersionSummary
+from phemius.store.document_list import (
+    DocumentFilters,
+    DocumentListItem,
+    DocumentOrder,
+    DocumentStatus,
+)
+from phemius.store.documents import Document, VersionSummary
 
 router = APIRouter(prefix="/api/docs", tags=["docs"])
 
@@ -25,8 +32,18 @@ class AudioCreated(BaseModel):
 
 
 @router.get("")
-def list_documents() -> list[DocumentSummary]:
-    return document_store.list_documents()
+def list_documents(
+    category: str | None = None,
+    tone: Annotated[str | None, Query(description="Suggested tone")] = None,
+    status: DocumentStatus | None = None,
+    q: Annotated[str | None, Query(description="Search titles")] = None,
+    order_by: DocumentOrder = "-created",
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> Page[DocumentListItem]:
+    filters = DocumentFilters(category, tone, status, title_search=q)
+    page = document_list.list_documents(filters, order_by, limit, offset)
+    return Page(items=page.items, total=page.total, limit=limit, offset=offset)
 
 
 @router.post("")
