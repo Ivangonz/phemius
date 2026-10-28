@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # No Kokoro extra: tests use the stub voice and a fake script model, so CI
+      # needs no API keys, model downloads or ffmpeg.
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run ruff (lint)
+        run: uv run ruff check .
+
+      - name: Run ruff (format check)
+        run: uv run ruff format --check .
+
+      - name: Cache mypy
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ hashFiles('src/**/*.py', 'tests/**/*.py', 'pyproject.toml') }}
+          restore-keys: |
+            mypy-${{ runner.os }}-${{ hashFiles('uv.lock') }}-
+            mypy-${{ runner.os }}-
+
+      - name: Run mypy
+        run: uv run mypy
+
+      - name: Run pytest
+        run: uv run pytest
+
+  # The frontend job (Node 22, npm ci, API types up to date, format:check, lint,
+  # typecheck, test, build) is added with the UI build in #42, once #41 lands.
