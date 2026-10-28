@@ -179,3 +179,58 @@ jobs:
       - name: Show the server log
         if: failure()
         run: cat "$RUNNER_TEMP/server.log" || true
+
+  # Builds the small image (no Kokoro, no ffmpeg) for speed, then proves the
+  # container is healthy, serves the UI and API, has no Node and is not root.
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: phemius:ci
+          build-args: |
+            WITH_KOKORO=false
+            WITH_FFMPEG=false
+          cache-from: type=gha,scope=docker-slim
+          cache-to: type=gha,mode=max,scope=docker-slim
+
+      - name: Check the image has no Node and does not run as root
+        run: |
+          docker run --rm --entrypoint sh phemius:ci -c '! command -v node' \
+            || { echo "::error::Node is in the image"; exit 1; }
+          uid=$(docker run --rm --entrypoint id phemius:ci -u)
+          [ "$uid" != "0" ] || { echo "::error::The image runs as root"; exit 1; }
+
+      - name: Start the container and wait for its health check
+        run: |
+          docker run -d --name phemius -p 8000:8000 -e PHEMIUS_TTS=stub phemius:ci
+          for attempt in $(seq 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' phemius)
+            [ "$status" = "starting" ] || break
+            sleep 1
+          done
+          [ "$status" = "healthy" ] || { echo "::error::The container is $status"; exit 1; }
+
+      - name: Serve the UI and API from the container
+        run: |
+          curl -fsS http://127.0.0.1:8000/api/health | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8000/ | grep -q '<div id="root">'
+          # Network mode: the API needs the token printed on the first start.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/docs)
+          [ "$code" = "401" ] || { echo "::error::The API answered $code without a token"; exit 1; }
+          token=$(docker logs phemius 2>&1 | grep -o 'phm_[A-Za-z0-9_-]*' | head -n 1)
+          curl -fsS -H "Authorization: Bearer $token" http://127.0.0.1:8000/api/docs > /dev/null
+
+      - name: Show the container log
+        if: failure()
+        run: docker logs phemius || true

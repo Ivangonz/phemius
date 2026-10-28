@@ -1,0 +1,29 @@
+# Only the source the image builds from goes into the build context.
+.git
+.github
+.claude
+.venv
+.env
+.env.*
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.ruff_cache
+.pytest_cache
+dist
+build
+*.egg-info
+.DS_Store
+
+# Library data from a local run
+phemius-data
+
+# Frontend dependencies and build output: the image installs and builds its own
+**/node_modules
+src/phemius/static
+frontend/dist
+frontend/coverage
+
+tests
+docs
+samples
