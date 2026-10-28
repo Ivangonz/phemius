@@ -61,23 +61,36 @@ against changes through `PATCH /api/settings`.
 
 | Package | Responsibility |
 | --- | --- |
-| `src/phemius/app.py` | FastAPI app: startup (logging, database, audio folder, access token, folder watcher, voice engine check), request logging, the access token check, routers, and the built UI with a fallback to `index.html` for client-side routes |
+| `src/phemius/app.py` | FastAPI app: startup (logging, library permissions, database, audio folder, access token, folder watcher, voice engine check), request logging, the access token check, routers, and the built UI with a fallback to `index.html` for client-side routes |
 | `src/phemius/cli.py` | `phemius serve`: opens the library, binds to the address the access mode allows (`127.0.0.1` for `local` and `proxy`, `0.0.0.0` for `network`) and runs uvicorn without its access log, which would print query-string tokens |
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
 | `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs`, `audio`, `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes), plus `errors.py`, which maps every error to `{detail, code, hint, errors}` |
 | `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `pipeline` (import and audio generation in threads), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored), `uploads`, `health` |
-| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openrouter.py`. `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
+| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets). `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra) and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
-| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings |
+| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings. `permissions.py` keeps the library folder and database owner-only |
 | `frontend/` | React, Vite and TypeScript UI with TanStack Router and Query and Tailwind CSS. `make build` writes it to `src/phemius/static` (not committed); in development, Vite serves it on port 5173 and proxies `/api`. API types in `src/lib/api-schema.d.ts` are generated from `frontend/openapi.json`. Node is needed only to develop or build it |
 
 The library is one folder (`PHEMIUS_DATA_DIR`, default `~/.phemius`) holding
 `library.db` (documents, audio records and saved settings, including any saved
 API key) and `audio/`. Back it up by copying the folder while Phemius is
 stopped.
+
+A saved API key sits in `library.db` in plain text, as it would in a `.env`
+file, so the library is private to its owner. `store/permissions.py` creates
+the folder `0700` and the database `0600` with those modes from the start
+(never a chmod after the fact, which would leave a window where another user
+could open them), and SQLite gives the `-wal` and `-shm` files the database's
+mode. Startup removes group and other access from an existing folder and
+database and logs one `library_permissions_tightened` warning with the paths.
+`audio/` is created `0700` too, but the folder's mode already makes it
+unreachable. A watched folder belongs to the user and is never changed. On
+Windows (no POSIX modes) the tightening is skipped. Deployments should pass keys
+as environment variables or a `.env` file given to Docker; those take
+precedence and are never written to the library.
 
 ## Decision log
 
@@ -146,8 +159,8 @@ outside these two packages.
   adapter.
 
 **Current state.** Both registries exist. `ScriptModel` (`models/base.py`) has
-the `offline` and `openrouter` adapters in `SCRIPT_MODELS`, selected with
-`PHEMIUS_SCRIPT_PROVIDER`; `services/agent.py` reaches them only through
+the `offline` and `openai_compatible` adapters in `SCRIPT_MODELS`, plus the
+`openai` and `openrouter` presets, selected with `PHEMIUS_SCRIPT_PROVIDER`; `services/agent.py` reaches them only through
 `get_script_model()`. `VoiceEngine` (`voices/base.py`) has the `kokoro` and
 `stub` engines in `ENGINES`, selected with `PHEMIUS_TTS`. Voice ids are
 namespaced by engine (`kokoro:af_heart`), and each engine reports whether it is
@@ -157,3 +170,31 @@ OpenAI-compatible speech and ElevenLabs are planned.
 **When to revisit.** If a provider needs a fundamentally different interaction
 than the protocols allow (for example streaming audio or multi-step tool use),
 extend the protocol through a new ADR rather than special-casing the provider.
+
+### ADR-003: Piper is an optional extra, never bundled by default
+
+- **Status:** Accepted
+- **Date:** 2026-10-28
+
+**Context.** Piper is a small, fast voice engine that suits low-power machines.
+`piper-tts` 1.3 and later is licensed GPL-3.0-or-later, while Phemius is
+Apache-2.0. The last MIT release, 1.2.0, depends on `piper-phonemize`, which has
+no Python 3.12 wheels, so it cannot be installed alongside Kokoro.
+
+**Decision.** Piper is available only through the optional `piper` extra
+(`uv sync --extra piper`). It is never part of the default install, the wheel's
+required dependencies or the Docker image (#18). Kokoro stays the default
+engine. The Piper adapter imports `piper` lazily, so Phemius runs without it.
+
+**Consequences.**
+
+- The default install and the Docker image ship only Apache-2.0-compatible
+  dependencies.
+- Users who want Piper install it themselves and accept its license.
+- Docker users who want Piper build their own image or install the extra in the
+  container.
+- Piper voices download on demand with their own dataset licenses; the default
+  Piper voice is CC0, and the README lists each voice's license.
+
+**When to revisit.** If a permissively licensed Piper release supports Python
+3.12, or if the project decides to ship a separately licensed Piper image.

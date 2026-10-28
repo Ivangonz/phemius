@@ -22,7 +22,7 @@ def test_unknown_engine_error_lists_valid_names(
 
 @pytest.mark.parametrize("name", list(ENGINES))
 def test_every_engine_offers_voices_namespaced_with_its_name(name: str) -> None:
-    engine = ENGINES[name]()
+    engine = ENGINES[name](load_config())
 
     voice_ids = [voice.id for voice in engine.voices()]
 

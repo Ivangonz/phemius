@@ -216,6 +216,9 @@
         "title": "Body_upload_documents_api_docs_post",
         "type": "object"
       },
+      "CommaList": {
+        "type": "string"
+      },
       "Document": {
         "properties": {
           "category": {
@@ -432,11 +435,91 @@
             ],
             "title": "Default Voice"
           },
+          "elevenlabs_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevenlabs Api Key"
+          },
+          "elevenlabs_voices": {
+            "$ref": "#/components/schemas/CommaList",
+            "default": "JBFqnCBsd6RMkjVDRZzb,EXAVITQu4vr4xnSDxMaL"
+          },
           "model": {
             "default": "anthropic/claude-sonnet-4.5",
             "minLength": 1,
             "title": "Model",
             "type": "string"
+          },
+          "ollama_model": {
+            "default": "llama3.2",
+            "minLength": 1,
+            "title": "Ollama Model",
+            "type": "string"
+          },
+          "ollama_timeout": {
+            "default": 600,
+            "exclusiveMinimum": 0.0,
+            "title": "Ollama Timeout",
+            "type": "integer"
+          },
+          "ollama_url": {
+            "default": "http://localhost:11434",
+            "minLength": 1,
+            "title": "Ollama Url",
+            "type": "string"
+          },
+          "openai_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Api Key"
+          },
+          "openai_speech_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Speech Api Key"
+          },
+          "openai_speech_base_url": {
+            "default": "https://api.openai.com/v1",
+            "minLength": 1,
+            "title": "Openai Speech Base Url",
+            "type": "string"
+          },
+          "openai_speech_model": {
+            "default": "tts-1",
+            "minLength": 1,
+            "title": "Openai Speech Model",
+            "type": "string"
+          },
+          "openai_speech_voices": {
+            "$ref": "#/components/schemas/CommaList",
+            "default": "alloy,ash,coral,echo,fable,nova,onyx,sage,shimmer"
           },
           "openrouter_api_key": {
             "anyOf": [
@@ -455,6 +538,32 @@
           "output_format": {
             "$ref": "#/components/schemas/OutputFormat",
             "default": "wav"
+          },
+          "script_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Api Key"
+          },
+          "script_base_url": {
+            "anyOf": [
+              {
+                "pattern": "^https?://\\S+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Base Url"
           },
           "script_max_tokens": {
             "default": 8000,
