@@ -43,16 +43,19 @@ def test_patch_saves_a_setting(client: TestClient) -> None:
     }
 
 
-def test_saved_key_is_never_returned_or_logged(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "key", ["openrouter_api_key", "openai_speech_api_key", "elevenlabs_api_key"]
+)
+def test_saved_key_is_never_returned_or_logged(client: TestClient, key: str) -> None:
     with capture_logs() as logs:
-        patched = client.patch("/api/settings", json={"openrouter_api_key": SECRET})
+        patched = client.patch("/api/settings", json={key: SECRET})
         fetched = client.get("/api/settings")
 
     assert SECRET not in patched.text + fetched.text
     assert SECRET not in str(logs)
-    assert fetched.json()["secrets"]["openrouter_api_key"]["has_key"] is True
+    assert fetched.json()["secrets"][key]["has_key"] is True
     assert any(
-        entry["event"] == "settings_updated" and entry["keys"] == ["openrouter_api_key"]
+        entry["event"] == "settings_updated" and entry["keys"] == [key]
         for entry in logs
     )
 
