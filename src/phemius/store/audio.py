@@ -38,6 +38,7 @@ class Audio(TypedDict):
     path: str | None
     format: AudioFormat | None
     size_bytes: int | None
+    duration_seconds: float | None
     conversion_note: str | None
     created: float
     job_id: int

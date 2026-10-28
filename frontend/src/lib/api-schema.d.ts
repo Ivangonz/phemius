@@ -327,6 +327,8 @@ export interface components {
             created: number;
             /** Doc Id */
             doc_id: number;
+            /** Duration Seconds */
+            duration_seconds: number | null;
             /** Error */
             error: string | null;
             format: components["schemas"]["AudioFormat"] | null;
@@ -505,10 +507,14 @@ export interface components {
             attempts: number;
             /** Audio Id */
             audio_id: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
             /** Created */
             created: number;
             /** Document Id */
             document_id: number | null;
+            /** Duration Seconds */
+            duration_seconds: number | null;
             /** Error */
             error: string | null;
             /** Finished */
@@ -517,6 +523,10 @@ export interface components {
             hint: string | null;
             /** Id */
             id: number;
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Output Tokens */
+            output_tokens: number | null;
             /** Progress */
             progress: number;
             stage: components["schemas"]["JobStage"];
@@ -685,11 +695,15 @@ export interface components {
             script_api_key?: string | null;
             /** Script Base Url */
             script_base_url?: string | null;
+            /** Script Input Price */
+            script_input_price?: number | null;
             /**
              * Script Max Tokens
              * @default 8000
              */
             script_max_tokens?: number;
+            /** Script Output Price */
+            script_output_price?: number | null;
             /** Script Provider */
             script_provider?: string | null;
             /**

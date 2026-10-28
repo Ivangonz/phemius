@@ -1,6 +1,6 @@
 """The interface every script model adapter implements."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypedDict
 
 type AudioSuitability = Literal["recommended", "partial", "not_recommended"]
@@ -17,6 +17,24 @@ class Analysis(TypedDict):
     audio_suitability: AudioSuitability
     suitability_reason: str
     suitability_source: SuitabilitySource
+
+
+@dataclass(frozen=True)
+class TokenUsage:
+    """What a request used, as the provider reported it. None means not reported."""
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    # Only some providers (OpenRouter) report the price they charged.
+    provider_cost_usd: float | None = None
+    # Runs on the user's own machine or server, so it costs nothing.
+    is_local: bool = False
+
+
+@dataclass(frozen=True)
+class Script:
+    text: str
+    usage: TokenUsage = field(default_factory=TokenUsage)
 
 
 @dataclass(frozen=True)
@@ -43,6 +61,6 @@ class ScriptModel(Protocol):
 
     def analyze(self, title: str, text: str) -> Analysis: ...
 
-    def write_script(self, title: str, text: str, tone: str) -> str: ...
+    def write_script(self, title: str, text: str, tone: str) -> Script: ...
 
     def check(self) -> ScriptModelCheck: ...

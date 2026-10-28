@@ -9,7 +9,7 @@ import httpx2
 
 from phemius.config import Config
 from phemius.errors import ModelError
-from phemius.models.base import ScriptModelCheck
+from phemius.models.base import Script, ScriptModelCheck, TokenUsage
 from phemius.models.chat import ChatReply, ChatScriptModel
 from phemius.models.cleanup import clean_script
 
@@ -33,8 +33,9 @@ class OllamaModel(ChatScriptModel):
         super().__init__(model, script_max_tokens)
         self._client = http_client
 
-    def write_script(self, title: str, text: str, tone: str) -> str:
-        return clean_script(super().write_script(title, text, tone))
+    def write_script(self, title: str, text: str, tone: str) -> Script:
+        script = super().write_script(title, text, tone)
+        return Script(clean_script(script.text), script.usage)
 
     def list_models(self) -> list[InstalledModel]:
         """Models pulled into Ollama, sorted by name."""
@@ -144,7 +145,19 @@ def _chat_reply(reply: dict[str, Any]) -> ChatReply:
         content = str(reply["message"]["content"])
     except (KeyError, TypeError) as error:
         raise ModelError("Ollama returned an unexpected reply.") from error
-    return ChatReply(content=content, is_truncated=reply.get("done_reason") == "length")
+    return ChatReply(
+        content=content,
+        is_truncated=reply.get("done_reason") == "length",
+        usage=TokenUsage(
+            input_tokens=_count(reply.get("prompt_eval_count")),
+            output_tokens=_count(reply.get("eval_count")),
+            is_local=True,
+        ),
+    )
+
+
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) else None
 
 
 def _context_tokens(prompt: str, max_tokens: int) -> int:

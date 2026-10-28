@@ -11,7 +11,7 @@ import structlog
 from phemius.config import load_config
 from phemius.errors import ModelError
 from phemius.models import get_script_model
-from phemius.models.base import Analysis
+from phemius.models.base import Analysis, Script
 from phemius.models.offline import OfflineModel
 from phemius.models.spoken_text import to_spoken_text
 
@@ -29,7 +29,7 @@ def analyze(title: str, text: str) -> Analysis:
     return OfflineModel().analyze(title, text)
 
 
-def make_script(title: str, text: str, tone: str) -> str:
+def make_script(title: str, text: str, tone: str) -> Script:
     """Write a spoken script. Raises `ModelError` if the configured model fails.
 
     Every model gets the same speakable input: code marked, tables flattened, URLs

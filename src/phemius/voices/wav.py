@@ -38,6 +38,15 @@ def read_wav(data: bytes, hint: str) -> Clip:
         raise VoiceError("The voice engine did not return WAV audio.", hint) from error
 
 
+def wav_duration_seconds(path: Path) -> float | None:
+    """The length of a WAV file from its header, or None if it cannot be read."""
+    try:
+        with wave.open(str(path), "rb") as wav_file:
+            return wav_file.getnframes() / wav_file.getframerate()
+    except (wave.Error, EOFError, ZeroDivisionError):
+        return None
+
+
 def write_clips(clips: list[Clip], out_path: Path) -> None:
     """Write `clips` back to back as one WAV file."""
     if not any(clip.frames for clip in clips):

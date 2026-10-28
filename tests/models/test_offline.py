@@ -19,12 +19,18 @@ def test_write_script_removes_markdown_and_code() -> None:
         "# Setup\n\nRun `make` then see [the docs](https://example.com).\n\n```\nx\n```"
     )
 
-    script = OfflineModel().write_script("Setup", text, "conversational")
+    script = OfflineModel().write_script("Setup", text, "conversational").text
 
     assert script.startswith("Alright, let's walk through Setup.")
     assert "Section: Setup." in script
     assert "https://" not in script
     assert "```" not in script and "`" not in script
+
+
+def test_offline_script_is_local_so_it_costs_nothing() -> None:
+    script = OfflineModel().write_script("Setup", "Install it.", "neutral")
+
+    assert script.usage.is_local
 
 
 def test_summary_skips_the_title_heading() -> None:

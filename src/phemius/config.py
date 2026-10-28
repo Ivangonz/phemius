@@ -103,6 +103,14 @@ class Settings(BaseModel):
     script_max_tokens: Annotated[
         int, Field(gt=0), EnvVar("PHEMIUS_SCRIPT_MAX_TOKENS")
     ] = 8000
+    # US dollars per million tokens, for estimating the cost of providers that do
+    # not report one. Both are needed; they apply to whichever model is configured.
+    script_input_price: Annotated[
+        Annotated[float, Field(ge=0)] | None, EnvVar("PHEMIUS_SCRIPT_INPUT_PRICE")
+    ] = None
+    script_output_price: Annotated[
+        Annotated[float, Field(ge=0)] | None, EnvVar("PHEMIUS_SCRIPT_OUTPUT_PRICE")
+    ] = None
     # Read when the job runner starts, so a change applies on the next start.
     # Voices always render one at a time; this bounds parallel script writing.
     script_workers: Annotated[

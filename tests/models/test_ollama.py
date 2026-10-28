@@ -8,6 +8,7 @@ import pytest
 from phemius.config import load_config
 from phemius.errors import ModelError
 from phemius.models import get_script_model
+from phemius.models.base import TokenUsage
 from phemius.models.ollama import InstalledModel, OllamaModel
 
 type Handler = Callable[[httpx2.Request], httpx2.Response]
@@ -87,10 +88,20 @@ def test_write_script_sends_a_non_streaming_chat_and_cleans_the_reply() -> None:
 
     script = _model(handler).write_script("Setup", "# Setup", "neutral")
 
-    assert script == "This covers setup."
+    assert script.text == "This covers setup."
     assert requests[0]["model"] == "llama3.2"
     assert requests[0]["stream"] is False
     assert requests[0]["options"]["num_predict"] == 100
+
+
+def test_script_is_local_and_carries_ollama_token_counts() -> None:
+    reply = {**_chat_reply("A script."), "prompt_eval_count": 900, "eval_count": 250}
+
+    script = _model(_respond(200, reply)).write_script("A", "B", "neutral")
+
+    assert script.usage == TokenUsage(
+        input_tokens=900, output_tokens=250, is_local=True
+    )
 
 
 def test_context_window_fits_the_prompt_and_the_reply() -> None:

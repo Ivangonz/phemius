@@ -18,7 +18,7 @@ def failing_model(
 
 
 def test_no_model_configured_writes_offline_script() -> None:
-    script = agent.make_script("Setup", "# Setup\n\nInstall it.", "executive")
+    script = agent.make_script("Setup", "# Setup\n\nInstall it.", "executive").text
 
     assert script.startswith("Here's the brief on Setup.")
 
@@ -38,7 +38,7 @@ def test_model_receives_text_with_code_and_urls_made_speakable(
 
 
 def test_offline_script_says_a_code_example_instead_of_reading_it() -> None:
-    script = agent.make_script("Setup", "Run:\n\n    make run\n", "neutral")
+    script = agent.make_script("Setup", "Run:\n\n    make run\n", "neutral").text
 
     assert "make run" not in script
     assert "code example" in script

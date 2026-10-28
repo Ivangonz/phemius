@@ -23,6 +23,7 @@ from pydantic import SecretStr
 
 from phemius.config import Config
 from phemius.errors import ModelError
+from phemius.models.base import TokenUsage
 from phemius.models.chat import ChatReply, ChatScriptModel
 
 log = structlog.get_logger(__name__)
@@ -73,10 +74,12 @@ class OpenAICompatibleModel(ChatScriptModel):
         )
 
     def _chat(self, system: str, user: str, max_tokens: int) -> ChatReply:
-        choice = self._request(system, user, max_tokens).choices[0]
+        completion = self._request(system, user, max_tokens)
+        choice = completion.choices[0]
         return ChatReply(
             content=choice.message.content or "",
             is_truncated=choice.finish_reason == "length",
+            usage=_token_usage(completion),
         )
 
     def _request(self, system: str, user: str, max_tokens: int) -> ChatCompletion:
@@ -99,6 +102,25 @@ class OpenAICompatibleModel(ChatScriptModel):
                 error=model_error.message,
             )
             raise model_error from error
+
+
+def _token_usage(completion: ChatCompletion) -> TokenUsage:
+    usage = completion.usage
+    if usage is None:
+        return TokenUsage()
+    # `cost` is not in the OpenAI schema; OpenRouter adds it, in US dollars.
+    cost = (usage.model_extra or {}).get("cost")
+    return TokenUsage(
+        input_tokens=usage.prompt_tokens,
+        output_tokens=usage.completion_tokens,
+        provider_cost_usd=_price(cost),
+    )
+
+
+def _price(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
 
 
 def _model_error(
