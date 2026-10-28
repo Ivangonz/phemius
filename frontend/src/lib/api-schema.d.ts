@@ -292,10 +292,16 @@ export interface components {
              * @default http://localhost:11434
              */
             ollama_url?: string;
+            /** Openai Api Key */
+            openai_api_key?: string | null;
             /** Openrouter Api Key */
             openrouter_api_key?: string | null;
             /** @default wav */
             output_format?: components["schemas"]["OutputFormat"];
+            /** Script Api Key */
+            script_api_key?: string | null;
+            /** Script Base Url */
+            script_base_url?: string | null;
             /**
              * Script Max Tokens
              * @default 8000

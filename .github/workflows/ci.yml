@@ -56,5 +56,125 @@ jobs:
       - name: Run pytest
         run: uv run pytest
 
-  # The frontend job (Node 22, npm ci, API types up to date, format:check, lint,
-  # typecheck, test, build) is added with the UI build in #42, once #41 lands.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The UI's API types are generated from the FastAPI schema, so a diff here
+      # means the API changed without `make api-types` being run.
+      - name: Check API types are up to date
+        working-directory: .
+        run: |
+          uv sync --locked
+          make api-types
+          git diff --exit-code frontend/openapi.json frontend/src/lib/api-schema.d.ts \
+            || { echo "::error::API types are stale. Run 'make api-types' and commit the result."; exit 1; }
+
+      - name: Run Prettier (format check)
+        run: npm run format:check
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run tsc (typecheck)
+        run: npm run typecheck
+
+      - name: Run Vitest
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # Builds the sdist and wheel as a release would, then proves the wheel serves
+  # the UI from a clean virtualenv with no Node, as `uv tool install` would.
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Build the UI into src/phemius/static
+        working-directory: frontend
+        run: npm ci && npm run build
+
+      - name: Build the sdist and wheel
+        run: uv build --python 3.12
+
+      - name: Check the built UI is in the sdist and wheel
+        run: |
+          unzip -l dist/phemius-*.whl | grep -q ' phemius/static/index.html$' \
+            || { echo "::error::The wheel is missing phemius/static/index.html"; exit 1; }
+          tar -tzf dist/phemius-*.tar.gz | grep -q '/src/phemius/static/index.html$' \
+            || { echo "::error::The sdist is missing src/phemius/static/index.html"; exit 1; }
+
+      - name: Install the wheel in a clean virtualenv
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv/bin/python" dist/phemius-*.whl
+
+      # PATH holds only the virtualenv and system binaries, so Node is out of
+      # reach even though the runner has it installed. It is set in the script
+      # because the runner prepends setup-node's folder to a step's `env` PATH.
+      - name: Serve the UI and API from the installed wheel without Node
+        working-directory: ${{ runner.temp }}
+        env:
+          PHEMIUS_DATA_DIR: ${{ runner.temp }}/phemius-data
+          PHEMIUS_TTS: stub
+        run: |
+          export PATH="$RUNNER_TEMP/venv/bin:/usr/bin:/bin"
+          if command -v node; then echo "::error::Node is on PATH"; exit 1; fi
+          python -m uvicorn phemius.app:app --port 8000 > server.log 2>&1 &
+          for attempt in $(seq 30); do
+            curl -fsS http://127.0.0.1:8000/api/health > /dev/null && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/api/health | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8000/ | grep -q '<div id="root">'
+          curl -fsS http://127.0.0.1:8000/settings | grep -q '<div id="root">'
+
+      - name: Show the server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log" || true
