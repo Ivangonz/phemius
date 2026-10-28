@@ -156,14 +156,15 @@ jobs:
           uv pip install --python "$RUNNER_TEMP/venv/bin/python" dist/phemius-*.whl
 
       # PATH holds only the virtualenv and system binaries, so Node is out of
-      # reach even though the runner has it installed.
+      # reach even though the runner has it installed. It is set in the script
+      # because the runner prepends setup-node's folder to a step's `env` PATH.
       - name: Serve the UI and API from the installed wheel without Node
         working-directory: ${{ runner.temp }}
         env:
-          PATH: ${{ runner.temp }}/venv/bin:/usr/bin:/bin
           PHEMIUS_DATA_DIR: ${{ runner.temp }}/phemius-data
           PHEMIUS_TTS: stub
         run: |
+          export PATH="$RUNNER_TEMP/venv/bin:/usr/bin:/bin"
           if command -v node; then echo "::error::Node is on PATH"; exit 1; fi
           python -m uvicorn phemius.app:app --port 8000 > server.log 2>&1 &
           for attempt in $(seq 30); do
