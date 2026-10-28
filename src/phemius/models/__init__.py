@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from phemius.config import OFFLINE_PROVIDER, Config
 from phemius.errors import ModelError
-from phemius.models import offline, openrouter
+from phemius.models import offline, ollama, openrouter
 from phemius.models.base import ScriptModel
 
 __all__ = ["OFFLINE_PROVIDER", "SCRIPT_MODELS", "get_script_model"]
@@ -18,6 +18,7 @@ type ScriptModelFactory = Callable[[Config], ScriptModel]
 SCRIPT_MODELS: dict[str, ScriptModelFactory] = {
     OFFLINE_PROVIDER: offline.from_config,
     "openrouter": openrouter.from_config,
+    "ollama": ollama.from_config,
 }
 
 

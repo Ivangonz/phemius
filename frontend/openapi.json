@@ -413,6 +413,24 @@
             "title": "Model",
             "type": "string"
           },
+          "ollama_model": {
+            "default": "llama3.2",
+            "minLength": 1,
+            "title": "Ollama Model",
+            "type": "string"
+          },
+          "ollama_timeout": {
+            "default": 600,
+            "exclusiveMinimum": 0.0,
+            "title": "Ollama Timeout",
+            "type": "integer"
+          },
+          "ollama_url": {
+            "default": "http://localhost:11434",
+            "minLength": 1,
+            "title": "Ollama Url",
+            "type": "string"
+          },
           "openrouter_api_key": {
             "anyOf": [
               {

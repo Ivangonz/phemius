@@ -20,6 +20,9 @@ ENV_NAMES = [
     "FORMAT",
     "SCRIPT_MAX_TOKENS",
     "LOG_LEVEL",
+    "OLLAMA_URL",
+    "OLLAMA_MODEL",
+    "OLLAMA_TIMEOUT",
 ]
 
 

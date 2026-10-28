@@ -33,7 +33,7 @@ pages are placeholders, so for now you add documents and play audio through the
 API (see [Hear your first document](#hear-your-first-document)).
 
 Not available yet: Docker and `uv tool install` installs, other model providers
-(OpenAI-compatible servers, Ollama), other voice engines, GitHub and Confluence
+(OpenAI-compatible servers), other voice engines, GitHub and Confluence
 sources, and the access token. Until the access token exists, keep Phemius bound
 to `127.0.0.1`, as `make run` does.
 
@@ -176,6 +176,7 @@ The stub works even if you installed without the Kokoro extra (plain `uv sync`).
 | --- | --- | --- |
 | `offline` | Rules: strip markdown, turn headings into "Section: ..." and numbered lists into "Step 1. ...", and replace code blocks with a short spoken note | None |
 | `openrouter` | The model in `PHEMIUS_MODEL` on OpenRouter (default `anthropic/claude-sonnet-4.5`) | Calls `openrouter.ai` |
+| `ollama` | The model in `PHEMIUS_OLLAMA_MODEL` on a local [Ollama](https://ollama.com) server (default `llama3.2`) | Only your Ollama server |
 
 When `PHEMIUS_SCRIPT_PROVIDER` is not set, Phemius uses `openrouter` if an
 OpenRouter API key is configured and `offline` otherwise. So the shortest setup
@@ -188,6 +189,30 @@ make run
 ```
 
 `GET /api/config` reports the provider in use (`script_provider`) and the model.
+
+### Local model with Ollama
+
+Ollama keeps everything on your machine: with Ollama and Kokoro, Phemius needs
+no network at all once the models are downloaded.
+
+```bash
+ollama pull llama3.2                       # once; any chat model works
+export PHEMIUS_SCRIPT_PROVIDER=ollama
+export PHEMIUS_OLLAMA_MODEL=llama3.2       # optional; the default
+export PHEMIUS_OLLAMA_URL=http://localhost:11434   # optional; the default
+make run
+```
+
+- Use a name from `ollama list`. A name without a tag means `:latest`.
+- Small local models are slow on a CPU, so a request may take up to
+  `PHEMIUS_OLLAMA_TIMEOUT` seconds (default 600) before it fails.
+- Phemius removes the code fences, markdown and "Here is the script:" lead-ins
+  that small models add, so the voice reads only the script.
+- Phemius sizes Ollama's context window to fit each document, so a long
+  document is never cut off without notice. Larger documents need more memory.
+- Ollama failures carry a fix: `Ollama is not running at ...` (start it with
+  `ollama serve`), `Ollama model '...' is not pulled.` (run `ollama pull ...`) or
+  `Ollama did not answer in time.` (raise `PHEMIUS_OLLAMA_TIMEOUT`).
 
 When a configured model fails:
 
@@ -287,10 +312,13 @@ starts; saved settings apply on their next use without a restart (except
 | --- | --- | --- | --- |
 | `PHEMIUS_DATA_DIR` | environment only | `~/.phemius` | Library folder. Holds `library.db` (SQLite, including saved settings) and `audio/`. Created on startup. |
 | `PHEMIUS_LOG_LEVEL` | environment only | `info` | Log level: `debug`, `info`, `warning` or `error`. |
-| `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline` or `openrouter`. See [Script model](#script-model). |
+| `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline`, `openrouter` or `ollama`. See [Script model](#script-model). |
 | `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | OpenRouter model slug. Used only by the `openrouter` provider. |
 | `PHEMIUS_SCRIPT_MAX_TOKENS` | `script_max_tokens` | `8000` | Maximum tokens a model may write for one script. A positive whole number. |
 | `OPENROUTER_API_KEY` | `openrouter_api_key` | not set | OpenRouter API key. Write-only through the API. See [API keys](#api-keys). |
+| `PHEMIUS_OLLAMA_URL` | `ollama_url` | `http://localhost:11434` | Ollama server address. Used only by the `ollama` provider. |
+| `PHEMIUS_OLLAMA_MODEL` | `ollama_model` | `llama3.2` | Ollama model name, as shown by `ollama list`. |
+| `PHEMIUS_OLLAMA_TIMEOUT` | `ollama_timeout` | `600` | Seconds to wait for one Ollama reply. A positive whole number. |
 | `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro` or `stub` (silent audio, no model download). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
