@@ -1,7 +1,13 @@
 import pytest
 
 from phemius.errors import ModelError
-from phemius.models.prompts import SCRIPT_TEXT_LIMIT, parse_analysis, script_prompt
+from phemius.models.prompts import (
+    SCRIPT_TEXT_LIMIT,
+    parse_analysis,
+    script_prompt,
+    script_system,
+)
+from phemius.models.spoken_text import CODE_EXAMPLE_END, to_spoken_text
 
 
 def test_unknown_category_and_tone_fall_back_to_other() -> None:
@@ -30,3 +36,13 @@ def test_script_prompt_keeps_the_whole_document() -> None:
     text = "x" * SCRIPT_TEXT_LIMIT
 
     assert script_prompt("Fits", text).endswith(text)
+
+
+def test_script_system_explains_the_code_example_markers() -> None:
+    marked = to_spoken_text("```\nmake run\n```")
+    header = marked.splitlines()[0]
+
+    system = script_system("neutral")
+
+    assert header.startswith("[Code example") and "[Code example" in system
+    assert CODE_EXAMPLE_END in system
