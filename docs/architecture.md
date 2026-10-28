@@ -67,8 +67,10 @@ Every screen and endpoint uses one vocabulary:
 | `attempts` | 1, plus one per retry |
 
 An audio has exactly one job, and its `status`, `stage`, `error` and `hint` in
-`GET /api/docs` and `GET /api/audio/{id}` are read from that job; the audio row
-stores only the script and the file path, so the two cannot disagree.
+`GET /api/audio/{id}` are read from that job; the audio row stores only the
+script and the file path, so the two cannot disagree. A document's `status` in
+`GET /api/docs` is the state of its latest version's newest audio job, or
+`no_audio` when that version has none.
 
 - **Stages.** A worker claims the oldest job queued for its stage and marks it
   `running`. When the script is written the job goes back to `queued` at

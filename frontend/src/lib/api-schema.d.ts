@@ -369,10 +369,10 @@ export interface components {
             /** Version Id */
             version_id: number;
         };
-        /** DocumentSummary */
-        DocumentSummary: {
-            /** Audio */
-            audio: components["schemas"]["AudioSummary"][];
+        /** DocumentListItem */
+        DocumentListItem: {
+            /** Audio Id */
+            audio_id: number | null;
             /** Category */
             category: string;
             /** Created */
@@ -381,17 +381,22 @@ export interface components {
             id: number;
             /** Is Changed */
             is_changed: boolean;
+            /** Signature */
+            signature: string;
             /** Source */
             source: string;
+            stage: components["schemas"]["JobStage"] | null;
+            status: components["schemas"]["DocumentStatus"];
             /** Suggested Tone */
             suggested_tone: string;
-            /** Summary */
-            summary: string;
             /** Title */
             title: string;
+            /** Updated */
+            updated: number;
             /** Version */
             version: number;
         };
+        DocumentStatus: components["schemas"]["JobState"] | "no_audio";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -441,6 +446,17 @@ export interface components {
         JobType: "audio";
         /** @enum {string} */
         OutputFormat: "wav" | "m4a" | "mp3" | "mp4";
+        /** Page[DocumentListItem] */
+        Page_DocumentListItem_: {
+            /** Items */
+            items: components["schemas"]["DocumentListItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** Page[VersionSummary] */
         Page_VersionSummary_: {
             /** Items */
@@ -740,7 +756,17 @@ export interface operations {
     };
     list_documents_api_docs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                category?: string | null;
+                /** @description Suggested tone */
+                tone?: string | null;
+                status?: components["schemas"]["DocumentStatus"] | null;
+                /** @description Search titles */
+                q?: string | null;
+                order_by?: "-created" | "created" | "title" | "-updated";
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -753,7 +779,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentSummary"][];
+                    "application/json": components["schemas"]["Page_DocumentListItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

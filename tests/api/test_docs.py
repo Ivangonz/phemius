@@ -5,6 +5,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from phemius.store import documents as document_store
+from phemius.store.documents import NewDocument
 from phemius.voices import ENGINES
 from tests.models.fakes import FailingScriptModel, FakeScriptModel, UseScriptModel
 
@@ -52,7 +54,7 @@ def test_reuploading_same_content_is_a_duplicate(client: TestClient) -> None:
     second = _upload_sample(client, "standup-notes.md")
 
     assert second == {**first, "duplicate": True}
-    assert len(client.get("/api/docs").json()) == 1
+    assert client.get("/api/docs").json()["total"] == 1
 
 
 def test_upload_reports_unsupported_type(client: TestClient) -> None:
@@ -230,3 +232,86 @@ def test_versions_page_size_is_capped(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["errors"][0]["field"] == "limit"
+
+
+def _add_document(title: str, category: str = "how-to", tone: str = "teacher") -> None:
+    document_store.add_document(
+        NewDocument(
+            title=title,
+            source=f"/docs/{title}.md",
+            text=f"{title} text.",
+            category=category,
+            summary="A doc.",
+            suggested_tone=tone,
+        )
+    )
+
+
+def _listed_titles(client: TestClient, **params: str | int) -> list[str]:
+    response = client.get("/api/docs", params=params)
+    assert response.status_code == 200, response.json()
+    return [item["title"] for item in response.json()["items"]]
+
+
+def test_document_list_filters_combine(client: TestClient) -> None:
+    _add_document("Deploy", category="how-to", tone="teacher")
+    _add_document("Roadmap", category="reference", tone="podcast")
+    _add_document("Runbook", category="how-to", tone="podcast")
+
+    assert _listed_titles(client, category="how-to") == ["Runbook", "Deploy"]
+    assert _listed_titles(client, category="how-to", tone="podcast") == ["Runbook"]
+    assert _listed_titles(client, q="DEP", status="no_audio") == ["Deploy"]
+    assert _listed_titles(client, status="done") == []
+
+
+def test_document_list_pages_with_total(client: TestClient) -> None:
+    for title in ["A", "B", "C"]:
+        _add_document(title)
+
+    page = client.get("/api/docs", params={"limit": 2, "offset": 1}).json()
+
+    assert [item["title"] for item in page["items"]] == ["B", "A"]
+    assert (page["total"], page["limit"], page["offset"]) == (3, 2, 1)
+
+
+def test_document_list_item_is_a_summary(client: TestClient) -> None:
+    _add_document("Deploy")
+
+    [item] = client.get("/api/docs").json()["items"]
+
+    assert item["status"] == "no_audio"
+    assert item["version"] == 1
+    assert item["signature"]
+    assert "text" not in item
+
+
+def test_document_list_orders_by_title(client: TestClient) -> None:
+    for title in ["beta", "Alpha"]:
+        _add_document(title)
+
+    assert _listed_titles(client, order_by="title") == ["Alpha", "beta"]
+
+
+def test_document_list_search_treats_percent_literally(client: TestClient) -> None:
+    _add_document("100% uptime")
+    _add_document("1000 users")
+
+    assert _listed_titles(client, q="0%") == ["100% uptime"]
+
+
+def test_document_list_page_size_is_capped(client: TestClient) -> None:
+    response = client.get("/api/docs", params={"limit": 101})
+
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["field"] == "limit"
+
+
+def test_unknown_document_order_returns_standard_validation_error(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/docs", params={"order_by": "text; DROP TABLE docs"})
+
+    body = response.json()
+    assert response.status_code == 422
+    assert body["code"] == "validation_error"
+    assert [error["field"] for error in body["errors"]] == ["order_by"]

@@ -249,9 +249,10 @@ Phemius generates its audio in the background. Check its status:
 curl http://127.0.0.1:8000/api/docs
 ```
 
-Each entry in the document's `audio` list has a `status` (`queued`, `running`,
-then `done`, `failed` or `cancelled`) and a `stage` (`writing_script`, then
-`narrating`). When it is `done`, open the file in your browser to play it:
+Each document in `items` has the `status` of its latest audio (`queued`,
+`running`, then `done`, `failed` or `cancelled`; `no_audio` when it has none), a
+`stage` (`writing_script`, then `narrating`) and an `audio_id`. When it is
+`done`, open the file in your browser to play it:
 
 ```text
 http://127.0.0.1:8000/api/audio/1/file
@@ -649,7 +650,7 @@ Every endpoint is listed with its schema in the interactive docs at
 | `GET /api/config` | Tones, voices, default voice, voice engine and its `tts_status`, script provider, model, last categorizing error, watched folder |
 | `GET /api/settings` | Every setting with its value, `source` (`env`, `saved` or `default`) and `is_locked`; secrets only as `has_key` |
 | `PATCH /api/settings` | Save some settings (only the fields sent; `null` removes a saved value). `409` if a field is locked by an environment variable, `422` for invalid values |
-| `GET /api/docs` | Library: all documents, newest first, each with its audio |
+| `GET /api/docs` | Library: one summary per document (latest version, its newest audio's `audio_id`, `status` and `stage`, `is_changed`, and a `signature` that changes only when the row does). Filter with `?category=`, `?tone=`, `?status=` (a job state or `no_audio`) and `?q=` (title search). `?order_by=` is `-created` (default), `created`, `title` or `-updated`. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
 | `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false` |
 | `GET /api/docs/{id}` | One document's latest version, including its extracted text |
 | `GET /api/docs/{id}/versions` | The document's versions, newest first, each with its audio. Paginated with `?limit=` (default 25, max 100) and `?offset=` |

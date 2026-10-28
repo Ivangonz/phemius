@@ -7,30 +7,12 @@ import hashlib
 import sqlite3
 import time
 from dataclasses import dataclass
-from typing import Any, Literal, TypedDict, cast
+from typing import Literal, TypedDict, cast
 
 from phemius.store.audio import AUDIO_JOB_COLUMNS, AudioSummary
 from phemius.store.database import transaction
 
 type SaveOutcome = Literal["created", "new_version", "unchanged"]
-
-_IS_LATEST_VERSION = (
-    "v.number = (SELECT MAX(number) FROM doc_versions WHERE doc_id = d.id)"
-)
-
-
-class DocumentSummary(TypedDict):
-    id: int
-    version: int
-    title: str
-    source: str
-    category: str
-    summary: str
-    suggested_tone: str
-    created: float
-    # True when earlier versions have audio but the latest one has none.
-    is_changed: bool
-    audio: list[AudioSummary]
 
 
 class Document(TypedDict):
@@ -157,28 +139,6 @@ def _insert_version(
         ),
     )
     return StoredVersion(document_id, number, outcome)
-
-
-def list_documents() -> list[DocumentSummary]:
-    with transaction() as connection:
-        documents = [
-            dict(row)
-            for row in connection.execute(
-                "SELECT d.id, v.number AS version, v.title, d.source, v.category,"
-                " v.summary, v.suggested_tone, d.created"
-                " FROM docs d JOIN doc_versions v ON v.doc_id = d.id"
-                f" WHERE {_IS_LATEST_VERSION} ORDER BY d.created DESC, d.id DESC"
-            )
-        ]
-        for document in documents:
-            document["audio"] = _audio_summaries(connection, document["id"])
-            document["is_changed"] = _is_changed(document)
-    return cast(list[DocumentSummary], documents)
-
-
-def _is_changed(document: dict[str, Any]) -> bool:
-    versions_with_audio = {audio["version"] for audio in document["audio"]}
-    return bool(versions_with_audio) and document["version"] not in versions_with_audio
 
 
 def _audio_summaries(
