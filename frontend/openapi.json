@@ -413,6 +413,20 @@
             "title": "Model",
             "type": "string"
           },
+          "openai_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Api Key"
+          },
           "openrouter_api_key": {
             "anyOf": [
               {
@@ -430,6 +444,32 @@
           "output_format": {
             "$ref": "#/components/schemas/OutputFormat",
             "default": "wav"
+          },
+          "script_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Api Key"
+          },
+          "script_base_url": {
+            "anyOf": [
+              {
+                "pattern": "^https?://\\S+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Base Url"
           },
           "script_max_tokens": {
             "default": 8000,

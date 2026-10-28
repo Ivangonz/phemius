@@ -20,6 +20,8 @@ ENV_NAMES = [
     "FORMAT",
     "SCRIPT_MAX_TOKENS",
     "LOG_LEVEL",
+    "SCRIPT_BASE_URL",
+    "SCRIPT_API_KEY",
 ]
 
 
@@ -29,6 +31,7 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
     for name in ENV_NAMES:
         monkeypatch.delenv(config.ENV_PREFIX + name, raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     # Without this, saved settings from an earlier test's library would leak in.
     monkeypatch.setattr(database, "_db_path", None)
     data_dir = tmp_path / "data"
