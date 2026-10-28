@@ -1,13 +1,12 @@
 # Usage: make <command> [backend|frontend]
 #   make install         Install dependencies, including Kokoro for real voices
-#   make run             Run the API on http://127.0.0.1:8000 and the UI dev server
+#   make run             Run the API on port 8000 (see PHEMIUS_ACCESS_MODE) and the UI dev server
 #   make run frontend    Run only the Vite dev server (proxies /api to the API)
 #   make test backend    Run only the backend tests
 #   make check           Run everything CI runs
 
 .PHONY: help install run build test lint format format-check check api-types backend frontend
 
-HOST ?= 127.0.0.1
 PORT ?= 8000
 
 # The optional second word picks one app; it is swallowed so make doesn't run it.
@@ -25,12 +24,12 @@ install: ## Install dependencies (uv with Kokoro, npm)
 
 run: ## Run the dev servers with reload
 	@if [ "$(APP)" = "backend" ]; then \
-		uv run uvicorn phemius.app:app --reload --host $(HOST) --port $(PORT); \
+		uv run phemius serve --reload --port $(PORT); \
 	elif [ "$(APP)" = "frontend" ]; then \
 		cd frontend && npm run dev; \
 	else \
 		trap 'kill 0' INT TERM EXIT; \
-		uv run uvicorn phemius.app:app --reload --host $(HOST) --port $(PORT) & \
+		uv run phemius serve --reload --port $(PORT) & \
 		(cd frontend && npm run dev) & \
 		wait; \
 	fi

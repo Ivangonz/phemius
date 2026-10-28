@@ -1,6 +1,27 @@
 {
   "components": {
     "schemas": {
+      "AccessMode": {
+        "enum": [
+          "local",
+          "network",
+          "proxy"
+        ],
+        "type": "string"
+      },
+      "AccessToken": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "AccessToken",
+        "type": "object"
+      },
       "Audio": {
         "properties": {
           "created": {
@@ -398,6 +419,10 @@
         "additionalProperties": false,
         "description": "Options a user can save. Adding one is one field here, with its `EnvVar`.",
         "properties": {
+          "access_mode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "default": "local"
+          },
           "default_voice": {
             "anyOf": [
               {
@@ -698,6 +723,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/access/token": {
+      "post": {
+        "description": "Replace the access token and return the new one. It is shown only here.",
+        "operationId": "regenerate_token_api_access_token_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Regenerate Token",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/api/audio/{audio_id}": {
       "get": {
         "operationId": "get_audio_api_audio__audio_id__get",

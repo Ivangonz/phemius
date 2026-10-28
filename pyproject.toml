@@ -16,6 +16,9 @@ dependencies = [
     "httpx2>=2.16",
 ]
 
+[project.scripts]
+phemius = "phemius.cli:main"
+
 [project.optional-dependencies]
 kokoro = [
     "kokoro>=0.9",
