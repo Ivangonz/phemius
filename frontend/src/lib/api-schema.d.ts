@@ -326,6 +326,8 @@ export interface components {
             /** Voice */
             voice?: string | null;
         };
+        /** @enum {string} */
+        AudioSuitability: "recommended" | "partial" | "not_recommended";
         /** AudioSummary */
         AudioSummary: {
             /** Error */
@@ -353,6 +355,7 @@ export interface components {
         CommaList: string;
         /** Document */
         Document: {
+            audio_suitability: components["schemas"]["AudioSuitability"] | null;
             /** Category */
             category: string;
             /** Content Hash */
@@ -365,12 +368,17 @@ export interface components {
             source: string;
             /** Suggested Tone */
             suggested_tone: string;
+            /** Suitability Reason */
+            suitability_reason: string | null;
+            suitability_source: components["schemas"]["SuitabilitySource"] | null;
             /** Summary */
             summary: string;
             /** Text */
             text: string;
             /** Title */
             title: string;
+            /** Tone Rationale */
+            tone_rationale: string | null;
             /** Version */
             version: number;
             /** Version Id */
@@ -380,6 +388,7 @@ export interface components {
         DocumentListItem: {
             /** Audio Id */
             audio_id: number | null;
+            audio_suitability: components["schemas"]["AudioSuitability"] | null;
             /** Category */
             category: string;
             /** Created */
@@ -582,6 +591,11 @@ export interface components {
              */
             script_workers?: number;
             /**
+             * Skip Not Recommended
+             * @default true
+             */
+            skip_not_recommended?: boolean;
+            /**
              * Voice Engine
              * @default kokoro
              */
@@ -602,6 +616,8 @@ export interface components {
                 [key: string]: components["schemas"]["SettingStatus"];
             };
         };
+        /** @enum {string} */
+        SuitabilitySource: "model" | "heuristic";
         /** UploadResult */
         UploadResult: {
             /** Doc Id */
@@ -612,6 +628,11 @@ export interface components {
             error?: string | null;
             /** File */
             file: string;
+            /**
+             * Is Audio Skipped
+             * @default false
+             */
+            is_audio_skipped?: boolean;
             /** Version */
             version?: number | null;
         };
@@ -632,6 +653,7 @@ export interface components {
         VersionSummary: {
             /** Audio */
             audio: components["schemas"]["AudioSummary"][];
+            audio_suitability: components["schemas"]["AudioSuitability"] | null;
             /** Category */
             category: string;
             /** Content Hash */
@@ -644,10 +666,15 @@ export interface components {
             number: number;
             /** Suggested Tone */
             suggested_tone: string;
+            /** Suitability Reason */
+            suitability_reason: string | null;
+            suitability_source: components["schemas"]["SuitabilitySource"] | null;
             /** Summary */
             summary: string;
             /** Title */
             title: string;
+            /** Tone Rationale */
+            tone_rationale: string | null;
         };
         /** @enum {string} */
         WatchOnChange: "mark" | "regenerate";

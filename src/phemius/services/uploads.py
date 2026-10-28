@@ -17,6 +17,8 @@ class UploadResult(BaseModel):
     version: int | None = None
     duplicate: bool | None = None
     error: str | None = None
+    # True when the auto-import rule kept a not_recommended document from audio.
+    is_audio_skipped: bool = False
 
 
 def import_upload(
@@ -43,7 +45,9 @@ def import_upload(
     )
     if is_auto_audio and not is_duplicate:
         try:
-            pipeline.build_audio(stored.document_id)
+            result.is_audio_skipped = (
+                pipeline.build_auto_audio(stored.document_id) is None
+            )
         except PhemiusError as error:  # the document is kept; only audio failed
             result.error = pipeline.error_text(error)
     return result

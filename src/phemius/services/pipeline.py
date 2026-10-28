@@ -14,7 +14,7 @@ from phemius.services import agent, ffmpeg, ingest, queue, voices
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
-from phemius.store.documents import NewDocument, StoredVersion
+from phemius.store.documents import Document, NewDocument, StoredVersion
 from phemius.store.jobs import AudioFile, AudioFormat, ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
@@ -48,6 +48,25 @@ def _store_analyzed(path: Path, source: str, text: str) -> StoredVersion:
     return document_store.add_document(document)
 
 
+def build_auto_audio(document_id: int) -> QueuedAudio | None:
+    """Queue audio for an automatic import, or None if the import rule skips it.
+
+    With `skip_not_recommended` on, a document flagged not_recommended is kept
+    but not narrated; `build_audio` still narrates it on request.
+    """
+    document = _get_document(document_id)
+    is_skipped = document["audio_suitability"] == "not_recommended"
+    if is_skipped and load_config().skip_not_recommended:
+        log.info(
+            "auto_audio_skipped",
+            document_id=document_id,
+            version=document["version"],
+            reason="not_recommended",
+        )
+        return None
+    return build_audio(document_id)
+
+
 def build_audio(
     document_id: int, tone: str | None = None, voice: str | None = None
 ) -> QueuedAudio:
@@ -56,15 +75,20 @@ def build_audio(
     Raises `InvalidInputError` for a voice the configured engine does not offer
     and `VoiceError` when PHEMIUS_TTS or PHEMIUS_VOICE is misconfigured.
     """
-    document = document_store.get_document(document_id)
-    if document is None:
-        raise NotFoundError(f"Document {document_id} not found")
+    document = _get_document(document_id)
     tone = tone or document["suggested_tone"]
     voice = voices.resolve_voice(voice)
     queued = job_store.enqueue_audio(document_id, document["version_id"], tone, voice)
     log.info("audio_queued", audio_id=queued.audio_id, job_id=queued.job_id)
     queue.notify_workers()
     return queued
+
+
+def _get_document(document_id: int) -> Document:
+    document = document_store.get_document(document_id)
+    if document is None:
+        raise NotFoundError(f"Document {document_id} not found")
+    return document
 
 
 def write_script(job: ClaimedJob) -> bool:

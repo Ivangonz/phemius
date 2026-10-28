@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from phemius.models.base import AudioSuitability
 from phemius.store import database, document_list
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
@@ -19,6 +20,7 @@ def _add(
     category: str = "how-to",
     tone: str = "teacher",
     text: str | None = None,
+    suitability: AudioSuitability = "recommended",
 ) -> int:
     stored = document_store.add_document(
         NewDocument(
@@ -28,6 +30,10 @@ def _add(
             category=category,
             summary="A doc.",
             suggested_tone=tone,
+            tone_rationale="Suits a doc.",
+            audio_suitability=suitability,
+            suitability_reason="Rated for the test.",
+            suitability_source="model",
         )
     )
     return stored.document_id
@@ -102,6 +108,16 @@ def test_audio_of_an_earlier_version_leaves_the_latest_without_audio() -> None:
     assert (item["version"], item["status"]) == (2, "no_audio")
     assert item["audio_id"] is None
     assert item["is_changed"] is True
+
+
+def test_each_row_shows_whether_its_latest_version_suits_audio() -> None:
+    _add("Guide", text="Install with pip.")
+    _add("Guide", text="| Code | Meaning |", suitability="not_recommended")
+    _add("Notes", suitability="partial")
+
+    suitability = {item["title"]: item["audio_suitability"] for item in _list()}
+
+    assert suitability == {"Guide": "not_recommended", "Notes": "partial"}
 
 
 def test_title_search_matches_percent_and_underscore_literally() -> None:

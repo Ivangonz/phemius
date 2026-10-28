@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from phemius.models.offline import OfflineModel
+
+FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
 def test_analyze_categorizes_a_how_to() -> None:
@@ -29,3 +33,14 @@ def test_summary_skips_the_title_heading() -> None:
     analysis = OfflineModel().analyze("Deploying the Billing Service", text)
 
     assert analysis["summary"] == "This guide explains it."
+
+
+def test_analyze_flags_its_suitability_and_rationale_as_heuristic() -> None:
+    text = (FIXTURES / "suitability" / "error-codes-reference.md").read_text()
+
+    analysis = OfflineModel().analyze("Error codes", text)
+
+    assert analysis["audio_suitability"] == "not_recommended"
+    assert analysis["suitability_reason"]
+    assert analysis["suggested_tone"] in analysis["tone_rationale"]
+    assert analysis["suitability_source"] == "heuristic"

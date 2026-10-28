@@ -8,6 +8,7 @@ import json
 from dataclasses import dataclass
 from typing import Literal, TypedDict, cast
 
+from phemius.models.base import AudioSuitability
 from phemius.store.database import transaction
 from phemius.store.jobs import AudioFormat, JobStage, JobState
 
@@ -26,13 +27,15 @@ _ORDER_CLAUSES: dict[DocumentOrder, str] = {
 _SUMMARIES = """
 WITH latest AS (
     SELECT d.id, d.source, d.created, v.id AS version_id, v.number AS version,
-        v.title, v.category, v.suggested_tone, v.created AS updated
+        v.title, v.category, v.suggested_tone, v.audio_suitability,
+        v.created AS updated
     FROM docs d JOIN doc_versions v ON v.doc_id = d.id
     WHERE v.number = (SELECT MAX(number) FROM doc_versions WHERE doc_id = d.id)
 ),
 summaries AS (
-    SELECT l.id, l.title, l.source, l.category, l.suggested_tone, l.version,
-        l.created, l.updated, a.id AS audio_id, a.format, a.size_bytes,
+    SELECT l.id, l.title, l.source, l.category, l.suggested_tone,
+        l.audio_suitability, l.version, l.created, l.updated, a.id AS audio_id,
+        a.format, a.size_bytes,
         COALESCE(j.state, 'no_audio') AS status, j.stage,
         a.id IS NULL AND EXISTS (SELECT 1 FROM audio WHERE doc_id = l.id)
             AS is_changed
@@ -52,6 +55,8 @@ class DocumentListItem(TypedDict):
     source: str
     category: str
     suggested_tone: str
+    # None for versions imported before suitability was rated: unknown.
+    audio_suitability: AudioSuitability | None
     version: int
     created: float
     updated: float

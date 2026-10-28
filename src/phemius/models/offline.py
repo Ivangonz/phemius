@@ -10,6 +10,7 @@ from phemius.config import Config
 from phemius.models.base import Analysis, ScriptModelCheck
 from phemius.models.prompts import TONE_BY_CATEGORY
 from phemius.models.spoken_text import CODE_EXAMPLE
+from phemius.models.suitability import assess_suitability, rule_tone_rationale
 
 # Category rules, checked in order.
 CATEGORY_PATTERNS = [
@@ -29,10 +30,16 @@ class OfflineModel:
 
     def analyze(self, title: str, text: str) -> Analysis:
         category = _match_category(text.lower())
+        tone = TONE_BY_CATEGORY[category]
+        suitability = assess_suitability(text)
         return Analysis(
             category=category,
             summary=_first_sentence(text)[:200],
-            suggested_tone=TONE_BY_CATEGORY[category],
+            suggested_tone=tone,
+            tone_rationale=rule_tone_rationale(category, tone),
+            audio_suitability=suitability.verdict,
+            suitability_reason=suitability.reason,
+            suitability_source="heuristic",
         )
 
     def write_script(self, title: str, text: str, tone: str) -> str:

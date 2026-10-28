@@ -1,7 +1,12 @@
 from collections.abc import Callable
 
 from phemius.errors import ModelError
-from phemius.models.base import Analysis, ScriptModel, ScriptModelCheck
+from phemius.models.base import (
+    Analysis,
+    AudioSuitability,
+    ScriptModel,
+    ScriptModelCheck,
+)
 
 type UseScriptModel = Callable[[ScriptModel], None]
 
@@ -9,8 +14,13 @@ type UseScriptModel = Callable[[ScriptModel], None]
 class FakeScriptModel:
     model = "fake/model"
 
-    def __init__(self, script: str = "A fake spoken script.") -> None:
+    def __init__(
+        self,
+        script: str = "A fake spoken script.",
+        suitability: AudioSuitability = "recommended",
+    ) -> None:
         self.script = script
+        self.suitability: AudioSuitability = suitability
         self.analyze_calls = 0
 
     def analyze(self, title: str, text: str) -> Analysis:
@@ -19,6 +29,10 @@ class FakeScriptModel:
             category="proposal / spec",
             summary=f"Fake summary of {title}.",
             suggested_tone="podcast",
+            tone_rationale="Fake rationale for the podcast tone.",
+            audio_suitability=self.suitability,
+            suitability_reason=f"Fake reason it is {self.suitability}.",
+            suitability_source="model",
         )
 
     def write_script(self, title: str, text: str, tone: str) -> str:

@@ -98,6 +98,10 @@ def _queue_audio(text: str = "Install it with uv.") -> int:
             category="how-to",
             summary="A guide.",
             suggested_tone="teacher",
+            tone_rationale="Teacher suits a guide.",
+            audio_suitability="recommended",
+            suitability_reason="Mostly prose.",
+            suitability_source="model",
         )
     )
     return pipeline.build_audio(stored.document_id).job_id

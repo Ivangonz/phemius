@@ -38,7 +38,7 @@ class ChatScriptModel(ABC):
             prompts.analysis_prompt(title, text),
             prompts.ANALYSIS_MAX_TOKENS,
         )
-        return prompts.parse_analysis(reply)
+        return prompts.parse_analysis(reply, text)
 
     def write_script(self, title: str, text: str, tone: str) -> str:
         return self._complete(

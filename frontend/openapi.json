@@ -224,6 +224,14 @@
         "title": "AudioRequest",
         "type": "object"
       },
+      "AudioSuitability": {
+        "enum": [
+          "recommended",
+          "partial",
+          "not_recommended"
+        ],
+        "type": "string"
+      },
       "AudioSummary": {
         "properties": {
           "error": {
@@ -325,6 +333,16 @@
       },
       "Document": {
         "properties": {
+          "audio_suitability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioSuitability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "category": {
             "title": "Category",
             "type": "string"
@@ -349,6 +367,27 @@
             "title": "Suggested Tone",
             "type": "string"
           },
+          "suitability_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suitability Reason"
+          },
+          "suitability_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuitabilitySource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "summary": {
             "title": "Summary",
             "type": "string"
@@ -360,6 +399,17 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "tone_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone Rationale"
           },
           "version": {
             "title": "Version",
@@ -381,6 +431,10 @@
           "category",
           "summary",
           "suggested_tone",
+          "tone_rationale",
+          "audio_suitability",
+          "suitability_reason",
+          "suitability_source",
           "created"
         ],
         "title": "Document",
@@ -398,6 +452,16 @@
               }
             ],
             "title": "Audio Id"
+          },
+          "audio_suitability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioSuitability"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "category": {
             "title": "Category",
@@ -480,6 +544,7 @@
           "source",
           "category",
           "suggested_tone",
+          "audio_suitability",
           "version",
           "created",
           "updated",
@@ -1061,6 +1126,11 @@
             "title": "Script Workers",
             "type": "integer"
           },
+          "skip_not_recommended": {
+            "default": true,
+            "title": "Skip Not Recommended",
+            "type": "boolean"
+          },
           "voice_engine": {
             "default": "kokoro",
             "minLength": 1,
@@ -1111,6 +1181,13 @@
         "title": "SettingsOverview",
         "type": "object"
       },
+      "SuitabilitySource": {
+        "enum": [
+          "model",
+          "heuristic"
+        ],
+        "type": "string"
+      },
       "UploadResult": {
         "properties": {
           "doc_id": {
@@ -1149,6 +1226,11 @@
           "file": {
             "title": "File",
             "type": "string"
+          },
+          "is_audio_skipped": {
+            "default": false,
+            "title": "Is Audio Skipped",
+            "type": "boolean"
           },
           "version": {
             "anyOf": [
@@ -1217,6 +1299,16 @@
             "title": "Audio",
             "type": "array"
           },
+          "audio_suitability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioSuitability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "category": {
             "title": "Category",
             "type": "string"
@@ -1241,6 +1333,27 @@
             "title": "Suggested Tone",
             "type": "string"
           },
+          "suitability_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suitability Reason"
+          },
+          "suitability_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuitabilitySource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "summary": {
             "title": "Summary",
             "type": "string"
@@ -1248,6 +1361,17 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "tone_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone Rationale"
           }
         },
         "required": [
@@ -1258,6 +1382,10 @@
           "category",
           "summary",
           "suggested_tone",
+          "tone_rationale",
+          "audio_suitability",
+          "suitability_reason",
+          "suitability_source",
           "created",
           "audio"
         ],

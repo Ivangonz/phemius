@@ -146,11 +146,9 @@ def test_analyze_parses_the_json_reply() -> None:
 
     analysis = model.analyze("API", "GET /docs returns documents.")
 
-    assert analysis == {
-        "category": "reference / API",
-        "summary": "Lists endpoints.",
-        "suggested_tone": "neutral",
-    }
+    assert analysis["category"] == "reference / API"
+    assert analysis["summary"] == "Lists endpoints."
+    assert analysis["suggested_tone"] == "neutral"
 
 
 def test_check_reports_model_and_latency() -> None:

@@ -21,6 +21,10 @@ def _document(text: str, source: str = "/docs/guide.md") -> NewDocument:
         category="how-to",
         summary="A guide.",
         suggested_tone="teacher",
+        tone_rationale="Teacher suits a guide.",
+        audio_suitability="recommended",
+        suitability_reason="Mostly prose.",
+        suitability_source="model",
     )
 
 

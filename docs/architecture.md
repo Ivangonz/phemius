@@ -13,7 +13,7 @@ flowchart LR
     upload["Upload<br/>POST /api/docs"] --> ingest
     watch["Watched folder<br/>PHEMIUS_WATCH_DIR"] --> ingest
     ingest["Ingest<br/>extract text, guess title"] --> analysis
-    analysis["Analysis<br/>category, summary, suggested tone"] --> store[("Library<br/>SQLite + audio folder")]
+    analysis["Analysis<br/>category, summary, tone, audio suitability"] --> store[("Library<br/>SQLite + audio folder")]
     store --> script["Script<br/>queued job; script model writes a spoken version in a tone"]
     script --> narration["Narration<br/>voice engine, one at a time"]
     narration --> convert["Convert<br/>optional ffmpeg to M4A or MP3"]
@@ -25,9 +25,15 @@ flowchart LR
    `services/ingest.py` extracts plain text from Markdown, text, reStructuredText,
    HTML, DOCX or PDF, and guesses a title from the first heading or line.
 2. **Analysis.** `services/agent.py` asks the configured script model
-   (`PHEMIUS_SCRIPT_PROVIDER`) for a category, a one-sentence summary and a
-   suggested tone. If the model fails, it falls back to the offline rules and
-   keeps the error for `GET /api/config`.
+   (`PHEMIUS_SCRIPT_PROVIDER`) for a category, a one-sentence summary, a
+   suggested tone with a one-sentence rationale, and an audio suitability
+   (`recommended`, `partial` or `not_recommended`) with a one-sentence reason.
+   If the model fails, it falls back to the offline rules and keeps the error for
+   `GET /api/config`. The rules (`models/suitability.py`) rate a document by the
+   share of its characters in tables, code and key/value constants, and also
+   stand in for a model reply with no valid rating; `suitability_source` says
+   which judged it. Automatic imports skip the audio of a `not_recommended`
+   document while `PHEMIUS_SKIP_NOT_RECOMMENDED` is on.
 3. **Library.** `store/documents.py` saves the document. A document is
    identified by its source (path or upload filename) and has versions: new text
    from the same source, compared by a SHA-256 hash, adds a version, and the

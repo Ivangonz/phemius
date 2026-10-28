@@ -179,6 +179,72 @@ def test_reuploading_changed_file_adds_a_version(client: TestClient) -> None:
     assert document["text"] == "# Guide\n\nInstall with uv."
 
 
+def _upload_with_auto_audio(client: TestClient, name: str) -> dict[str, Any]:
+    content = (SAMPLES / name).read_bytes()
+    response = client.post(
+        "/api/docs", files=[("files", (name, content, "text/markdown"))]
+    )
+    result: dict[str, Any] = response.json()[0]
+    return result
+
+
+def test_analysis_from_the_model_is_stored_and_returned(
+    client: TestClient, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(suitability="partial"))
+    uploaded = _upload_sample(client, "deploy-guide.md")
+
+    document = client.get(f"/api/docs/{uploaded['doc_id']}").json()
+    versions = client.get(f"/api/docs/{uploaded['doc_id']}/versions").json()
+
+    expected = {
+        "audio_suitability": "partial",
+        "suitability_reason": "Fake reason it is partial.",
+        "tone_rationale": "Fake rationale for the podcast tone.",
+        "suitability_source": "model",
+    }
+    assert {key: document[key] for key in expected} == expected
+    assert {key: versions["items"][0][key] for key in expected} == expected
+
+
+def test_auto_audio_skips_a_document_not_recommended_for_audio(
+    client: TestClient, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(suitability="not_recommended"))
+
+    uploaded = _upload_with_auto_audio(client, "deploy-guide.md")
+
+    assert uploaded["doc_id"] is not None
+    assert uploaded["is_audio_skipped"] is True
+    assert client.get("/api/queue").json()["total"] == 0
+
+
+def test_generate_audio_still_works_for_a_skipped_document(
+    client: TestClient, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(suitability="not_recommended"))
+    uploaded = _upload_with_auto_audio(client, "deploy-guide.md")
+
+    created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+
+    assert created.status_code == 200
+    assert client.get("/api/queue").json()["total"] == 1
+
+
+def test_auto_audio_narrates_every_document_when_skipping_is_off(
+    client: TestClient,
+    use_script_model: UseScriptModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_SKIP_NOT_RECOMMENDED", "false")
+    use_script_model(FakeScriptModel(suitability="not_recommended"))
+
+    uploaded = _upload_with_auto_audio(client, "deploy-guide.md")
+
+    assert uploaded["is_audio_skipped"] is False
+    assert client.get("/api/queue").json()["total"] == 1
+
+
 def test_identical_reupload_is_a_duplicate_without_a_model_call(
     client: TestClient, use_script_model: UseScriptModel
 ) -> None:
@@ -245,6 +311,10 @@ def _add_document(title: str, category: str = "how-to", tone: str = "teacher") -
             category=category,
             summary="A doc.",
             suggested_tone=tone,
+            tone_rationale="Suits a doc.",
+            audio_suitability="recommended",
+            suitability_reason="Mostly prose.",
+            suitability_source="model",
         )
     )
 
