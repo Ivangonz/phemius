@@ -13,6 +13,7 @@ from phemius.services import agent, ingest, voices
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
 from phemius.store.documents import Document, NewDocument, StoredVersion
+from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
 
 log = structlog.get_logger(__name__)
@@ -99,7 +100,7 @@ def error_text(error: Exception) -> str:
 
 def _synthesize(audio_id: int, script: str, voice: str) -> Path:
     config = load_config()
-    config.audio_dir.mkdir(parents=True, exist_ok=True)
+    create_private_dir(config.audio_dir)
     with _synthesis_lock:
         engine = get_engine(config)
         out_path = config.audio_dir / f"{audio_id}.{engine.extension}"

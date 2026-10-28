@@ -3,6 +3,7 @@
 import wave
 from pathlib import Path
 
+from phemius.config import Config
 from phemius.voices.base import Voice, VoiceCheck
 from phemius.voices.text import split_chunks
 
@@ -26,3 +27,7 @@ class StubEngine:
             wav_file.setsampwidth(2)
             wav_file.setframerate(SAMPLE_RATE)
             wav_file.writeframes(b"\x00\x00" * SAMPLE_RATE * seconds)
+
+
+def from_config(config: Config) -> StubEngine:
+    return StubEngine()

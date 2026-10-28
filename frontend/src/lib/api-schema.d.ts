@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/access/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Token
+         * @description Replace the access token and return the new one. It is shown only here.
+         */
+        post: operations["regenerate_token_api_access_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/audio/{audio_id}": {
         parameters: {
             query?: never;
@@ -166,6 +186,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        AccessMode: "local" | "network" | "proxy";
+        /** AccessToken */
+        AccessToken: {
+            /** Token */
+            token: string;
+        };
         /** Audio */
         Audio: {
             /** Created */
@@ -221,6 +248,7 @@ export interface components {
             /** Files */
             files: string[];
         };
+        CommaList: string;
         /** Document */
         Document: {
             /** Category */
@@ -310,17 +338,58 @@ export interface components {
          * @description Options a user can save. Adding one is one field here, with its `EnvVar`.
          */
         Settings: {
+            /** @default local */
+            access_mode?: components["schemas"]["AccessMode"];
             /** Default Voice */
             default_voice?: string | null;
+            /** Elevenlabs Api Key */
+            elevenlabs_api_key?: string | null;
+            /** @default JBFqnCBsd6RMkjVDRZzb,EXAVITQu4vr4xnSDxMaL */
+            elevenlabs_voices?: components["schemas"]["CommaList"];
             /**
              * Model
              * @default anthropic/claude-sonnet-4.5
              */
             model?: string;
+            /**
+             * Ollama Model
+             * @default llama3.2
+             */
+            ollama_model?: string;
+            /**
+             * Ollama Timeout
+             * @default 600
+             */
+            ollama_timeout?: number;
+            /**
+             * Ollama Url
+             * @default http://localhost:11434
+             */
+            ollama_url?: string;
+            /** Openai Api Key */
+            openai_api_key?: string | null;
+            /** Openai Speech Api Key */
+            openai_speech_api_key?: string | null;
+            /**
+             * Openai Speech Base Url
+             * @default https://api.openai.com/v1
+             */
+            openai_speech_base_url?: string;
+            /**
+             * Openai Speech Model
+             * @default tts-1
+             */
+            openai_speech_model?: string;
+            /** @default alloy,ash,coral,echo,fable,nova,onyx,sage,shimmer */
+            openai_speech_voices?: components["schemas"]["CommaList"];
             /** Openrouter Api Key */
             openrouter_api_key?: string | null;
             /** @default wav */
             output_format?: components["schemas"]["OutputFormat"];
+            /** Script Api Key */
+            script_api_key?: string | null;
+            /** Script Base Url */
+            script_base_url?: string | null;
             /**
              * Script Max Tokens
              * @default 8000
@@ -407,6 +476,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    regenerate_token_api_access_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessToken"];
+                };
+            };
+        };
+    };
     get_audio_api_audio__audio_id__get: {
         parameters: {
             query?: never;

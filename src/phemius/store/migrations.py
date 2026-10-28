@@ -59,6 +59,19 @@ def _create_settings_table(connection: sqlite3.Connection) -> None:
     )
 
 
+def _create_access_token_table(connection: sqlite3.Connection) -> None:
+    # One row at most: Phemius has a single access token, stored only as a hash.
+    connection.execute(
+        """
+        CREATE TABLE access_token (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            token_hash TEXT NOT NULL,
+            created REAL NOT NULL
+        )
+        """
+    )
+
+
 _DOCUMENT_VERSION_STATEMENTS = [
     "ALTER TABLE docs RENAME TO legacy_docs",
     """
@@ -117,6 +130,7 @@ MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
     _create_settings_table,
+    _create_access_token_table,
     _add_document_versions,
 ]
 
