@@ -130,12 +130,12 @@ connectors exist.
 | Package | Responsibility |
 | --- | --- |
 | `src/phemius/app.py` | FastAPI app: startup (logging, library permissions, database, audio folder, access token, folder watcher, voice engine check), request logging, the access token check, routers, and the built UI with a fallback to `index.html` for client-side routes |
-| `src/phemius/cli.py` | `phemius serve`: opens the library, binds to the address the access mode allows (`127.0.0.1` for `local` and `proxy`, `0.0.0.0` for `network`) and runs uvicorn without its access log, which would print query-string tokens |
+| `src/phemius/cli.py` | `phemius serve`: opens the library, binds to the address the access mode allows (`127.0.0.1` for `local` and `proxy`, `0.0.0.0` for `network`) and runs uvicorn without its access log, which would print signed audio URLs |
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
-| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
-| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored), `checks` (setup checks in parallel with a timeout, last run kept in memory), `uploads`, `health` |
+| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
+| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `uploads`, `health` |
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network), `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets) and `ollama.py`. `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, `spoken_text.py` prepares document text for any model, and `suitability.py` rates how well a document suits listening when no model does |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra), `piper.py` (local, optional GPL extra, see ADR-003), `openai_speech.py`, `elevenlabs.py` and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
@@ -266,3 +266,41 @@ engine. The Piper adapter imports `piper` lazily, so Phemius runs without it.
 
 **When to revisit.** If a permissively licensed Piper release supports Python
 3.12, or if the project decides to ship a separately licensed Piper image.
+
+### ADR-004: Short-lived signed URLs for audio files, not a cookie
+
+- **Status:** Accepted
+- **Date:** 2026-10-28
+
+**Context.** In `network` and `proxy` modes every `/api/*` request needs the
+access token. The browser's `<audio>` element cannot send an `Authorization`
+header, so the file route accepted `?token=` instead (#80). A token in a URL
+leaks into browser history, proxy logs and anything the URL is copied into, and
+it never expires. A cookie would avoid the URL, but the browser sends it with
+every request, including ones another site triggers, which reopens the
+cross-site request surface tracked in #84.
+
+**Decision.** `GET /api/audio/{id}/url`, which needs the token like every API
+route, returns a URL to the file signed with HMAC-SHA256 over the audio id and
+an expiry six hours ahead (`AUDIO_URL_LIFETIME_SECONDS`). The key is derived
+from the stored token hash, so regenerating the token revokes every
+outstanding URL. The file route accepts a valid, unexpired signature for that
+audio only, on reads, in place of the bearer header. The token is no
+longer accepted in a query string anywhere. In `local` mode the URL is
+unsigned, as nothing asks for a token. The player fetches a fresh URL once when
+the audio element fails and resumes at the same position.
+
+**Consequences.**
+
+- The token never appears in a URL, log or browser history; a leaked audio URL
+  exposes one file for at most six hours.
+- No ambient credential exists, so a cross-site request still cannot reach the
+  library.
+- Playing audio costs one extra request, and long sessions refetch the URL when
+  it expires.
+- The browser caches a file per signed URL, so a new URL fetches the file
+  again.
+
+**When to revisit.** If Phemius gains another client that streams audio without
+headers (for example a podcast feed), or if signed URLs need to outlive a
+listening session.
