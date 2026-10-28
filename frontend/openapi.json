@@ -76,6 +76,17 @@
             "title": "Tone",
             "type": "string"
           },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
           "voice": {
             "anyOf": [
               {
@@ -91,6 +102,7 @@
         "required": [
           "id",
           "doc_id",
+          "version_id",
           "tone",
           "voice",
           "script",
@@ -177,6 +189,17 @@
             "title": "Tone",
             "type": "string"
           },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
           "voice": {
             "anyOf": [
               {
@@ -191,6 +214,7 @@
         },
         "required": [
           "id",
+          "version",
           "tone",
           "voice",
           "status",
@@ -256,10 +280,20 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "integer"
           }
         },
         "required": [
           "id",
+          "version_id",
+          "version",
           "title",
           "source",
           "content_hash",
@@ -293,6 +327,10 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_changed": {
+            "title": "Is Changed",
+            "type": "boolean"
+          },
           "source": {
             "title": "Source",
             "type": "string"
@@ -308,16 +346,22 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
           }
         },
         "required": [
           "id",
+          "version",
           "title",
           "source",
           "category",
           "summary",
           "suggested_tone",
           "created",
+          "is_changed",
           "audio"
         ],
         "title": "DocumentSummary",
@@ -344,6 +388,37 @@
           "mp4"
         ],
         "type": "string"
+      },
+      "Page_VersionSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VersionSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[VersionSummary]",
+        "type": "object"
       },
       "SecretStatus": {
         "properties": {
@@ -600,6 +675,10 @@
               }
             ],
             "title": "Watch Dir"
+          },
+          "watch_on_change": {
+            "$ref": "#/components/schemas/WatchOnChange",
+            "default": "mark"
           }
         },
         "title": "Settings",
@@ -667,6 +746,17 @@
           "file": {
             "title": "File",
             "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
           }
         },
         "required": [
@@ -714,6 +804,69 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VersionSummary": {
+        "properties": {
+          "audio": {
+            "items": {
+              "$ref": "#/components/schemas/AudioSummary"
+            },
+            "title": "Audio",
+            "type": "array"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created": {
+            "title": "Created",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "suggested_tone": {
+            "title": "Suggested Tone",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "title",
+          "content_hash",
+          "category",
+          "summary",
+          "suggested_tone",
+          "created",
+          "audio"
+        ],
+        "title": "VersionSummary",
+        "type": "object"
+      },
+      "WatchOnChange": {
+        "enum": [
+          "mark",
+          "regenerate"
+        ],
+        "type": "string"
       }
     }
   },
@@ -1014,6 +1167,71 @@
           }
         },
         "summary": "Create Audio",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/docs/{document_id}/versions": {
+      "get": {
+        "operationId": "list_versions_api_docs__document_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_VersionSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Versions",
         "tags": [
           "docs"
         ]

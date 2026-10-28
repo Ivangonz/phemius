@@ -14,6 +14,7 @@ from phemius.services import ingest, pipeline
 class UploadResult(BaseModel):
     file: str
     doc_id: int | None = None
+    version: int | None = None
     duplicate: bool | None = None
     error: str | None = None
 
@@ -30,13 +31,19 @@ def import_upload(
         with path.open("wb") as handle:
             shutil.copyfileobj(content, handle)
         try:
-            document_id, is_created = pipeline.import_file(path, source=filename)
+            stored = pipeline.import_file(path, source=filename)
         except Exception as error:  # reported per file in the response
             return UploadResult(file=filename, error=str(error))
-    result = UploadResult(file=filename, doc_id=document_id, duplicate=not is_created)
-    if is_created and is_auto_audio:
+    is_duplicate = stored.outcome == "unchanged"
+    result = UploadResult(
+        file=filename,
+        doc_id=stored.document_id,
+        version=stored.version,
+        duplicate=is_duplicate,
+    )
+    if is_auto_audio and not is_duplicate:
         try:
-            pipeline.build_audio(document_id)
+            pipeline.build_audio(stored.document_id)
         except PhemiusError as error:  # the document is kept; only audio failed
             result.error = pipeline.error_text(error)
     return result

@@ -127,6 +127,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/docs/{document_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_api_docs__document_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -193,6 +210,8 @@ export interface components {
             status: components["schemas"]["AudioStatus"];
             /** Tone */
             tone: string;
+            /** Version Id */
+            version_id: number | null;
             /** Voice */
             voice: string | null;
         };
@@ -219,6 +238,8 @@ export interface components {
             status: components["schemas"]["AudioStatus"];
             /** Tone */
             tone: string;
+            /** Version */
+            version: number | null;
             /** Voice */
             voice: string | null;
         };
@@ -248,6 +269,10 @@ export interface components {
             text: string;
             /** Title */
             title: string;
+            /** Version */
+            version: number;
+            /** Version Id */
+            version_id: number;
         };
         /** DocumentSummary */
         DocumentSummary: {
@@ -259,6 +284,8 @@ export interface components {
             created: number;
             /** Id */
             id: number;
+            /** Is Changed */
+            is_changed: boolean;
             /** Source */
             source: string;
             /** Suggested Tone */
@@ -267,6 +294,8 @@ export interface components {
             summary: string;
             /** Title */
             title: string;
+            /** Version */
+            version: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -275,6 +304,17 @@ export interface components {
         };
         /** @enum {string} */
         OutputFormat: "wav" | "m4a" | "mp3" | "mp4";
+        /** Page[VersionSummary] */
+        Page_VersionSummary_: {
+            /** Items */
+            items: components["schemas"]["VersionSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** SecretStatus */
         SecretStatus: {
             /** Has Key */
@@ -364,6 +404,8 @@ export interface components {
             voice_engine?: string;
             /** Watch Dir */
             watch_dir?: string | null;
+            /** @default mark */
+            watch_on_change?: components["schemas"]["WatchOnChange"];
         };
         /** SettingsOverview */
         SettingsOverview: {
@@ -386,6 +428,8 @@ export interface components {
             error?: string | null;
             /** File */
             file: string;
+            /** Version */
+            version?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -400,6 +444,29 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** VersionSummary */
+        VersionSummary: {
+            /** Audio */
+            audio: components["schemas"]["AudioSummary"][];
+            /** Category */
+            category: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created */
+            created: number;
+            /** Id */
+            id: number;
+            /** Number */
+            number: number;
+            /** Suggested Tone */
+            suggested_tone: string;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
+        /** @enum {string} */
+        WatchOnChange: "mark" | "regenerate";
     };
     responses: never;
     parameters: never;
@@ -619,6 +686,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AudioCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_docs__document_id__versions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_VersionSummary_"];
                 };
             };
             /** @description Validation Error */

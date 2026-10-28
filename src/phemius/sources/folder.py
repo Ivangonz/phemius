@@ -9,7 +9,9 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 from watchdog.observers.api import BaseObserver
 
+from phemius.config import load_config
 from phemius.services import ingest, pipeline
+from phemius.store.documents import StoredVersion
 
 log = structlog.get_logger(__name__)
 
@@ -21,13 +23,19 @@ def import_watched_file(path: Path, is_auto_audio: bool) -> None:
     if path.suffix.lower() not in ingest.SUPPORTED or path.name.startswith("."):
         return
     try:
-        document_id, is_created = pipeline.import_file(path)
-        if is_created and is_auto_audio:
-            pipeline.build_audio(document_id)
+        stored = pipeline.import_file(path)
+        if is_auto_audio and _should_build_audio(stored):
+            pipeline.build_audio(stored.document_id)
     except Exception as error:  # one bad file must not stop the watcher
         log.warning(
             "watched_file_failed", file=path.name, error_type=type(error).__name__
         )
+
+
+def _should_build_audio(stored: StoredVersion) -> bool:
+    if stored.outcome == "new_version":
+        return load_config().watch_on_change == "regenerate"
+    return stored.outcome == "created"
 
 
 class _FolderEventHandler(FileSystemEventHandler):

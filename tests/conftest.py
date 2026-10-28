@@ -17,6 +17,7 @@ ENV_NAMES = [
     "TTS",
     "VOICE",
     "WATCH_DIR",
+    "WATCH_ON_CHANGE",
     "FORMAT",
     "SCRIPT_MAX_TOKENS",
     "LOG_LEVEL",

@@ -10,6 +10,7 @@ type AudioStatus = Literal["pending", "scripting", "synthesizing", "done", "erro
 
 class AudioSummary(TypedDict):
     id: int
+    version: int | None
     tone: str
     voice: str | None
     status: AudioStatus
@@ -19,6 +20,7 @@ class AudioSummary(TypedDict):
 class Audio(TypedDict):
     id: int
     doc_id: int
+    version_id: int | None
     tone: str
     voice: str | None
     script: str | None
@@ -28,12 +30,12 @@ class Audio(TypedDict):
     created: float
 
 
-def create_audio(document_id: int, tone: str, voice: str) -> int:
+def create_audio(document_id: int, version_id: int, tone: str, voice: str) -> int:
     with transaction() as connection:
         cursor = connection.execute(
-            "INSERT INTO audio (doc_id, tone, voice, status, created)"
-            " VALUES (?, ?, ?, 'pending', ?)",
-            (document_id, tone, voice, time.time()),
+            "INSERT INTO audio (doc_id, version_id, tone, voice, status, created)"
+            " VALUES (?, ?, ?, ?, 'pending', ?)",
+            (document_id, version_id, tone, voice, time.time()),
         )
         return cast(int, cursor.lastrowid)
 
