@@ -8,6 +8,7 @@ from phemius.store import audio as audio_store
 from phemius.store import database
 from phemius.store import documents as document_store
 from phemius.store.audio import Audio
+from tests.models.fakes import FakeScriptModel, UseScriptModel
 
 
 @pytest.fixture
@@ -89,3 +90,21 @@ def test_saving_identical_content_adds_no_version_or_audio(watched: Path) -> Non
     [document] = document_store.list_documents()
     assert document["version"] == 1
     assert len(document["audio"]) == 1
+
+
+def test_only_changed_content_is_sent_to_the_model(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    model = FakeScriptModel()
+    use_script_model(model)
+    guide = watched / "guide.md"
+    guide.write_text("# Guide\n\nInstall with pip.")
+    import_watched_file(guide, is_auto_audio=False)
+
+    import_watched_file(guide, is_auto_audio=False)
+    calls_after_unchanged_save = model.analyze_calls
+    guide.write_text("# Guide\n\nInstall with uv.")
+    import_watched_file(guide, is_auto_audio=False)
+
+    assert calls_after_unchanged_save == 1
+    assert model.analyze_calls == 2

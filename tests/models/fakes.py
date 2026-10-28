@@ -9,8 +9,10 @@ type UseScriptModel = Callable[[ScriptModel], None]
 class FakeScriptModel:
     def __init__(self, script: str = "A fake spoken script.") -> None:
         self.script = script
+        self.analyze_calls = 0
 
     def analyze(self, title: str, text: str) -> Analysis:
+        self.analyze_calls += 1
         return Analysis(
             category="proposal / spec",
             summary=f"Fake summary of {title}.",

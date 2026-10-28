@@ -171,6 +171,19 @@ def test_reuploading_changed_file_adds_a_version(client: TestClient) -> None:
     assert document["text"] == "# Guide\n\nInstall with uv."
 
 
+def test_identical_reupload_is_a_duplicate_without_a_model_call(
+    client: TestClient, use_script_model: UseScriptModel
+) -> None:
+    model = FakeScriptModel()
+    use_script_model(model)
+    first = _upload_text(client, "guide.md", "# Guide\n\nInstall with pip.")
+
+    again = _upload_text(client, "guide.md", "# Guide\n\nInstall with pip.")
+
+    assert again == {**first, "duplicate": True}
+    assert model.analyze_calls == 1
+
+
 def test_versions_are_listed_newest_first_with_paging(client: TestClient) -> None:
     for text in ["One.", "Two.", "Three."]:
         uploaded = _upload_text(client, "guide.md", text)

@@ -101,6 +101,18 @@ def add_document(document: NewDocument) -> StoredVersion:
         )
 
 
+def find_unchanged(source: str, text: str) -> StoredVersion | None:
+    """The latest version from `source` if its text is `text`, else None.
+
+    A cheap pre-check only; `add_document` decides again under the write lock.
+    """
+    with transaction() as connection:
+        latest = _latest_version_from_source(connection, source)
+    if latest is None or latest["content_hash"] != hash_text(text):
+        return None
+    return StoredVersion(latest["doc_id"], latest["number"], "unchanged")
+
+
 def _latest_version_from_source(
     connection: sqlite3.Connection, source: str
 ) -> sqlite3.Row | None:

@@ -33,12 +33,11 @@ def import_file(path: Path, source: str | None = None) -> StoredVersion:
     text = ingest.extract_text(path)
     if not text.strip():
         raise ValueError(f"No text found in {path.name}")
-    title = ingest.guess_title(text, path.stem)
-    analysis = agent.analyze(title, text)
-    document = NewDocument(
-        title=title, source=source or str(path), text=text, **analysis
+    source = source or str(path)
+    # Skips the model call on an unchanged save; editors save often.
+    stored = document_store.find_unchanged(source, text) or _store_analyzed(
+        path, source, text
     )
-    stored = document_store.add_document(document)
     log.info(
         "document_imported",
         document_id=stored.document_id,
@@ -46,6 +45,13 @@ def import_file(path: Path, source: str | None = None) -> StoredVersion:
         outcome=stored.outcome,
     )
     return stored
+
+
+def _store_analyzed(path: Path, source: str, text: str) -> StoredVersion:
+    title = ingest.guess_title(text, path.stem)
+    analysis = agent.analyze(title, text)
+    document = NewDocument(title=title, source=source, text=text, **analysis)
+    return document_store.add_document(document)
 
 
 def build_audio(
