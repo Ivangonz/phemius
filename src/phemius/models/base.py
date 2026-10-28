@@ -1,13 +1,22 @@
 """The interface every script model adapter implements."""
 
 from dataclasses import dataclass
-from typing import Protocol, TypedDict
+from typing import Literal, Protocol, TypedDict
+
+type AudioSuitability = Literal["recommended", "partial", "not_recommended"]
+# Who judged suitability: the script model, or the offline rules when there is no
+# model, the model failed, or its reply had no valid verdict.
+type SuitabilitySource = Literal["model", "heuristic"]
 
 
 class Analysis(TypedDict):
     category: str
     summary: str
     suggested_tone: str
+    tone_rationale: str
+    audio_suitability: AudioSuitability
+    suitability_reason: str
+    suitability_source: SuitabilitySource
 
 
 @dataclass(frozen=True)

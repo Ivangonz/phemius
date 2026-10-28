@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from structlog.testing import capture_logs
 
 from phemius.services.runner import start_runner
 from phemius.sources.folder import import_existing_files, import_watched_file
@@ -129,3 +130,21 @@ def test_only_changed_content_is_sent_to_the_model(
 
     assert calls_after_unchanged_save == 1
     assert model.analyze_calls == 2
+
+
+def test_watched_document_not_recommended_is_imported_but_not_narrated(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(suitability="not_recommended"))
+    reference = watched / "codes.md"
+    reference.write_text("# Codes\n\n| Code | Meaning |\n| --- | --- |\n| 1 | One |")
+
+    with capture_logs() as logs:
+        import_watched_file(reference, is_auto_audio=True)
+
+    [document] = document_list.list_documents().items
+    assert document["status"] == "no_audio"
+    assert document["audio_suitability"] == "not_recommended"
+    [skipped] = [entry for entry in logs if entry["event"] == "auto_audio_skipped"]
+    assert skipped["document_id"] == document["id"]
+    assert "codes.md" not in str(skipped)

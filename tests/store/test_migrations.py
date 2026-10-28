@@ -5,6 +5,7 @@ import pytest
 
 from phemius.store import audio as audio_store
 from phemius.store import database, migrations
+from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
 from phemius.store.migrations import MIGRATIONS
 
@@ -301,3 +302,27 @@ def test_existing_audio_gets_its_format_and_size_from_the_file(
         (None, None, None),
         (None, None, None),
     ]
+
+
+def test_versions_analyzed_before_suitability_report_it_as_unknown(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS[5:6]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=6")
+    connection.close()
+
+    database.init_database(db_path)
+
+    document = document_store.get_document(1)
+    assert document is not None
+    assert document["title"] == "Guide"
+    assert (
+        document["audio_suitability"],
+        document["suitability_reason"],
+        document["tone_rationale"],
+        document["suitability_source"],
+    ) == (None, None, None, None)

@@ -93,6 +93,10 @@ class Settings(BaseModel):
     watch_on_change: Annotated[
         WatchOnChange, BeforeValidator(_lower), EnvVar("PHEMIUS_WATCH_ON_CHANGE")
     ] = "mark"
+    # On by default: automatic imports exist to save clicks, not to spend model
+    # credits and voice time on references nobody listens to. Manual "generate
+    # audio" still works for a skipped document.
+    skip_not_recommended: Annotated[bool, EnvVar("PHEMIUS_SKIP_NOT_RECOMMENDED")] = True
     output_format: Annotated[
         AudioFormat, BeforeValidator(_output_format), EnvVar("PHEMIUS_FORMAT")
     ] = "wav"

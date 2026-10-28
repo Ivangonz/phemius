@@ -25,7 +25,7 @@ def import_watched_file(path: Path, is_auto_audio: bool) -> None:
     try:
         stored = pipeline.import_file(path)
         if is_auto_audio and _should_build_audio(stored):
-            pipeline.build_audio(stored.document_id)
+            pipeline.build_auto_audio(stored.document_id)
     except Exception as error:  # one bad file must not stop the watcher
         log.warning(
             "watched_file_failed", file=path.name, error_type=type(error).__name__

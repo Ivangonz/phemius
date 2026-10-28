@@ -55,6 +55,8 @@ def test_failing_model_analysis_falls_back_and_records_error() -> None:
     analysis = agent.analyze("Deploy", "# Deploy\n\n1. Install the CLI.")
 
     assert analysis["category"] == "how-to / tutorial"
+    assert analysis["suitability_source"] == "heuristic"
+    assert analysis["suitability_reason"]
     assert agent.last_error == "Provider returned 402."
 
 

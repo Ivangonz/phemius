@@ -9,10 +9,16 @@ import time
 from dataclasses import dataclass
 from typing import Literal, TypedDict, cast
 
+from phemius.models.base import AudioSuitability, SuitabilitySource
 from phemius.store.audio import AUDIO_JOB_COLUMNS, AudioSummary
 from phemius.store.database import transaction
 
 type SaveOutcome = Literal["created", "new_version", "unchanged"]
+
+# None for versions analyzed before suitability existed: unknown, not judged.
+_SUITABILITY_COLUMNS = (
+    "v.tone_rationale, v.audio_suitability, v.suitability_reason, v.suitability_source"
+)
 
 
 class Document(TypedDict):
@@ -26,6 +32,10 @@ class Document(TypedDict):
     category: str
     summary: str
     suggested_tone: str
+    tone_rationale: str | None
+    audio_suitability: AudioSuitability | None
+    suitability_reason: str | None
+    suitability_source: SuitabilitySource | None
     created: float
 
 
@@ -37,6 +47,10 @@ class VersionSummary(TypedDict):
     category: str
     summary: str
     suggested_tone: str
+    tone_rationale: str | None
+    audio_suitability: AudioSuitability | None
+    suitability_reason: str | None
+    suitability_source: SuitabilitySource | None
     created: float
     audio: list[AudioSummary]
 
@@ -55,6 +69,10 @@ class NewDocument:
     category: str
     summary: str
     suggested_tone: str
+    tone_rationale: str
+    audio_suitability: AudioSuitability
+    suitability_reason: str
+    suitability_source: SuitabilitySource
 
 
 @dataclass(frozen=True)
@@ -124,8 +142,9 @@ def _insert_version(
 ) -> StoredVersion:
     connection.execute(
         "INSERT INTO doc_versions (doc_id, number, title, content_hash, text,"
-        " category, summary, suggested_tone, created)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " category, summary, suggested_tone, tone_rationale, audio_suitability,"
+        " suitability_reason, suitability_source, created)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             document_id,
             number,
@@ -135,6 +154,10 @@ def _insert_version(
             document.category,
             document.summary,
             document.suggested_tone,
+            document.tone_rationale,
+            document.audio_suitability,
+            document.suitability_reason,
+            document.suitability_source,
             time.time(),
         ),
     )
@@ -159,7 +182,7 @@ def get_document(document_id: int) -> Document | None:
         row = connection.execute(
             "SELECT d.id, v.id AS version_id, v.number AS version, v.title,"
             " d.source, v.content_hash, v.text, v.category, v.summary,"
-            " v.suggested_tone, d.created"
+            f" v.suggested_tone, {_SUITABILITY_COLUMNS}, d.created"
             " FROM docs d JOIN doc_versions v ON v.doc_id = d.id"
             " WHERE d.id = ? ORDER BY v.number DESC LIMIT 1",
             (document_id,),
@@ -176,9 +199,10 @@ def list_versions(document_id: int, limit: int, offset: int) -> VersionPage | No
         if total == 0:
             return None
         rows = connection.execute(
-            "SELECT id, number, title, content_hash, category, summary,"
-            " suggested_tone, created FROM doc_versions WHERE doc_id = ?"
-            " ORDER BY number DESC LIMIT ? OFFSET ?",
+            "SELECT v.id, v.number, v.title, v.content_hash, v.category, v.summary,"
+            f" v.suggested_tone, {_SUITABILITY_COLUMNS}, v.created"
+            " FROM doc_versions v WHERE v.doc_id = ?"
+            " ORDER BY v.number DESC LIMIT ? OFFSET ?",
             (document_id, limit, offset),
         ).fetchall()
         audio = _audio_summaries(connection, document_id)

@@ -17,7 +17,12 @@ keeps its library in one folder, and works fully offline.
   and `.pdf`.
 - **Categorize and suggest a tone.** Each document gets a category (for example
   "how-to / tutorial" or "meeting notes / status"), a one-sentence summary and a
-  suggested tone: `neutral`, `conversational`, `podcast`, `teacher` or `executive`.
+  suggested tone: `neutral`, `conversational`, `podcast`, `teacher` or `executive`,
+  with a sentence on why that tone fits.
+- **Flag documents that do not work as audio.** Each document is rated
+  `recommended`, `partial` or `not_recommended` for listening, with a
+  one-sentence reason. A document that is mostly tables, code or lists of
+  constants is `not_recommended`, and automatic imports skip its audio.
 - **Write a spoken script** with any server that speaks the OpenAI chat API:
   [OpenRouter](https://openrouter.ai), OpenAI, or a local server such as LM
   Studio, vLLM or LiteLLM. Offline rules need no model at all.
@@ -513,7 +518,10 @@ PHEMIUS_WATCH_DIR=~/Documents/listen make run
 - The folder is created if it does not exist, and subfolders are included.
 - On startup, every supported file already in the folder is imported.
 - While the server runs, new and changed files are imported about a second after
-  they are written. New files get their audio generated automatically.
+  they are written. New files get their audio generated automatically, unless
+  they are rated `not_recommended` for audio and `PHEMIUS_SKIP_NOT_RECOMMENDED`
+  is on (the default). A skipped document is still imported, and you can
+  generate its audio yourself.
 - Hidden files (names starting with `.`) and unsupported types are skipped.
 - A document is identified by its path. Editing a file adds a new version of the
   same document; earlier versions and their audio stay in the library. Saving a
@@ -622,6 +630,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_ACCESS_MODE` | `access_mode` | `local` | Who can reach the server: `local`, `network` or `proxy`. See [Access from other devices](#access-from-other-devices). Applies on the next start. |
 | `PHEMIUS_ACCESS_TOKEN` | environment only | not set (a token is generated) | Access token for `network` and `proxy` modes, at least 16 characters. Write-only: never shown or logged. See [Set your own token](#set-your-own-token-recommended-for-deployments). |
 | `PHEMIUS_WATCH_ON_CHANGE` | `watch_on_change` | `mark` | What a changed watched file does: `mark` (mark the document as changed) or `regenerate` (generate audio for the new version). |
+| `PHEMIUS_SKIP_NOT_RECOMMENDED` | `skip_not_recommended` | `true` | Whether automatic imports (the watched folder and uploads with `auto_audio`) skip the audio of documents rated `not_recommended` for listening. The document is still imported; generating its audio by hand still works. `true` or `false`. |
 | `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a` or `mp3` (`mp4` is still read as `m4a`). Formats other than WAV need `ffmpeg` on your `PATH`; without it, or if a conversion fails, Phemius keeps the WAV file and the audio says why. |
 
 Invalid values are reported as follows:
@@ -650,9 +659,9 @@ Every endpoint is listed with its schema in the interactive docs at
 | `GET /api/config` | Tones, voices, default voice, voice engine and its `tts_status`, script provider, model, last categorizing error, watched folder |
 | `GET /api/settings` | Every setting with its value, `source` (`env`, `saved` or `default`) and `is_locked`; secrets only as `has_key` |
 | `PATCH /api/settings` | Save some settings (only the fields sent; `null` removes a saved value). `409` if a field is locked by an environment variable, `422` for invalid values |
-| `GET /api/docs` | Library: one summary per document (latest version, its newest audio's `audio_id`, `status` and `stage`, `is_changed`, and a `signature` that changes only when the row does). Filter with `?category=`, `?tone=`, `?status=` (a job state or `no_audio`) and `?q=` (title search). `?order_by=` is `-created` (default), `created`, `title` or `-updated`. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
-| `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false` |
-| `GET /api/docs/{id}` | One document's latest version, including its extracted text |
+| `GET /api/docs` | Library: one summary per document (latest version, its newest audio's `audio_id`, `status` and `stage`, `is_changed`, `audio_suitability`, and a `signature` that changes only when the row does). Filter with `?category=`, `?tone=`, `?status=` (a job state or `no_audio`) and `?q=` (title search). `?order_by=` is `-created` (default), `created`, `title` or `-updated`. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
+| `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false`, or the document is rated `not_recommended` and `PHEMIUS_SKIP_NOT_RECOMMENDED` is on (`is_audio_skipped` in the result) |
+| `GET /api/docs/{id}` | One document's latest version, including its extracted text, `tone_rationale`, `audio_suitability` (`recommended`, `partial`, `not_recommended`, or `null` when unknown because it was imported before ratings existed), `suitability_reason` and `suitability_source` (`model`, or `heuristic` when the offline rules judged it) |
 | `GET /api/docs/{id}/versions` | The document's versions, newest first, each with its audio. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
 | `POST /api/docs/{id}/audio` | Queue another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional. Returns `{"audio_id", "job_id"}` |
 | `GET /api/audio/{id}` | One audio, including its script and its job's status, stage, error and hint |

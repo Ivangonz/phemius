@@ -248,6 +248,18 @@ def _audio_file_facts(path: Path) -> tuple[str | None, int | None]:
     return _FORMATS_BY_SUFFIX.get(path.suffix.lower()), size_bytes
 
 
+def _add_audio_suitability(connection: sqlite3.Connection) -> None:
+    # Nullable: versions analyzed before this have no verdict, which reads as
+    # unknown rather than a guess made without the analysis.
+    for column in [
+        "tone_rationale",
+        "audio_suitability",
+        "suitability_reason",
+        "suitability_source",
+    ]:
+        connection.execute(f"ALTER TABLE doc_versions ADD COLUMN {column} TEXT")
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -257,6 +269,7 @@ MIGRATIONS: list[Migration] = [
     _add_job_queue,
     _index_document_list,
     _add_audio_format_and_size,
+    _add_audio_suitability,
 ]
 
 

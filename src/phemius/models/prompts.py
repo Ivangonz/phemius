@@ -2,10 +2,16 @@
 
 import json
 import re
+from collections.abc import Container
 from typing import Any
 
 from phemius.errors import ModelError
-from phemius.models.base import Analysis
+from phemius.models.base import Analysis, AudioSuitability, SuitabilitySource
+from phemius.models.suitability import (
+    Suitability,
+    assess_suitability,
+    rule_tone_rationale,
+)
 
 TONES = {
     "neutral": "Clear, calm and professional, like a good narrator reading a briefing.",
@@ -30,6 +36,11 @@ TONE_BY_CATEGORY = {
     "other": "neutral",
 }
 CATEGORIES = list(TONE_BY_CATEGORY)
+SUITABILITY_VERDICTS: tuple[AudioSuitability, ...] = (
+    "recommended",
+    "partial",
+    "not_recommended",
+)
 
 SCRIPT_SYSTEM = """You turn written documentation into a script that will be read \
 aloud by a text-to-speech voice.
@@ -55,7 +66,8 @@ up...").
 ANALYSIS_SYSTEM = (
     "You classify documentation for an audio-listening app. Reply with JSON only."
 )
-ANALYSIS_MAX_TOKENS = 300
+# Room for two one-sentence explanations on top of the category and summary.
+ANALYSIS_MAX_TOKENS = 500
 ANALYSIS_TEXT_LIMIT = 6000
 SCRIPT_TEXT_LIMIT = 40000
 
@@ -64,7 +76,12 @@ def analysis_prompt(title: str, text: str) -> str:
     return (
         f"Categories: {CATEGORIES}\nTones: {list(TONES)}\n\n"
         'Return {"category": one category, "summary": one sentence, '
-        '"suggested_tone": best tone for listening to this document}.\n\n'
+        '"suggested_tone": best tone for listening to this document, '
+        '"tone_rationale": one sentence on why that tone suits it, '
+        '"audio_suitability": "recommended", "partial" or "not_recommended", '
+        '"suitability_reason": one sentence on why}. A document that is mostly '
+        "tables, code or lists of constants is not_recommended, because a "
+        "listener cannot follow it by ear.\n\n"
         f"Title: {title}\n\nDocument (truncated):\n{text[:ANALYSIS_TEXT_LIMIT]}"
     )
 
@@ -85,18 +102,60 @@ def script_prompt(title: str, text: str) -> str:
     return f"Title: {title}\n\nDocument:\n{text}"
 
 
-def parse_analysis(reply: str) -> Analysis:
-    """Read the analysis JSON from a reply. Raises `ValueError` if there is none."""
+def parse_analysis(reply: str, text: str) -> Analysis:
+    """Read the analysis JSON from a reply. Raises `ValueError` if there is none.
+
+    A missing or unknown field falls back to the rules, judged on `text`; what the
+    model wrote is kept whole.
+    """
     data = _json_object(reply)
-    category = data.get("category")
-    if category not in TONE_BY_CATEGORY:
-        category = "other"
-    tone = data.get("suggested_tone")
+    category = _known(data.get("category"), TONE_BY_CATEGORY) or "other"
+    tone, tone_rationale = _tone_and_rationale(data, category)
+    suitability, source = _suitability(data, text)
     return Analysis(
         category=category,
         summary=str(data.get("summary", "")),
-        suggested_tone=tone if tone in TONES else TONE_BY_CATEGORY[category],
+        suggested_tone=tone,
+        tone_rationale=tone_rationale,
+        audio_suitability=suitability.verdict,
+        suitability_reason=suitability.reason,
+        suitability_source=source,
     )
+
+
+def _tone_and_rationale(data: dict[str, Any], category: str) -> tuple[str, str]:
+    tone = _known(data.get("suggested_tone"), TONES)
+    if tone is None:
+        # Any rationale the model gave argued for a tone that is not used.
+        tone = TONE_BY_CATEGORY[category]
+        return tone, rule_tone_rationale(category, tone)
+    rationale = _sentence(data.get("tone_rationale"))
+    return tone, rationale or rule_tone_rationale(category, tone)
+
+
+def _suitability(
+    data: dict[str, Any], text: str
+) -> tuple[Suitability, SuitabilitySource]:
+    verdict = _verdict(data.get("audio_suitability"))
+    reason = _sentence(data.get("suitability_reason"))
+    if verdict is None or reason is None:
+        return assess_suitability(text), "heuristic"
+    return Suitability(verdict, reason), "model"
+
+
+def _verdict(value: object) -> AudioSuitability | None:
+    if not isinstance(value, str):
+        return None
+    normalized = re.sub(r"[\s-]+", "_", value.strip().lower())
+    return next((item for item in SUITABILITY_VERDICTS if item == normalized), None)
+
+
+def _known(value: object, options: Container[str]) -> str | None:
+    return value if isinstance(value, str) and value in options else None
+
+
+def _sentence(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _json_object(reply: str) -> dict[str, Any]:
