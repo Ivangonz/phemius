@@ -1,0 +1,36 @@
+# Phemius with one command: `docker compose up -d`, then open http://localhost:8000.
+# See "Quick start with Docker" in README.md.
+services:
+  phemius:
+    # The small image without Kokoro is ghcr.io/ivangonz/phemius:slim; use it
+    # with a hosted voice (PHEMIUS_TTS in .env).
+    image: ghcr.io/ivangonz/phemius:latest
+    # Builds from this checkout when the image cannot be pulled, or with
+    # `docker compose up -d --build`.
+    build:
+      context: .
+      args:
+        WITH_KOKORO: "true"
+        WITH_FFMPEG: "true"
+    ports:
+      - "8000:8000"
+    # Copy .env.example to .env for API keys and settings.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Listen on all interfaces and require the access token. Other modes
+      # listen on 127.0.0.1 inside the container, which the port cannot reach.
+      PHEMIUS_ACCESS_MODE: network
+    volumes:
+      # The library: database, audio and the downloaded voice model.
+      - ./phemius-data:/data
+      # A folder of documents to import, read-only. Uncomment it and set
+      # PHEMIUS_WATCH_DIR=/watch in .env.
+      # - ~/Documents/listen:/watch:ro
+    # Lets the container reach Ollama or another server on the host as
+    # host.docker.internal (built in on Docker Desktop, needed on Linux).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+    restart: unless-stopped

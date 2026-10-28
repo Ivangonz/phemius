@@ -35,8 +35,7 @@ The web UI is in early development. Its Library, Sources, Queue and Settings
 pages are placeholders, so for now you add documents and play audio through the
 API (see [Hear your first document](#hear-your-first-document)).
 
-Not available yet: Docker and `uv tool install` installs, GitHub and Confluence
-sources.
+Not available yet: GitHub and Confluence sources.
 
 ## Contents
 
@@ -58,8 +57,80 @@ sources.
 
 ## Quick start with Docker
 
-Coming soon. Installed copies will include the built UI, so they will not need
-Node.
+You need Docker with Compose (Docker Desktop, or Docker Engine with the compose
+plugin). The image includes the built UI, Kokoro and ffmpeg; it does not need
+Node or a GPU.
+
+```bash
+git clone https://github.com/Ivangonz/phemius.git
+cd phemius
+cp .env.example .env    # optional: API keys, script model, voice
+mkdir -p phemius-data   # the library; create it yourself so you own it
+docker compose up -d
+docker compose logs phemius | grep token
+# Phemius access token (shown once, save it now): phm_...
+```
+
+Open <http://localhost:8000> and enter the token. Compose pulls
+`ghcr.io/ivangonz/phemius:latest`, or builds the image from the checkout when it
+cannot pull it (`docker compose up -d --build` rebuilds it after a change).
+
+**The access token.** The container listens on all interfaces
+(`PHEMIUS_ACCESS_MODE=network`), so the API always requires a token. Without
+`PHEMIUS_ACCESS_TOKEN`, the first start creates one and prints it once to the
+log. To choose your own instead, set it in `.env` before the first start (see
+[Set your own token](#set-your-own-token-recommended-for-deployments)):
+
+```bash
+echo "PHEMIUS_ACCESS_TOKEN=$(openssl rand -hex 32)" >> .env
+docker compose up -d
+```
+
+**Your library** lives in `./phemius-data` on the host, mounted at `/data`: the
+database, the audio, saved settings and the Kokoro voice model, which downloads
+there on the first narration (about 300 MB). Updating or recreating the
+container keeps it. The container runs as user `1000:1000`; on Linux, if your
+user has another id, run `sudo chown 1000:1000 phemius-data`. If the folder is
+not writable, `GET /api/health` answers `503` and the container shows as
+`unhealthy`.
+
+**Settings** go in `.env`; every variable in [Configuration](#configuration)
+works there. Inside the container, `localhost` is the container itself: reach
+Ollama or another server on the host at `http://host.docker.internal:11434`
+(compose maps it on Linux too).
+
+**A watched folder.** Uncomment the `/watch` volume in `docker-compose.yml`,
+point it at your folder (it is mounted read-only), set `PHEMIUS_WATCH_DIR=/watch`
+in `.env` and run `docker compose up -d` again.
+
+**Update** with `docker compose pull && docker compose up -d`.
+
+### Image variants
+
+| Image | Download / on disk | Voices | Audio formats |
+| --- | --- | --- | --- |
+| `ghcr.io/ivangonz/phemius:latest` | about 620 MB / 2.1 GB | Kokoro (local), hosted voices, stub | WAV, M4A, MP4, MP3 |
+| `ghcr.io/ivangonz/phemius:slim` | about 70 MB / 260 MB | Hosted voices (`openai_speech`, `elevenlabs`), stub | WAV only |
+
+Kokoro and its PyTorch, spaCy and transformers libraries take about 1.4 GB of
+the default image on disk, and ffmpeg about 400 MB. The image uses the CPU-only PyTorch
+build, so it has no CUDA libraries. Use the slim image when you
+narrate with a hosted voice: set `image: ghcr.io/ivangonz/phemius:slim` in
+`docker-compose.yml` and `PHEMIUS_TTS` in `.env`. To build either one yourself:
+
+```bash
+docker build -t phemius .
+docker build -t phemius:slim --build-arg WITH_KOKORO=false --build-arg WITH_FFMPEG=false .
+```
+
+`WITH_KOKORO=false` leaves out Kokoro and PyTorch; `WITH_FFMPEG=false` leaves
+out ffmpeg, so audio stays WAV. Piper is never in the image because of its
+license (ADR-003 in [docs/architecture.md](docs/architecture.md)).
+
+The image and `docker-compose.yml` set `PHEMIUS_ACCESS_MODE=network`. The
+`local` and `proxy` modes listen on `127.0.0.1` inside the container, which the
+published port cannot reach. Behind a reverse proxy, keep `network` mode and
+publish the port only to the proxy, for example `127.0.0.1:8000:8000`.
 
 ## Quick start with uv tool install
 
