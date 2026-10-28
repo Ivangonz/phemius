@@ -38,6 +38,13 @@ class SettingLockedError(PhemiusError):
     status_code = 409
 
 
+class JobStateError(PhemiusError):
+    """A job action does not apply to the job's current state."""
+
+    code = "invalid_job_state"
+    status_code = 409
+
+
 class ServiceUnavailableError(PhemiusError):
     code = "unavailable"
     status_code = 503

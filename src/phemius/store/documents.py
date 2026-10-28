@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Literal, TypedDict, cast
 
-from phemius.store.audio import AudioSummary
+from phemius.store.audio import AUDIO_JOB_COLUMNS, AudioSummary
 from phemius.store.database import transaction
 
 type SaveOutcome = Literal["created", "new_version", "unchanged"]
@@ -185,8 +185,9 @@ def _audio_summaries(
     connection: sqlite3.Connection, document_id: int
 ) -> list[AudioSummary]:
     rows = connection.execute(
-        "SELECT a.id, v.number AS version, a.tone, a.voice, a.status, a.error"
-        " FROM audio a LEFT JOIN doc_versions v ON v.id = a.version_id"
+        f"SELECT a.id, v.number AS version, a.tone, a.voice, {AUDIO_JOB_COLUMNS}"
+        " FROM audio a JOIN jobs j ON j.audio_id = a.id"
+        " LEFT JOIN doc_versions v ON v.id = a.version_id"
         " WHERE a.doc_id = ? ORDER BY a.created DESC, a.id DESC",
         (document_id,),
     )

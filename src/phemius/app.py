@@ -17,11 +17,20 @@ from starlette.exceptions import HTTPException
 from starlette.types import Scope
 
 from phemius import __version__
-from phemius.api import access, audio, docs, health, library_config, settings
+from phemius.api import (
+    access,
+    audio,
+    docs,
+    health,
+    library_config,
+    queue,
+    settings,
+)
 from phemius.api.errors import register_exception_handlers
 from phemius.config import Config, load_config
 from phemius.logs import configure_logging
 from phemius.services import access as access_service
+from phemius.services.runner import start_runner
 from phemius.services.voices import check_engine
 from phemius.sources.folder import start_watcher
 from phemius.store.database import init_database
@@ -46,6 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = load_config()
     create_private_dir(config.audio_dir)
     _prepare_access(app, config)
+    runner = start_runner()
     observer = start_watcher(config.watch_dir) if config.watch_dir else None
     log.info(
         "phemius_started",
@@ -58,6 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if observer:
         observer.stop()
         observer.join()
+    runner.stop()
 
 
 def _prepare_access(app: FastAPI, config: Config) -> None:
@@ -129,7 +140,7 @@ def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
     # The last middleware added runs first, so rejected requests are logged too.
     app.middleware("http")(access.require_access_token)
     app.middleware("http")(log_requests)
-    for module in (health, library_config, settings, docs, audio, access):
+    for module in (health, library_config, settings, docs, audio, queue, access):
         app.include_router(module.router)
     if static_dir.is_dir():
         app.mount("/", SinglePageApp(directory=static_dir), name="static")
