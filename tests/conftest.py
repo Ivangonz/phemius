@@ -22,6 +22,9 @@ ENV_NAMES = [
     "LOG_LEVEL",
     "SCRIPT_BASE_URL",
     "SCRIPT_API_KEY",
+    "OLLAMA_URL",
+    "OLLAMA_MODEL",
+    "OLLAMA_TIMEOUT",
 ]
 
 

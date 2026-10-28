@@ -277,6 +277,21 @@ export interface components {
              * @default anthropic/claude-sonnet-4.5
              */
             model?: string;
+            /**
+             * Ollama Model
+             * @default llama3.2
+             */
+            ollama_model?: string;
+            /**
+             * Ollama Timeout
+             * @default 600
+             */
+            ollama_timeout?: number;
+            /**
+             * Ollama Url
+             * @default http://localhost:11434
+             */
+            ollama_url?: string;
             /** Openai Api Key */
             openai_api_key?: string | null;
             /** Openrouter Api Key */

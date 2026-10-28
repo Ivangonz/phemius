@@ -89,6 +89,14 @@ class Settings(BaseModel):
         Annotated[SecretStr, Field(min_length=1)] | None,
         EnvVar("PHEMIUS_SCRIPT_API_KEY", is_secret=True),
     ] = None
+    ollama_url: Annotated[str, Field(min_length=1), EnvVar("PHEMIUS_OLLAMA_URL")] = (
+        "http://localhost:11434"
+    )
+    ollama_model: Annotated[
+        str, Field(min_length=1), EnvVar("PHEMIUS_OLLAMA_MODEL")
+    ] = "llama3.2"
+    # Local models on a CPU can take minutes to write a long script.
+    ollama_timeout: Annotated[int, Field(gt=0), EnvVar("PHEMIUS_OLLAMA_TIMEOUT")] = 600
 
 
 class Config(Settings):
