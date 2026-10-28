@@ -5,7 +5,7 @@ from fastapi import APIRouter
 
 from phemius.config import OFFLINE_PROVIDER, load_config
 from phemius.models.prompts import TONES
-from phemius.services import agent, voices
+from phemius.services import agent, script_models, voices
 
 router = APIRouter(prefix="/api", tags=["config"])
 
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api", tags=["config"])
 @router.get("/config")
 def library_config() -> dict[str, Any]:
     config = load_config()
+    script_model = script_models.active_model()
     return {
         "tones": TONES,
         "voices": {voice.id: voice.label for voice in voices.list_voices()},
@@ -20,8 +21,9 @@ def library_config() -> dict[str, Any]:
         "tts_status": asdict(voices.check_engine()),
         "watch_dir": str(config.watch_dir) if config.watch_dir else None,
         "llm": config.script_provider != OFFLINE_PROVIDER,
-        "script_provider": config.script_provider,
-        "model": config.model,
-        "llm_error": agent.last_error,
+        "script_provider": script_model.provider,
+        "model": script_model.model,
+        "llm_error": script_model.error or agent.last_error,
+        "llm_hint": script_model.hint,
         "tts": config.voice_engine,
     }

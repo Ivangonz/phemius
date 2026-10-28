@@ -7,6 +7,8 @@ type UseScriptModel = Callable[[ScriptModel], None]
 
 
 class FakeScriptModel:
+    model = "fake/model"
+
     def __init__(self, script: str = "A fake spoken script.") -> None:
         self.script = script
         self.analyze_calls = 0
@@ -23,7 +25,7 @@ class FakeScriptModel:
         return self.script
 
     def check(self) -> ScriptModelCheck:
-        return ScriptModelCheck(is_reachable=True, model="fake/model", latency_ms=1.0)
+        return ScriptModelCheck(is_reachable=True, model=self.model, latency_ms=1.0)
 
 
 class FailingScriptModel(FakeScriptModel):

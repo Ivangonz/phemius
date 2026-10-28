@@ -51,3 +51,50 @@ def test_config_reports_configured_provider_without_the_key(
     assert response.json()["llm"] is True
     assert response.json()["script_provider"] == "openrouter"
     assert "sk-or-secret" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("provider", "env", "expected_model"),
+    [
+        ("offline", {}, "offline rules"),
+        ("openrouter", {"OPENROUTER_API_KEY": "sk-or-secret"}, "vendor/chat-model"),
+        ("openai", {"OPENAI_API_KEY": "sk-secret"}, "vendor/chat-model"),
+        (
+            "openai_compatible",
+            {"PHEMIUS_SCRIPT_BASE_URL": "http://localhost:1234/v1"},
+            "vendor/chat-model",
+        ),
+        ("ollama", {"PHEMIUS_OLLAMA_MODEL": "qwen2.5:7b"}, "qwen2.5:7b"),
+    ],
+)
+def test_config_reports_the_model_of_the_configured_provider(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    env: dict[str, str],
+    expected_model: str,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_SCRIPT_PROVIDER", provider)
+    monkeypatch.setenv("PHEMIUS_MODEL", "vendor/chat-model")
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    body = client.get("/api/config").json()
+
+    assert body["script_provider"] == provider
+    assert body["model"] == expected_model
+    assert body["llm_hint"] is None
+
+
+def test_config_answers_with_a_hint_when_the_provider_key_is_missing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_SCRIPT_PROVIDER", "openai")
+    monkeypatch.setenv("PHEMIUS_MODEL", "gpt-4o-mini")
+
+    response = client.get("/api/config")
+
+    assert response.status_code == 200
+    assert response.json()["model"] == "gpt-4o-mini"
+    assert response.json()["llm_error"] == "OpenAI needs an API key."
+    assert "OPENAI_API_KEY" in response.json()["llm_hint"]
