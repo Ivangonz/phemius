@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phemius</title>
+<style>
+  :root { --bg:#f7f6f3; --card:#fff; --ink:#1f1d1a; --muted:#6f6a62; --line:#e5e2db; --accent:#b4501f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161513; --card:#201f1c; --ink:#f0ede7; --muted:#9a948a; --line:#34312c; --accent:#e0804d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 80px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: .9rem; }
+  #drop { border:2px dashed var(--line); border-radius:12px; padding:28px; text-align:center; color:var(--muted); cursor:pointer; background:var(--card); }
+  #drop.over { border-color: var(--accent); color: var(--accent); }
+  .doc { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:14px; }
+  .doc h2 { font-size:1.05rem; margin:0 0 4px; }
+  .chip { display:inline-block; font-size:.75rem; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); margin-right:6px; }
+  .summary { color:var(--muted); font-size:.9rem; margin:6px 0 10px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+  select, button { font:inherit; padding:6px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; cursor:pointer; }
+  .audio { border-top:1px solid var(--line); margin-top:10px; padding-top:10px; }
+  .status { font-size:.85rem; color:var(--muted); }
+  .err { color:#c0392b; }
+  audio { width:100%; margin-top:6px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:.85rem; }
+  pre { white-space:pre-wrap; font:inherit; font-size:.9rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Phemius</h1>
+  <p class="sub" id="sub">Hear your docs.</p>
+  <p class="status err" id="llmerr"></p>
+  <div id="drop">Drop documents here or click to choose (.md .txt .docx .pdf .html)
+    <input id="file" type="file" multiple hidden>
+  </div>
+  <div id="list"></div>
+</main>
+<script>
+let config = { tones: {} };
+const $ = s => document.querySelector(s);
+const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function init() {
+  config = await (await fetch('/api/config')).json();
+  loop();
+}
+
+// Poll quickly while something is generating, slowly otherwise.
+async function loop() {
+  let working = false;
+  try { working = await refresh(); } catch (e) { /* server restarting, try again */ }
+  setTimeout(loop, working ? 2000 : 8000);
+}
+
+async function updateStatusLine() {
+  config = await (await fetch('/api/config')).json();
+  const bits = [config.llm ? 'LLM: ' + config.model + ' (OpenRouter)' : 'LLM: offline heuristics (set OPENROUTER_API_KEY)', 'TTS: ' + config.tts];
+  if (config.watch_dir) bits.push('Watching: ' + config.watch_dir);
+  $('#sub').textContent = bits.join('  ·  ');
+  const err = $('#llmerr');
+  err.textContent = config.llm_error ? 'LLM call failed, used offline fallback: ' + config.llm_error : '';
+}
+
+// Last rendered snapshot of each document, so unchanged documents are never re-rendered
+// (re-rendering recreates the <audio> element and cuts off playback).
+const sigs = new Map();
+
+// A document card is "busy" if audio in it is playing or one of its dropdowns is focused.
+function isBusy(el) {
+  const a = document.activeElement;
+  if (a && a.tagName === 'SELECT' && el.contains(a)) return true;
+  return [...el.querySelectorAll('audio')].some(x => !x.paused && !x.ended);
+}
+
+// Returns true while any audio is still being generated.
+async function refresh() {
+  const docs = await (await fetch('/api/docs')).json();
+  const list = $('#list');
+  let changed = false;
+
+  if (!docs.length) {
+    list.innerHTML = '<p class="sub">No documents yet.</p>';
+    sigs.clear();
+    return false;
+  }
+  list.querySelector(':scope > p.sub')?.remove();
+
+  const ids = new Set(docs.map(d => d.id));
+  for (const id of [...sigs.keys()]) {
+    if (!ids.has(id)) { list.querySelector(`[data-doc="${id}"]`)?.remove(); sigs.delete(id); changed = true; }
+  }
+
+  let prev = null;
+  for (const d of docs) {
+    const sig = JSON.stringify(d);
+    const el = list.querySelector(`[data-doc="${d.id}"]`);
+    if (el && (sigs.get(d.id) === sig || isBusy(el))) { prev = el; continue; }  // unchanged, or retry later
+    const tmp = document.createElement('div');
+    tmp.innerHTML = renderDoc(d).trim();
+    const fresh = tmp.firstElementChild;
+    if (el) el.replaceWith(fresh);
+    else if (prev) prev.after(fresh);
+    else list.prepend(fresh);
+    sigs.set(d.id, sig);
+    prev = fresh;
+    changed = true;
+  }
+
+  if (changed) await updateStatusLine();
+  return docs.some(d => d.audio.some(a => !['done', 'error'].includes(a.status)));
+}
+
+function renderDoc(d) {
+  const opts = Object.entries(config.tones).map(([k, v]) =>
+    `<option value="${k}" ${k === d.suggested_tone ? 'selected' : ''}>${k}${k === d.suggested_tone ? ' (suggested)' : ''}</option>`).join('');
+  const voiceOpts = Object.entries(config.voices || {}).map(([k, v]) =>
+    `<option value="${k}" ${k === config.default_voice ? 'selected' : ''}>${k} - ${esc(v)}</option>`).join('');
+  const audios = d.audio.map(a => {
+    const chips = `<span class="chip">${esc(a.tone)}</span><span class="chip">${esc(a.voice || 'default voice')}</span>`;
+    if (a.status === 'done') return `<div class="audio">${chips}
+      <audio controls preload="none" src="/api/audio/${a.id}/file"></audio>
+      <details onclick="loadScript(${a.id}, this)"><summary>Show script</summary><pre></pre></details></div>`;
+    if (a.status === 'error') return `<div class="audio">${chips}<span class="status err">Error: ${esc(a.error)}</span></div>`;
+    return `<div class="audio">${chips}<span class="status">${esc(a.status)}…</span></div>`;
+  }).join('');
+  return `<div class="doc" data-doc="${d.id}">
+    <h2>${esc(d.title)}</h2>
+    <span class="chip">${esc(d.category)}</span><span class="chip">${esc(d.source)}</span>
+    <div class="summary">${esc(d.summary)}</div>
+    <div class="row"><select id="tone-${d.id}" title="Tone">${opts}</select>
+      <select id="voice-${d.id}" title="Voice">${voiceOpts}</select>
+      <button class="primary" onclick="gen(${d.id})">Generate audio</button></div>
+    ${audios}</div>`;
+}
+
+async function loadScript(id, el) {
+  const pre = el.querySelector('pre');
+  if (pre.textContent) return;
+  const a = await (await fetch('/api/audio/' + id)).json();
+  pre.textContent = a.script || '';
+}
+
+async function gen(id) {
+  const tone = $('#tone-' + id).value, voice = $('#voice-' + id).value;
+  await fetch(`/api/docs/${id}/audio`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tone, voice }) });
+  refresh();
+}
+
+async function upload(files) {
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  await fetch('/api/docs', { method:'POST', body: fd });
+  refresh();
+}
+
+const drop = $('#drop'), input = $('#file');
+drop.onclick = () => input.click();
+input.onchange = () => upload(input.files);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); upload(e.dataTransfer.files); };
+init();
+</script>
+</body>
+</html>

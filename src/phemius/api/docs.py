@@ -1,0 +1,59 @@
+from typing import Annotated
+
+from fastapi import APIRouter, File, UploadFile
+from pydantic import BaseModel
+
+from phemius.errors import InvalidInputError, NotFoundError
+from phemius.services import agent, pipeline
+from phemius.services.uploads import UploadResult, import_upload
+from phemius.store import documents as document_store
+from phemius.store.documents import Document, DocumentSummary
+from phemius.voices import VOICES
+
+router = APIRouter(prefix="/api/docs", tags=["docs"])
+
+
+class AudioRequest(BaseModel):
+    tone: str | None = None
+    voice: str | None = None
+
+
+class AudioCreated(BaseModel):
+    audio_id: int
+
+
+@router.get("")
+def list_documents() -> list[DocumentSummary]:
+    return document_store.list_documents()
+
+
+@router.post("")
+def upload_documents(
+    files: Annotated[list[UploadFile], File()], auto_audio: bool = True
+) -> list[UploadResult]:
+    return [
+        import_upload(upload.filename or "upload", upload.file, auto_audio)
+        for upload in files
+    ]
+
+
+@router.get("/{document_id}")
+def get_document(document_id: int) -> Document:
+    document = document_store.get_document(document_id)
+    if document is None:
+        raise NotFoundError(f"Document {document_id} not found")
+    return document
+
+
+@router.post("/{document_id}/audio")
+def create_audio(document_id: int, request: AudioRequest) -> AudioCreated:
+    if request.tone and request.tone not in agent.TONES:
+        raise InvalidInputError(
+            f"Unknown tone; choose from {list(agent.TONES)}", field="tone"
+        )
+    if request.voice and request.voice not in VOICES:
+        raise InvalidInputError(
+            f"Unknown voice; choose from {list(VOICES)}", field="voice"
+        )
+    audio_id = pipeline.build_audio(document_id, request.tone, request.voice)
+    return AudioCreated(audio_id=audio_id)
