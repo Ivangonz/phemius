@@ -164,9 +164,29 @@ A repository ruleset enforces these for everyone, including admins:
 - No direct pushes, no force pushes, and the branch cannot be deleted.
 - Merged branches are deleted automatically.
 
-CI does not run the frontend checks yet. A frontend job (Node 22, `npm ci`, API
-types up to date, format check, lint, typecheck, tests and build) is added in
-#42. Until then, `make check` is how you run them.
+CI also runs two more jobs:
+
+- **Frontend:** Node from `frontend/.nvmrc`, `npm ci`, a check that the API
+  types are up to date (`make api-types` must leave no diff), then Prettier,
+  ESLint, `tsc`, Vitest and the production build.
+- **Package:** builds the UI, runs `uv build`, fails if the wheel or sdist lacks
+  `phemius/static/index.html`, then installs the wheel in a clean virtualenv
+  with no Node on `PATH` and requests `/` and `/api/health`.
+
+## How the UI ships
+
+Only UI contributors need Node. The React app is built into
+`src/phemius/static`, which is ignored by git but listed as a hatchling build
+artifact in `pyproject.toml`, so `uv build` puts it in the sdist and the wheel.
+Anyone who installs the package gets the built UI and never runs Node.
+
+To build a package locally, build the UI first; otherwise the package ships
+without it and Phemius serves only the API:
+
+```bash
+make build   # npm ci first if frontend/node_modules is missing
+uv build     # dist/phemius-<version>.tar.gz and .whl, with the UI inside
+```
 
 ## Project conventions
 
