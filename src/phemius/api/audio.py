@@ -2,8 +2,10 @@ from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from phemius.errors import NotFoundError
+from phemius.services import access as access_service
 from phemius.store import audio as audio_store
 from phemius.store.audio import Audio
 
@@ -17,6 +19,11 @@ MEDIA_TYPES = {
 }
 
 
+class AudioUrl(BaseModel):
+    url: str
+    expires: int
+
+
 @router.get("/{audio_id}")
 def get_audio(audio_id: int) -> Audio:
     audio = audio_store.get_audio(audio_id)
@@ -25,13 +32,28 @@ def get_audio(audio_id: int) -> Audio:
     return audio
 
 
+@router.get("/{audio_id}/url")
+def get_audio_url(audio_id: int) -> AudioUrl:
+    """A short-lived URL for the audio file that works without the token header."""
+    _ready_audio_path(audio_id)
+    signed = access_service.sign_audio_url(audio_id)
+    url = f"/api/audio/{audio_id}/file"
+    if signed.signature is not None:
+        url += f"?expires={signed.expires}&sig={signed.signature}"
+    return AudioUrl(url=url, expires=signed.expires)
+
+
 @router.get("/{audio_id}/file", response_class=FileResponse)
 def get_audio_file(audio_id: int) -> FileResponse:
+    path = _ready_audio_path(audio_id)
+    media_type = MEDIA_TYPES.get(path.suffix, "application/octet-stream")
+    return FileResponse(path, media_type=media_type)
+
+
+def _ready_audio_path(audio_id: int) -> Path:
     audio = audio_store.get_audio(audio_id)
     if audio is None or audio["status"] != "done" or not audio["path"]:
         raise NotFoundError(
             f"Audio {audio_id} is not ready", hint="Wait for generation to finish."
         )
-    path = Path(audio["path"])
-    media_type = MEDIA_TYPES.get(path.suffix, "application/octet-stream")
-    return FileResponse(path, media_type=media_type)
+    return Path(audio["path"])

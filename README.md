@@ -552,7 +552,9 @@ a token. The mode is read when the server starts; restart after changing it.
 
 Send the token with every API request as `Authorization: Bearer <token>`;
 without it, requests get `401 unauthorized`. An `<audio>` element cannot send
-headers, so `GET /api/audio/{id}/file` also accepts `?token=<token>`.
+headers, so `GET /api/audio/{id}/url` returns a signed link to the file that
+works without the header for six hours; regenerating the token revokes every
+link. The token itself is never accepted in a URL.
 `GET /api/health` and the UI files load without a token, and the UI asks for the
 token on the first `401`. Phemius stores only a hash of the token, so it can
 never show it again.
@@ -665,7 +667,8 @@ Every endpoint is listed with its schema in the interactive docs at
 | `GET /api/docs/{id}/versions` | The document's versions, newest first, each with its audio. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
 | `POST /api/docs/{id}/audio` | Queue another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional. Returns `{"audio_id", "job_id"}` |
 | `GET /api/audio/{id}` | One audio, including its script and its job's status, stage, error and hint |
-| `GET /api/audio/{id}/file` | The audio file, once its status is `done`. Accepts `?token=` in `network` and `proxy` modes |
+| `GET /api/audio/{id}/url` | `{"url", "expires"}`: a link to the audio file signed for six hours, for players that cannot send the token header (unsigned in `local` mode) |
+| `GET /api/audio/{id}/file` | The audio file, once its status is `done`. In `network` and `proxy` modes it needs the bearer token or a signed link from `/url` |
 | `GET /api/queue` | Jobs, newest first, with `is_paused`. Filter with `?state=` (repeatable: `queued`, `running`, `done`, `failed`, `cancelled`). Paginated with `?limit=` and `?offset=` |
 | `POST /api/queue/{job_id}/cancel` | Cancel a queued or running job (a running step finishes, then its result is discarded). `409 invalid_job_state` otherwise |
 | `POST /api/queue/{job_id}/retry` | Queue a failed or cancelled job again; it resumes at narration when its script was already written. `409 invalid_job_state` otherwise |

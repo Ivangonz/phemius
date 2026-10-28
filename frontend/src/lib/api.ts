@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { getAccessToken } from "./accessToken"
+import type { components } from "./api-schema"
 
 const API_BASE = "/api"
 
@@ -91,12 +92,13 @@ export const api = {
   },
 }
 
-// An <audio> element cannot send headers, so the server also accepts the
-// token as a query parameter on this route.
-export function audioFileUrl(audioId: number): string {
-  const url = `${API_BASE}/audio/${audioId}/file`
-  const token = getAccessToken()
-  return token ? `${url}?token=${encodeURIComponent(token)}` : url
+type AudioUrl = components["schemas"]["AudioUrl"]
+
+// An <audio> element cannot send headers, so the server hands out a
+// short-lived signed URL for the file. The token never goes in a URL.
+export async function audioFileUrl(audioId: number): Promise<string> {
+  const { url } = await api.get<AudioUrl>(`/audio/${audioId}/url`)
+  return url
 }
 
 export function getErrorMessage(error: unknown): string {

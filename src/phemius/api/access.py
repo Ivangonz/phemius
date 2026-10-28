@@ -16,8 +16,9 @@ router = APIRouter(prefix="/api/access", tags=["access"])
 # Docker and uptime checks probe health without a secret, and it reveals no
 # library data.
 OPEN_PATHS = {"/api/health"}
-# An <audio> element cannot send headers, so audio files also accept ?token=.
-AUDIO_FILE_PATH = re.compile(r"/api/audio/\d+/file")
+# An <audio> element cannot send headers, so audio files also accept a signed,
+# short-lived URL from GET /api/audio/{id}/url.
+AUDIO_FILE_PATH = re.compile(r"/api/audio/(\d+)/file")
 
 
 class AccessToken(BaseModel):
@@ -36,8 +37,10 @@ async def require_access_token(
 ) -> Response:
     if not _is_protected(request):
         return await call_next(request)
-    token = _presented_token(request)
+    token = _bearer_token(request)
     if await run_in_threadpool(access_service.is_valid_token, token):
+        return await call_next(request)
+    if await run_in_threadpool(_has_valid_audio_signature, request):
         return await call_next(request)
     return JSONResponse(
         error_body(
@@ -58,12 +61,19 @@ def _is_protected(request: Request) -> bool:
     return is_required and is_api and path not in OPEN_PATHS
 
 
-def _presented_token(request: Request) -> str | None:
+def _bearer_token(request: Request) -> str | None:
     scheme, _, credentials = request.headers.get("Authorization", "").partition(" ")
     if scheme.lower() == "bearer" and credentials.strip():
         return credentials.strip()
-    if request.method in {"GET", "HEAD"} and AUDIO_FILE_PATH.fullmatch(
-        request.url.path
-    ):
-        return request.query_params.get("token")
     return None
+
+
+def _has_valid_audio_signature(request: Request) -> bool:
+    match = AUDIO_FILE_PATH.fullmatch(request.url.path)
+    if request.method not in {"GET", "HEAD"} or match is None:
+        return False
+    return access_service.is_valid_audio_signature(
+        int(match.group(1)),
+        request.query_params.get("expires"),
+        request.query_params.get("sig"),
+    )

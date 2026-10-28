@@ -58,6 +58,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audio/{audio_id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Audio Url
+         * @description A short-lived URL for the audio file that works without the token header.
+         */
+        get: operations["get_audio_url_api_audio__audio_id__url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/checks": {
         parameters: {
             query?: never;
@@ -367,6 +387,13 @@ export interface components {
             version: number | null;
             /** Voice */
             voice: string | null;
+        };
+        /** AudioUrl */
+        AudioUrl: {
+            /** Expires */
+            expires: number;
+            /** Url */
+            url: string;
         };
         /** Body_upload_documents_api_docs_post */
         Body_upload_documents_api_docs_post: {
@@ -811,6 +838,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audio_url_api_audio__audio_id__url_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                audio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudioUrl"];
+                };
             };
             /** @description Validation Error */
             422: {
