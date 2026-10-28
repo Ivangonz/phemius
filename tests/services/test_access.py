@@ -46,6 +46,18 @@ def test_ensure_creates_a_token_only_once() -> None:
     assert access.is_valid_token(created)
 
 
+def test_local_mode_creates_no_token_without_the_env_variable() -> None:
+    assert access.prepare_access_token("local") is None
+    assert access_store.read_token_hash() is None
+
+
+def test_env_token_applies_in_any_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PHEMIUS_ACCESS_TOKEN", "0123456789abcdef")
+
+    assert access.prepare_access_token("local") is None
+    assert access.is_valid_token("0123456789abcdef")
+
+
 def test_only_a_hash_of_the_token_is_stored() -> None:
     token = access.regenerate_token()
 

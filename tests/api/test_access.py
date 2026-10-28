@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from structlog.testing import capture_logs
 
 from phemius.app import create_app
+from phemius.errors import PhemiusError
 from phemius.services import access
 from tests.api.test_docs import _upload_sample, _wait_for_audio
 
@@ -137,3 +138,59 @@ def test_token_never_appears_in_logs(
     assert started_token not in str(logs)
     assert regenerated not in str(logs)
     assert any(entry["event"] == "access_token_regenerated" for entry in logs)
+
+
+ENV_TOKEN = "a-long-env-token-from-compose"
+
+
+def _first_printed_token(output: str) -> str:
+    return "phm_" + output.split("phm_")[1].split()[0]
+
+
+def test_env_token_replaces_a_generated_token_without_printing(
+    network_mode: None,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with TestClient(create_app()):
+        generated = _first_printed_token(capsys.readouterr().err)
+    monkeypatch.setenv("PHEMIUS_ACCESS_TOKEN", ENV_TOKEN)
+
+    with TestClient(create_app()) as test_client:
+        startup = capsys.readouterr()
+        with capture_logs() as logs:
+            with_generated = test_client.get("/api/docs", headers=_bearer(generated))
+            with_env = test_client.get("/api/docs", headers=_bearer(ENV_TOKEN))
+
+    assert with_generated.status_code == 401
+    assert with_env.status_code == 200
+    assert "phm_" not in startup.err
+    assert ENV_TOKEN not in startup.out + startup.err + str(logs)
+
+
+def test_short_env_token_refuses_to_start(
+    network_mode: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_ACCESS_TOKEN", "too-short")
+
+    with pytest.raises(PhemiusError) as raised, TestClient(create_app()):
+        pass
+
+    assert "PHEMIUS_ACCESS_TOKEN" in raised.value.message
+    assert "too-short" not in f"{raised.value.message} {raised.value.hint}"
+
+
+def test_regenerate_is_refused_while_the_env_token_is_set(
+    network_mode: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_ACCESS_TOKEN", ENV_TOKEN)
+
+    with TestClient(create_app(), headers=_bearer(ENV_TOKEN)) as test_client:
+        response = test_client.post("/api/access/token")
+        still_valid = test_client.get("/api/docs")
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "setting_locked"
+    assert "PHEMIUS_ACCESS_TOKEN" in response.json()["hint"]
+    assert ENV_TOKEN not in response.text
+    assert still_valid.status_code == 200

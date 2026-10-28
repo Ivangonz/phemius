@@ -283,23 +283,43 @@ the library, so `PHEMIUS_ACCESS_MODE` decides who can reach it:
 server through them rather than calling `uvicorn` with your own `--host`. The
 mode is read when the server starts; restart after changing it.
 
+Send the token with every API request as `Authorization: Bearer <token>`;
+without it, requests get `401 unauthorized`. An `<audio>` element cannot send
+headers, so `GET /api/audio/{id}/file` also accepts `?token=<token>`.
+`GET /api/health` and the UI files load without a token, and the UI asks for the
+token on the first `401`. Phemius stores only a hash of the token, so it can
+never show it again.
+
+### Set your own token (recommended for deployments)
+
+Set `PHEMIUS_ACCESS_TOKEN` to a long random value, at least 16 characters, for
+example in a `.env` file passed to Docker:
+
+```bash
+echo "PHEMIUS_ACCESS_TOKEN=$(openssl rand -hex 32)" >> .env
+```
+
+The variable wins over any generated token, which stops working. Nothing is
+printed. To rotate it, change the variable and restart. While it is set,
+`POST /api/access/token` refuses with `409 setting_locked`. A shorter value
+stops the server from starting with `PHEMIUS_ACCESS_TOKEN must be at least 16
+characters.`
+
+### Generated token
+
+Without `PHEMIUS_ACCESS_TOKEN`, the first start in `network` or `proxy` mode
+creates a `phm_...` token and prints it once:
+
 ```bash
 PHEMIUS_ACCESS_MODE=network make run backend
 # Phemius access token (shown once, save it now): phm_...
 ```
 
-The first start in `network` or `proxy` mode creates a token and prints it once.
-Phemius stores only a hash of it, so it cannot show it again. Send it with every
-API request as `Authorization: Bearer phm_...`; without it, requests get
-`401 unauthorized`. An `<audio>` element cannot send headers, so
-`GET /api/audio/{id}/file` also accepts `?token=phm_...`. `GET /api/health` and
-the UI files load without a token, and the UI asks for the token on the first
-`401`.
-
-To replace the token, call `POST /api/access/token` with the current one. The
-response holds the new token, and the old one stops working at once. If you
-lost the token, restart in `local` mode, call the endpoint from the same
-computer, and restart in your previous mode.
+To replace it, call `POST /api/access/token` with the current one. The response
+holds the new token, and the old one stops working at once. If you lost it,
+either set `PHEMIUS_ACCESS_TOKEN` and restart, or restart in `local` mode, call
+`POST /api/access/token` from the same computer, and restart in your previous
+mode.
 
 ## Configuration
 
@@ -328,6 +348,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
 | `PHEMIUS_ACCESS_MODE` | `access_mode` | `local` | Who can reach the server: `local`, `network` or `proxy`. See [Access from other devices](#access-from-other-devices). Applies on the next start. |
+| `PHEMIUS_ACCESS_TOKEN` | environment only | not set (a token is generated) | Access token for `network` and `proxy` modes, at least 16 characters. Write-only: never shown or logged. See [Set your own token](#set-your-own-token-recommended-for-deployments). |
 | `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a`, `mp4` or `mp3`. Formats other than WAV need `ffmpeg` on your `PATH`; without it, Phemius keeps the WAV file. |
 
 Invalid values are reported as follows:
@@ -362,7 +383,7 @@ Every endpoint is listed with its schema in the interactive docs at
 | `POST /api/docs/{id}/audio` | Generate another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional |
 | `GET /api/audio/{id}` | One audio, including its status, script and error |
 | `GET /api/audio/{id}/file` | The audio file, once its status is `done`. Accepts `?token=` in `network` and `proxy` modes |
-| `POST /api/access/token` | Replace the access token and return the new one, `{"token": "phm_..."}`. The old token stops working at once |
+| `POST /api/access/token` | Replace the access token and return the new one, `{"token": "phm_..."}`. The old token stops working at once. `409 setting_locked` while `PHEMIUS_ACCESS_TOKEN` is set |
 
 Errors share one shape:
 

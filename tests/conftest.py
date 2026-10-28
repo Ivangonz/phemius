@@ -21,6 +21,7 @@ ENV_NAMES = [
     "SCRIPT_MAX_TOKENS",
     "LOG_LEVEL",
     "ACCESS_MODE",
+    "ACCESS_TOKEN",
 ]
 
 

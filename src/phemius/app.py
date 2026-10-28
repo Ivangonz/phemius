@@ -55,8 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def _prepare_access(app: FastAPI, config: Config) -> None:
     app.state.is_token_required = access_service.is_token_required(config.access_mode)
-    if app.state.is_token_required:
-        _show_new_token(access_service.ensure_access_token())
+    _show_new_token(access_service.prepare_access_token(config.access_mode))
 
 
 def _show_new_token(token: str | None) -> None:
