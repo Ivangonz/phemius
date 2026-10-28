@@ -329,6 +329,7 @@ Every endpoint is listed with its schema in the interactive docs at
 | `GET /api/docs` | Library: all documents, newest first, each with its audio |
 | `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false` |
 | `GET /api/docs/{id}` | One document's latest version, including its extracted text |
+| `GET /api/docs/{id}/versions` | The document's versions, newest first, each with its audio. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
 | `POST /api/docs/{id}/audio` | Generate another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional |
 | `GET /api/audio/{id}` | One audio, including its status, script and error |
 | `GET /api/audio/{id}/file` | The audio file, once its status is `done` |

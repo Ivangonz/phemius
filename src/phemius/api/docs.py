@@ -3,12 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 
+from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
 from phemius.errors import InvalidInputError, NotFoundError
 from phemius.models.prompts import TONES
 from phemius.services import pipeline
 from phemius.services.uploads import UploadResult, import_upload
 from phemius.store import documents as document_store
-from phemius.store.documents import Document, DocumentSummary
+from phemius.store.documents import Document, DocumentSummary, VersionSummary
 
 router = APIRouter(prefix="/api/docs", tags=["docs"])
 
@@ -43,6 +44,16 @@ def get_document(document_id: int) -> Document:
     if document is None:
         raise NotFoundError(f"Document {document_id} not found")
     return document
+
+
+@router.get("/{document_id}/versions")
+def list_versions(
+    document_id: int, limit: Limit = DEFAULT_PAGE_SIZE, offset: Offset = 0
+) -> Page[VersionSummary]:
+    page = document_store.list_versions(document_id, limit, offset)
+    if page is None:
+        raise NotFoundError(f"Document {document_id} not found")
+    return Page(items=page.items, total=page.total, limit=limit, offset=offset)
 
 
 @router.post("/{document_id}/audio")

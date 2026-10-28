@@ -147,3 +147,69 @@ def test_failing_script_model_fails_audio_with_hint(
     assert audio["status"] == "error"
     assert audio["error"] == "Provider returned 402. Add provider credits."
     assert audio["path"] is None
+
+
+def _upload_text(client: TestClient, name: str, text: str) -> dict[str, Any]:
+    response = client.post(
+        "/api/docs",
+        params={"auto_audio": "false"},
+        files=[("files", (name, text.encode(), "text/markdown"))],
+    )
+    result: dict[str, Any] = response.json()[0]
+    return result
+
+
+def test_reuploading_changed_file_adds_a_version(client: TestClient) -> None:
+    first = _upload_text(client, "guide.md", "# Guide\n\nInstall with pip.")
+    second = _upload_text(client, "guide.md", "# Guide\n\nInstall with uv.")
+
+    document = client.get(f"/api/docs/{first['doc_id']}").json()
+
+    assert second["doc_id"] == first["doc_id"]
+    assert (first["version"], second["version"]) == (1, 2)
+    assert second["duplicate"] is False
+    assert document["text"] == "# Guide\n\nInstall with uv."
+
+
+def test_versions_are_listed_newest_first_with_paging(client: TestClient) -> None:
+    for text in ["One.", "Two.", "Three."]:
+        uploaded = _upload_text(client, "guide.md", text)
+    url = f"/api/docs/{uploaded['doc_id']}/versions"
+
+    first_page = client.get(url, params={"limit": 2}).json()
+    second_page = client.get(url, params={"limit": 2, "offset": 2}).json()
+
+    assert [item["number"] for item in first_page["items"]] == [3, 2]
+    assert [item["number"] for item in second_page["items"]] == [1]
+    assert first_page["total"] == 3
+    assert (first_page["limit"], second_page["offset"]) == (2, 2)
+
+
+def test_versions_include_their_audio(client: TestClient) -> None:
+    uploaded = _upload_sample(client, "deploy-guide.md")
+    created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    audio = _wait_for_audio(client, created.json()["audio_id"])
+
+    page = client.get(f"/api/docs/{uploaded['doc_id']}/versions").json()
+
+    [version] = page["items"]
+    assert [item["id"] for item in version["audio"]] == [audio["id"]]
+    assert page["limit"] == 25
+
+
+def test_versions_of_missing_document_returns_not_found(client: TestClient) -> None:
+    response = client.get("/api/docs/999/versions")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+def test_versions_page_size_is_capped(client: TestClient) -> None:
+    uploaded = _upload_text(client, "guide.md", "One.")
+
+    response = client.get(
+        f"/api/docs/{uploaded['doc_id']}/versions", params={"limit": 101}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["field"] == "limit"

@@ -107,6 +107,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/docs/{document_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_api_docs__document_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -259,6 +276,17 @@ export interface components {
         };
         /** @enum {string} */
         OutputFormat: "wav" | "m4a" | "mp3" | "mp4";
+        /** Page[VersionSummary] */
+        Page_VersionSummary_: {
+            /** Items */
+            items: components["schemas"]["VersionSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** SecretStatus */
         SecretStatus: {
             /** Has Key */
@@ -346,6 +374,27 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VersionSummary */
+        VersionSummary: {
+            /** Audio */
+            audio: components["schemas"]["AudioSummary"][];
+            /** Category */
+            category: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created */
+            created: number;
+            /** Id */
+            id: number;
+            /** Number */
+            number: number;
+            /** Suggested Tone */
+            suggested_tone: string;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
         };
         /** @enum {string} */
         WatchOnChange: "mark" | "regenerate";
@@ -548,6 +597,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AudioCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_docs__document_id__versions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_VersionSummary_"];
                 };
             };
             /** @description Validation Error */

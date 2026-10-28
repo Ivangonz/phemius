@@ -365,6 +365,37 @@
         ],
         "type": "string"
       },
+      "Page_VersionSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VersionSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[VersionSummary]",
+        "type": "object"
+      },
       "SecretStatus": {
         "properties": {
           "has_key": {
@@ -638,6 +669,62 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VersionSummary": {
+        "properties": {
+          "audio": {
+            "items": {
+              "$ref": "#/components/schemas/AudioSummary"
+            },
+            "title": "Audio",
+            "type": "array"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created": {
+            "title": "Created",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "suggested_tone": {
+            "title": "Suggested Tone",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "title",
+          "content_hash",
+          "category",
+          "summary",
+          "suggested_tone",
+          "created",
+          "audio"
+        ],
+        "title": "VersionSummary",
         "type": "object"
       },
       "WatchOnChange": {
@@ -924,6 +1011,71 @@
           }
         },
         "summary": "Create Audio",
+        "tags": [
+          "docs"
+        ]
+      }
+    },
+    "/api/docs/{document_id}/versions": {
+      "get": {
+        "operationId": "list_versions_api_docs__document_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_VersionSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Versions",
         "tags": [
           "docs"
         ]
