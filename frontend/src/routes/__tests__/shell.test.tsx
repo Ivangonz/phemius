@@ -44,6 +44,31 @@ describe("app shell", () => {
     ).not.toHaveAttribute("aria-current")
   })
 
+  it("shows the script model and voice in the sidebar footer", async () => {
+    renderAppAt("/")
+    await screen.findByRole("heading", { level: 1, name: "Library" })
+
+    expect(
+      await within(mainNav()).findByText("anthropic/claude-haiku-5.5"),
+    ).toBeInTheDocument()
+    expect(within(mainNav()).getByText("kokoro · af_heart")).toBeInTheDocument()
+  })
+
+  it("collapses the navigation behind a menu button on phones", async () => {
+    const user = userEvent.setup()
+    renderAppAt("/")
+    await screen.findByRole("heading", { level: 1, name: "Library" })
+    const menu = within(mainNav()).getByRole("button", { name: "Menu" })
+    expect(menu).toHaveAttribute("aria-expanded", "false")
+
+    await user.click(menu)
+    expect(menu).toHaveAttribute("aria-expanded", "true")
+
+    await user.click(within(mainNav()).getByRole("link", { name: "Sources" }))
+    await screen.findByRole("heading", { level: 1, name: "Sources" })
+    expect(menu).toHaveAttribute("aria-expanded", "false")
+  })
+
   it("shows a not-found page for unknown paths", async () => {
     renderAppAt("/nowhere")
 
