@@ -23,7 +23,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": API_SERVER,
+      // Keep the browser's Host (the string shorthand would rewrite it): the
+      // API refuses changes whose Origin does not match Host.
+      "/api": { target: API_SERVER, changeOrigin: false },
     },
   },
   build: {

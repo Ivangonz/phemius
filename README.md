@@ -550,6 +550,11 @@ server through them rather than calling `uvicorn` with your own `--host`.
 anything beyond this computer (such as `0.0.0.0`), because nothing would ask for
 a token. The mode is read when the server starts; restart after changing it.
 
+In `local` mode, open Phemius at `localhost` or `127.0.0.1`: a request for any
+other host name gets `400 untrusted_host`, which stops other websites from
+reaching the library through your browser. In every mode, changes sent by a page
+on another site get `403 cross_site_request`; curl and scripts are unaffected.
+
 Send the token with every API request as `Authorization: Bearer <token>`;
 without it, requests get `401 unauthorized`. An `<audio>` element cannot send
 headers, so `GET /api/audio/{id}/url` returns a signed link to the file that

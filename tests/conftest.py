@@ -12,6 +12,8 @@ from phemius.services import ffmpeg
 from phemius.store import database
 from tests.services.fakes import FAKE_EXECUTABLE, FakeFfmpeg, UseFfmpeg
 
+LOCAL_URL = "http://127.0.0.1:8000"
+
 ENV_NAMES = [
     "DATA_DIR",
     "MODEL",
@@ -58,7 +60,8 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    with TestClient(create_app()) as test_client:
+    # Local mode accepts only loopback Host headers, unlike the default testserver.
+    with TestClient(create_app(), base_url=LOCAL_URL) as test_client:
         yield test_client
 
 
