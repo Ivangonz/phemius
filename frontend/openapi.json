@@ -434,6 +434,38 @@
             "title": "Model",
             "type": "string"
           },
+          "ollama_model": {
+            "default": "llama3.2",
+            "minLength": 1,
+            "title": "Ollama Model",
+            "type": "string"
+          },
+          "ollama_timeout": {
+            "default": 600,
+            "exclusiveMinimum": 0.0,
+            "title": "Ollama Timeout",
+            "type": "integer"
+          },
+          "ollama_url": {
+            "default": "http://localhost:11434",
+            "minLength": 1,
+            "title": "Ollama Url",
+            "type": "string"
+          },
+          "openai_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Api Key"
+          },
           "openai_speech_api_key": {
             "anyOf": [
               {
@@ -481,6 +513,32 @@
           "output_format": {
             "$ref": "#/components/schemas/OutputFormat",
             "default": "wav"
+          },
+          "script_api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Api Key"
+          },
+          "script_base_url": {
+            "anyOf": [
+              {
+                "pattern": "^https?://\\S+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Base Url"
           },
           "script_max_tokens": {
             "default": 8000,

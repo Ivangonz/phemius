@@ -89,6 +89,26 @@ class Settings(BaseModel):
         Annotated[SecretStr, Field(min_length=1)] | None,
         EnvVar("OPENROUTER_API_KEY", is_secret=True),
     ] = None
+    openai_api_key: Annotated[
+        Annotated[SecretStr, Field(min_length=1)] | None,
+        EnvVar("OPENAI_API_KEY", is_secret=True),
+    ] = None
+    script_base_url: Annotated[
+        Annotated[str, Field(pattern=r"^https?://\S+$")] | None,
+        EnvVar("PHEMIUS_SCRIPT_BASE_URL"),
+    ] = None
+    script_api_key: Annotated[
+        Annotated[SecretStr, Field(min_length=1)] | None,
+        EnvVar("PHEMIUS_SCRIPT_API_KEY", is_secret=True),
+    ] = None
+    ollama_url: Annotated[str, Field(min_length=1), EnvVar("PHEMIUS_OLLAMA_URL")] = (
+        "http://localhost:11434"
+    )
+    ollama_model: Annotated[
+        str, Field(min_length=1), EnvVar("PHEMIUS_OLLAMA_MODEL")
+    ] = "llama3.2"
+    # Local models on a CPU can take minutes to write a long script.
+    ollama_timeout: Annotated[int, Field(gt=0), EnvVar("PHEMIUS_OLLAMA_TIMEOUT")] = 600
     openai_speech_base_url: Annotated[
         str, Field(min_length=1), EnvVar("PHEMIUS_OPENAI_SPEECH_BASE_URL")
     ] = "https://api.openai.com/v1"

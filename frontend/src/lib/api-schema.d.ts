@@ -282,6 +282,23 @@ export interface components {
              * @default anthropic/claude-sonnet-4.5
              */
             model?: string;
+            /**
+             * Ollama Model
+             * @default llama3.2
+             */
+            ollama_model?: string;
+            /**
+             * Ollama Timeout
+             * @default 600
+             */
+            ollama_timeout?: number;
+            /**
+             * Ollama Url
+             * @default http://localhost:11434
+             */
+            ollama_url?: string;
+            /** Openai Api Key */
+            openai_api_key?: string | null;
             /** Openai Speech Api Key */
             openai_speech_api_key?: string | null;
             /**
@@ -300,6 +317,10 @@ export interface components {
             openrouter_api_key?: string | null;
             /** @default wav */
             output_format?: components["schemas"]["OutputFormat"];
+            /** Script Api Key */
+            script_api_key?: string | null;
+            /** Script Base Url */
+            script_base_url?: string | null;
             /**
              * Script Max Tokens
              * @default 8000
