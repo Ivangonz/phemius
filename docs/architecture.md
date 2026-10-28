@@ -35,7 +35,10 @@ flowchart LR
    kept.
 4. **Script.** For each audio (one per tone and voice), `services/pipeline.py`
    resolves the voice through `services/voices.py` and starts a background
-   thread, which asks the script model for a spoken script. A model failure,
+   thread, which asks the script model for a spoken script. `services/agent.py`
+   first prepares the text with `models/spoken_text.py` (code blocks marked for
+   description, tables flattened, URLs and images removed; see
+   [script-evaluation.md](script-evaluation.md)). A model failure,
    a cut-off reply or a document over 40,000 characters raises `ModelError`, and
    the audio fails with a hint. A configured model never falls back to an offline
    script.
@@ -70,7 +73,7 @@ against changes through `PATCH /api/settings`.
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
 | `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs`, `audio`, `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes), plus `errors.py`, which maps every error to `{detail, code, hint, errors}` |
 | `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `pipeline` (import and audio generation in threads), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored), `uploads`, `health` |
-| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets). `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
+| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets). `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, and `spoken_text.py` prepares document text for any model |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra) and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
 | `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings. `permissions.py` keeps the library folder and database owner-only |
