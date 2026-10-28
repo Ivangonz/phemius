@@ -136,7 +136,7 @@ def test_signed_audio_url_is_valid_until_it_expires() -> None:
     assert not is_valid_later
 
 
-@pytest.mark.parametrize("expires", [None, "", "soon", "-1"])
+@pytest.mark.parametrize("expires", [None, "", "soon", "-1", "²", "9" * 5000])
 def test_audio_signature_with_a_malformed_expiry_is_rejected(
     expires: str | None,
 ) -> None:
@@ -144,6 +144,14 @@ def test_audio_signature_with_a_malformed_expiry_is_rejected(
     signed = access.sign_audio_url(3)
 
     assert not access.is_valid_audio_signature(3, expires, signed.signature)
+
+
+@pytest.mark.parametrize("signature", ["", "é", "0" * 64])
+def test_audio_signature_that_does_not_match_is_rejected(signature: str) -> None:
+    access.regenerate_token()
+    signed = access.sign_audio_url(3)
+
+    assert not access.is_valid_audio_signature(3, str(signed.expires), signature)
 
 
 def test_audio_url_is_unsigned_without_a_token() -> None:

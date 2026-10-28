@@ -21,6 +21,8 @@ MIN_ENV_TOKEN_LENGTH = 16
 # Long enough for a long listen; the player fetches a fresh URL when one expires.
 AUDIO_URL_LIFETIME_SECONDS = 6 * 60 * 60
 AUDIO_URL_KEY_LABEL = b"phemius-audio-url-v1"
+# Unix seconds fit in 12 digits for millennia; a longer value is not ours.
+MAX_EXPIRES_DIGITS = 12
 
 log = structlog.get_logger(__name__)
 
@@ -150,15 +152,22 @@ def sign_audio_url(audio_id: int) -> AudioUrlSignature:
 def is_valid_audio_signature(
     audio_id: int, expires: str | None, signature: str | None
 ) -> bool:
-    if not expires or not expires.isdigit() or not signature:
-        return False
-    if int(expires) < time.time():
+    expires_at = _unix_seconds(expires)
+    if not signature or expires_at is None or expires_at < time.time():
         return False
     stored_hash = access_store.read_token_hash()
     if stored_hash is None:
         return False
-    expected = _audio_signature(stored_hash, audio_id, int(expires))
-    return hmac.compare_digest(expected, signature)
+    expected = _audio_signature(stored_hash, audio_id, expires_at)
+    # compare_digest raises on non-ASCII text, so compare bytes.
+    return hmac.compare_digest(expected.encode(), signature.encode())
+
+
+def _unix_seconds(value: str | None) -> int | None:
+    # isdigit() alone accepts characters such as "²" that int() rejects.
+    if not value or len(value) > MAX_EXPIRES_DIGITS:
+        return None
+    return int(value) if value.isascii() and value.isdecimal() else None
 
 
 def _audio_signature(token_hash: str, audio_id: int, expires: int) -> str:
