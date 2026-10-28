@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from phemius.store.migrations import run_migrations
+from phemius.store.permissions import create_private_dir, create_private_file
 
 BUSY_TIMEOUT_MS = 5000
 
@@ -13,9 +14,13 @@ _db_path: Path | None = None
 
 
 def init_database(db_path: Path) -> None:
-    """Point the store at a database file, enable WAL and apply migrations."""
+    """Point the store at a database file, enable WAL and apply migrations.
+
+    A new folder and database are created readable by their owner only.
+    """
     global _db_path
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    create_private_dir(db_path.parent)
+    create_private_file(db_path)
     _db_path = db_path
     with transaction() as connection:
         connection.execute("PRAGMA journal_mode=WAL")

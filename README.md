@@ -205,8 +205,9 @@ When a configured model fails:
 
 ## API keys
 
-For a deployment, pass API keys as environment variables (later, a `.env` file
-passed to Docker). An environment variable always wins, and it never touches the
+For a deployment, pass API keys as environment variables, or keep them in a
+`.env` file that you pass to Docker (`docker run --env-file .env ...`) and do not
+commit. An environment variable always wins, and it is never written to the
 library.
 
 You can also save a key through the API:
@@ -219,9 +220,14 @@ curl -X PATCH http://127.0.0.1:8000/api/settings \
 
 - Keys are write-only: the API reports only whether a key is set
   (`"has_key": true`), never the key itself. Keys are not logged.
-- A saved key is stored in `library.db` in the data folder. Protect that folder
-  like any file that holds a secret; restricting the file's permissions is
-  tracked in #53.
+- A saved key is stored in plain text in `library.db` in the data folder, the
+  same way it would sit in a `.env` file. Phemius keeps that folder private to
+  the account that runs it: the folder is `0700` and `library.db` (with its
+  `-wal` and `-shm` files) is `0600`, so other local users cannot read the
+  database or the audio. If an existing library is readable by others, startup
+  tightens it and logs `library_permissions_tightened` with the paths. A watched
+  folder is never changed. On Windows, file modes are not applied; rely on the
+  folder's location in your user profile.
 - Send `{"openrouter_api_key": null}` to remove a saved key.
 - Saving a key also switches the default provider to `openrouter`, unless
   `PHEMIUS_SCRIPT_PROVIDER` says otherwise.
@@ -285,7 +291,7 @@ starts; saved settings apply on their next use without a restart (except
 
 | Variable | Setting key | Default | Description |
 | --- | --- | --- | --- |
-| `PHEMIUS_DATA_DIR` | environment only | `~/.phemius` | Library folder. Holds `library.db` (SQLite, including saved settings) and `audio/`. Created on startup. |
+| `PHEMIUS_DATA_DIR` | environment only | `~/.phemius` | Library folder. Holds `library.db` (SQLite, including saved settings and keys) and `audio/`. Created on startup, readable only by its owner. |
 | `PHEMIUS_LOG_LEVEL` | environment only | `info` | Log level: `debug`, `info`, `warning` or `error`. |
 | `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline` or `openrouter`. See [Script model](#script-model). |
 | `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | OpenRouter model slug. Used only by the `openrouter` provider. |
