@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from phemius.config import Config
 from phemius.errors import VoiceError
-from phemius.voices import elevenlabs, kokoro, openai_speech, stub
+from phemius.voices import elevenlabs, kokoro, openai_speech, piper, stub
 from phemius.voices.base import Voice, VoiceCheck, VoiceEngine, namespace_voice
 
 __all__ = [
@@ -27,6 +27,7 @@ ENGINES: dict[str, VoiceEngineFactory] = {
     "stub": stub.from_config,
     "openai_speech": openai_speech.from_config,
     "elevenlabs": elevenlabs.from_config,
+    "piper": piper.from_config,
 }
 
 

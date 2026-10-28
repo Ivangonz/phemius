@@ -22,8 +22,10 @@ keeps its library in one folder, and works fully offline.
   [OpenRouter](https://openrouter.ai), OpenAI, or a local server such as LM
   Studio, vLLM or LiteLLM. Offline rules need no model at all.
 - **Narrate locally** with [Kokoro](https://github.com/hexgrad/kokoro) and one of
-  11 American and British English voices, or with hosted voices from OpenAI, a
-  self-hosted OpenAI-compatible speech server, or ElevenLabs.
+  11 American and British English voices, with the lighter
+  [Piper](https://github.com/OHF-Voice/piper1-gpl) for small machines, or with
+  hosted voices from OpenAI, a self-hosted OpenAI-compatible speech server, or
+  ElevenLabs.
 - **Keep a library** of documents and their audio, with more versions per
   document in another tone or voice.
 - **Save settings** through `PATCH /api/settings`, with environment variables
@@ -33,8 +35,7 @@ The web UI is in early development. Its Library, Sources, Queue and Settings
 pages are placeholders, so for now you add documents and play audio through the
 API (see [Hear your first document](#hear-your-first-document)).
 
-Not available yet: Docker and `uv tool install` installs, the Piper voice
-engine, GitHub and Confluence
+Not available yet: Docker and `uv tool install` installs, GitHub and Confluence
 sources, and the access token. Until the access token exists, keep Phemius bound
 to `127.0.0.1`, as `make run` does.
 
@@ -293,6 +294,7 @@ engine.
 | Engine (`PHEMIUS_TTS`) | Voices |
 | --- | --- |
 | `kokoro` (default) | `kokoro:af_heart` (default), `af_bella`, `af_nicole`, `af_sarah`, `af_sky`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`. The first letter is the accent (American or British), the second the gender. |
+| `piper` | `piper:en_US-joe-medium` (default), `en_US-lessac-medium` (non-commercial use only), `en_GB-cori-medium`, `en_GB-northern_english_male-medium`. See [Piper](#piper). |
 | `openai_speech` | The names in `PHEMIUS_OPENAI_SPEECH_VOICES`, by default OpenAI's `alloy` (default), `ash`, `coral`, `echo`, `fable`, `nova`, `onyx`, `sage` and `shimmer`, for example `openai_speech:nova` |
 | `elevenlabs` | The voice ids in `PHEMIUS_ELEVENLABS_VOICES`, by default the premade voices George (`elevenlabs:JBFqnCBsd6RMkjVDRZzb`, default) and Sarah (`elevenlabs:EXAVITQu4vr4xnSDxMaL`) |
 | `stub` | `stub:silent`, silent audio for testing |
@@ -304,6 +306,37 @@ default voice (`default_voice`) and whether the engine is ready
 ```json
 "tts_status": {"is_ready": false, "message": "Kokoro is not installed.", "hint": "Run `uv sync --extra kokoro`, or set PHEMIUS_TTS=stub to test."}
 ```
+
+### Piper
+
+Piper is small and fast and runs on low-power machines such as a small VPS or a
+Raspberry Pi. It does not need Kokoro. Install it and select it:
+
+```bash
+uv sync --extra piper
+PHEMIUS_TTS=piper make run backend
+```
+
+Each voice is about 63 MB. A voice downloads the first time you narrate with it,
+into `<data folder>/voices/piper`, and its SHA-256 checksum is verified before
+it is kept; a failed or corrupted download leaves no file behind. `tts_status`
+reports `Piper is not installed.`, `Piper voice not downloaded yet.` or
+`Piper is ready.`
+
+The voices come from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices).
+Each was trained on a dataset with its own license; check it before you use the
+audio beyond personal listening:
+
+| Voice | Accent | Dataset license |
+| --- | --- | --- |
+| `piper:en_US-joe-medium` (default) | American English, male | CC0 |
+| `piper:en_US-lessac-medium` | American English, female | [Blizzard 2013 Lessac license](https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html): **non-commercial use only** |
+| `piper:en_GB-cori-medium` | British English, female | Public domain (LibriVox recordings) |
+| `piper:en_GB-northern_english_male-medium` | British English, male | [CC BY-SA 4.0](http://www.openslr.org/83/) |
+
+The `piper-tts` package itself is licensed GPL-3.0-or-later, so it is an
+optional extra and is never bundled with the default install or the Docker image
+(see ADR-003 in [docs/architecture.md](docs/architecture.md)).
 
 ### Hosted voices
 
@@ -407,7 +440,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_OLLAMA_URL` | `ollama_url` | `http://localhost:11434` | Ollama server address. Used only by the `ollama` provider. |
 | `PHEMIUS_OLLAMA_MODEL` | `ollama_model` | `llama3.2` | Ollama model name, as shown by `ollama list`. |
 | `PHEMIUS_OLLAMA_TIMEOUT` | `ollama_timeout` | `600` | Seconds to wait for one Ollama reply. A positive whole number. |
-| `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro`, `openai_speech`, `elevenlabs` or `stub` (silent audio, no model download). See [Voices](#voices). |
+| `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro`, `piper`, `openai_speech`, `elevenlabs` or `stub` (silent audio, no model download). See [Voices](#voices). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_OPENAI_SPEECH_BASE_URL` | `openai_speech_base_url` | `https://api.openai.com/v1` | Base URL of an OpenAI-compatible speech server. See [Hosted voices](#hosted-voices). |
 | `PHEMIUS_OPENAI_SPEECH_API_KEY` | `openai_speech_api_key` | not set | API key for the speech server; leave unset for a server that needs none. Write-only through the API. |
@@ -423,7 +456,7 @@ Invalid values are reported as follows:
 | Problem | What happens |
 | --- | --- |
 | A value of the wrong type or outside the allowed list, for example `PHEMIUS_FORMAT=ogg` or `PHEMIUS_SCRIPT_MAX_TOKENS=abc` | The server does not start. The log shows `Setting output_format has an invalid value.` (the setting key from the table) and `Application startup failed`. Through `PATCH /api/settings`, the same values are rejected with `422`. |
-| Unknown `PHEMIUS_TTS` | The server starts and logs `voice_engine_not_ready`. Creating audio fails with `Unknown voice engine '...'. Set PHEMIUS_TTS to one of: kokoro, stub, openai_speech, elevenlabs.` |
+| Unknown `PHEMIUS_TTS` | The server starts and logs `voice_engine_not_ready`. Creating audio fails with `Unknown voice engine '...'. Set PHEMIUS_TTS to one of: kokoro, stub, openai_speech, elevenlabs, piper.` |
 | `PHEMIUS_VOICE` that the engine does not offer | Creating audio fails with `PHEMIUS_VOICE '...' is not a kokoro voice.` and a list of valid ids. |
 | Unknown `PHEMIUS_SCRIPT_PROVIDER` | Categorizing falls back to the offline rules; scripts fail with `Unknown script provider '...'.` and the valid names. |
 | `PHEMIUS_SCRIPT_PROVIDER=openrouter` without a key | Scripts fail with `OpenRouter needs an API key.` |

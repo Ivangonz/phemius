@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from phemius.voices import ENGINES
 from tests.models.fakes import FailingScriptModel, FakeScriptModel, UseScriptModel
 
 SAMPLES = Path(__file__).parents[2] / "samples"
@@ -101,7 +102,7 @@ def test_upload_keeps_document_when_voice_engine_is_unknown(
     result = response.json()[0]
     assert response.status_code == 200
     assert result["doc_id"] is not None
-    assert "Set PHEMIUS_TTS to one of:" in result["error"]
+    assert f"Set PHEMIUS_TTS to one of: {', '.join(ENGINES)}." in result["error"]
 
 
 def test_missing_document_returns_not_found(client: TestClient) -> None:

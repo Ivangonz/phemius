@@ -62,3 +62,11 @@ def test_unknown_engine_is_reported_not_ready(
     assert status.hint is not None and "kokoro, stub" in status.hint
     assert voices.list_voices() == []
     assert voices.default_voice() is None
+
+
+def test_default_piper_voice_is_the_cc0_voice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_TTS", "piper")
+
+    assert voices.resolve_voice() == "piper:en_US-joe-medium"
