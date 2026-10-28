@@ -77,7 +77,7 @@ Every error uses one shape so the frontend handles it uniformly:
     "hint": "Add credits or lower the script length limit.",  # optional
     "errors": [  # optional, for validation errors
         {"field": "port", "message": "Must be between 1 and 65535"}
-    ]
+    ],
 }
 ```
 

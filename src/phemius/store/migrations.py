@@ -1,0 +1,52 @@
+"""Schema migrations tracked with `PRAGMA user_version`.
+
+Append new migrations to `MIGRATIONS`; never edit one that has shipped. Each runs
+inside the caller's transaction, so a failure leaves the library unchanged.
+"""
+
+import sqlite3
+from collections.abc import Callable
+
+type Migration = Callable[[sqlite3.Connection], None]
+
+
+def _create_initial_schema(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE docs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            source TEXT,
+            content_hash TEXT UNIQUE,
+            text TEXT,
+            category TEXT,
+            summary TEXT,
+            suggested_tone TEXT,
+            created REAL
+        );
+        CREATE TABLE audio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_id INTEGER,
+            tone TEXT,
+            voice TEXT,
+            script TEXT,
+            path TEXT,
+            status TEXT,
+            error TEXT,
+            created REAL
+        );
+        """
+    )
+
+
+MIGRATIONS: list[Migration] = [
+    _create_initial_schema,
+]
+
+
+def run_migrations(connection: sqlite3.Connection) -> None:
+    current_version: int = connection.execute("PRAGMA user_version").fetchone()[0]
+    for version, migration in enumerate(MIGRATIONS, start=1):
+        if version > current_version:
+            migration(connection)
+            connection.execute(f"PRAGMA user_version={version}")
