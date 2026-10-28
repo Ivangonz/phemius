@@ -35,3 +35,24 @@ def test_api_key_is_hidden_from_repr(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-secret")
 
     assert "sk-or-secret" not in repr(load_config())
+
+
+def test_script_provider_defaults_to_offline_without_a_key() -> None:
+    assert load_config().script_provider == "offline"
+
+
+def test_script_provider_defaults_to_openrouter_with_a_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-secret")
+
+    assert load_config().script_provider == "openrouter"
+
+
+def test_script_provider_env_var_wins_over_the_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-secret")
+    monkeypatch.setenv("PHEMIUS_SCRIPT_PROVIDER", "Offline")
+
+    assert load_config().script_provider == "offline"

@@ -5,7 +5,9 @@ from functools import lru_cache
 from openai import APIConnectionError, APIStatusError, DefaultHttpxClient, OpenAI
 from openai.types.chat import ChatCompletion
 
+from phemius.config import Config
 from phemius.errors import ModelError
+from phemius.models.chat import ChatReply, ChatScriptModel
 
 BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -18,25 +20,30 @@ STATUS_HINTS = {
 }
 
 
-class OpenRouterClient:
+class OpenRouterModel(ChatScriptModel):
+    length_hint = (
+        "Raise PHEMIUS_SCRIPT_MAX_TOKENS (needs more OpenRouter credit)"
+        " or use a shorter document."
+    )
+
     def __init__(
-        self, api_key: str, model: str, http_client: DefaultHttpxClient | None = None
+        self,
+        api_key: str,
+        model: str,
+        script_max_tokens: int,
+        http_client: DefaultHttpxClient | None = None,
     ) -> None:
-        self.model = model
+        super().__init__(model, script_max_tokens)
         self._client = OpenAI(
             base_url=BASE_URL, api_key=api_key, http_client=http_client
         )
 
-    def complete(self, system: str, user: str, max_tokens: int) -> str:
+    def _chat(self, system: str, user: str, max_tokens: int) -> ChatReply:
         choice = self._request(system, user, max_tokens).choices[0]
-        if choice.finish_reason == "length":
-            # Never silently ship a script that was cut off mid-document.
-            raise ModelError(
-                f"Model output hit the {max_tokens}-token limit.",
-                hint="Raise PHEMIUS_SCRIPT_MAX_TOKENS (needs more OpenRouter credit)"
-                " or use a shorter document.",
-            )
-        return choice.message.content or ""
+        return ChatReply(
+            content=choice.message.content or "",
+            is_truncated=choice.finish_reason == "length",
+        )
 
     def _request(self, system: str, user: str, max_tokens: int) -> ChatCompletion:
         try:
@@ -59,6 +66,17 @@ class OpenRouterClient:
             ) from error
 
 
+def from_config(config: Config) -> OpenRouterModel:
+    if not config.openrouter_api_key:
+        raise ModelError(
+            "OpenRouter needs an API key.",
+            hint="Set OPENROUTER_API_KEY, or set PHEMIUS_SCRIPT_PROVIDER=offline.",
+        )
+    return _cached_model(
+        config.openrouter_api_key, config.model, config.script_max_tokens
+    )
+
+
 @lru_cache(maxsize=4)
-def get_client(api_key: str, model: str) -> OpenRouterClient:
-    return OpenRouterClient(api_key, model)
+def _cached_model(api_key: str, model: str, script_max_tokens: int) -> OpenRouterModel:
+    return OpenRouterModel(api_key, model, script_max_tokens)

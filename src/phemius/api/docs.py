@@ -4,7 +4,8 @@ from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 
 from phemius.errors import InvalidInputError, NotFoundError
-from phemius.services import agent, pipeline
+from phemius.models.prompts import TONES
+from phemius.services import pipeline
 from phemius.services.uploads import UploadResult, import_upload
 from phemius.store import documents as document_store
 from phemius.store.documents import Document, DocumentSummary
@@ -46,9 +47,9 @@ def get_document(document_id: int) -> Document:
 
 @router.post("/{document_id}/audio")
 def create_audio(document_id: int, request: AudioRequest) -> AudioCreated:
-    if request.tone and request.tone not in agent.TONES:
+    if request.tone and request.tone not in TONES:
         raise InvalidInputError(
-            f"Unknown tone; choose from {list(agent.TONES)}", field="tone"
+            f"Unknown tone; choose from {list(TONES)}", field="tone"
         )
     audio_id = pipeline.build_audio(document_id, request.tone, request.voice)
     return AudioCreated(audio_id=audio_id)

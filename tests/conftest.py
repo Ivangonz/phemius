@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -6,8 +6,19 @@ from fastapi.testclient import TestClient
 
 from phemius import config
 from phemius.app import create_app
+from phemius.models import SCRIPT_MODELS
+from phemius.models.base import ScriptModel
 
-ENV_NAMES = ["DATA_DIR", "MODEL", "TTS", "VOICE", "WATCH_DIR", "FORMAT", "LOG_LEVEL"]
+ENV_NAMES = [
+    "DATA_DIR",
+    "MODEL",
+    "SCRIPT_PROVIDER",
+    "TTS",
+    "VOICE",
+    "WATCH_DIR",
+    "FORMAT",
+    "LOG_LEVEL",
+]
 
 
 @pytest.fixture(autouse=True)
@@ -26,3 +37,16 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
 def client() -> Iterator[TestClient]:
     with TestClient(create_app()) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def use_script_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[ScriptModel], None]:
+    """Registers `model` as a provider and selects it, as a real adapter would be."""
+
+    def use(model: ScriptModel) -> None:
+        monkeypatch.setitem(SCRIPT_MODELS, "fake", lambda loaded_config: model)
+        monkeypatch.setenv("PHEMIUS_SCRIPT_PROVIDER", "fake")
+
+    return use

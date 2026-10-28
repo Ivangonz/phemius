@@ -5,8 +5,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from phemius.services import agent
-from tests.services.test_agent import FailingModel
+from tests.models.fakes import FailingScriptModel, FakeScriptModel, UseScriptModel
 
 SAMPLES = Path(__file__).parents[2] / "samples"
 
@@ -119,15 +118,32 @@ def test_audio_file_not_ready_returns_hint(client: TestClient) -> None:
     assert response.json()["hint"]
 
 
+def test_script_model_drives_import_and_audio(
+    client: TestClient, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(script="Welcome to the deploy guide."))
+    uploaded = _upload_sample(client, "deploy-guide.md")
+
+    document = client.get(f"/api/docs/{uploaded['doc_id']}").json()
+    created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    audio = _wait_for_audio(client, created.json()["audio_id"])
+
+    assert document["category"] == "proposal / spec"
+    assert document["suggested_tone"] == "podcast"
+    assert audio["status"] == "done", audio["error"]
+    assert audio["tone"] == "podcast"
+    assert audio["script"] == "Welcome to the deploy guide."
+
+
 def test_failing_script_model_fails_audio_with_hint(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, use_script_model: UseScriptModel
 ) -> None:
     uploaded = _upload_sample(client, "deploy-guide.md")
-    monkeypatch.setattr(agent, "_model_client", lambda: FailingModel())
+    use_script_model(FailingScriptModel())
 
     created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
     audio = _wait_for_audio(client, created.json()["audio_id"])
 
     assert audio["status"] == "error"
-    assert audio["error"] == "OpenRouter returned 402. Add OpenRouter credits."
+    assert audio["error"] == "Provider returned 402. Add provider credits."
     assert audio["path"] is None
