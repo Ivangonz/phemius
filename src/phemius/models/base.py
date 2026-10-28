@@ -27,6 +27,11 @@ class ScriptModel(Protocol):
     Provider failures raise `ModelError` with a hint; output is never truncated.
     """
 
+    @property
+    def model(self) -> str:
+        """The name of the model that writes scripts, safe to show in the UI."""
+        ...
+
     def analyze(self, title: str, text: str) -> Analysis: ...
 
     def write_script(self, title: str, text: str, tone: str) -> str: ...
