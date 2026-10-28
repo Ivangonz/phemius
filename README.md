@@ -249,9 +249,9 @@ Phemius generates its audio in the background. Check its status:
 curl http://127.0.0.1:8000/api/docs
 ```
 
-The `audio` list of the document moves through `pending`, `scripting`,
-`synthesizing` and then `done` or `error`. When it is `done`, open the file in
-your browser to play it:
+Each entry in the document's `audio` list has a `status` (`queued`, `running`,
+then `done`, `failed` or `cancelled`) and a `stage` (`writing_script`, then
+`narrating`). When it is `done`, open the file in your browser to play it:
 
 ```text
 http://127.0.0.1:8000/api/audio/1/file
@@ -260,7 +260,9 @@ http://127.0.0.1:8000/api/audio/1/file
 You can also upload from the browser: open <http://127.0.0.1:8000/docs>, expand
 `POST /api/docs`, choose "Try it out" and pick a file.
 
-An audio with status `error` has an `error` field with the message and a hint.
+An audio with status `failed` has an `error` field with the message and a
+`hint` field with what to do. `GET /api/queue` lists every job, and a failed
+job can be retried (see [API](#api)).
 
 ## First run
 
@@ -599,6 +601,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline`, `openrouter`, `openai`, `openai_compatible` or `ollama`. See [Script model](#script-model). |
 | `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | Model name sent to the script provider, for example an OpenRouter slug. Set it when you use `openai` or `openai_compatible`. |
 | `PHEMIUS_SCRIPT_MAX_TOKENS` | `script_max_tokens` | `8000` | Maximum tokens a model may write for one script. A positive whole number. |
+| `PHEMIUS_SCRIPT_WORKERS` | `script_workers` | `2` | How many scripts may be written at the same time, from 1 to 8. Voices always narrate one audio at a time. Applies on the next start. |
 | `OPENROUTER_API_KEY` | `openrouter_api_key` | not set | OpenRouter API key. Write-only through the API. See [API keys](#api-keys). |
 | `OPENAI_API_KEY` | `openai_api_key` | not set | OpenAI API key, used by the `openai` provider. Write-only through the API. |
 | `PHEMIUS_SCRIPT_BASE_URL` | `script_base_url` | not set | Base URL of an OpenAI-compatible server, for example `http://localhost:1234/v1`. Used by the `openai_compatible` provider. Must start with `http://` or `https://`. |
@@ -650,9 +653,13 @@ Every endpoint is listed with its schema in the interactive docs at
 | `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false` |
 | `GET /api/docs/{id}` | One document's latest version, including its extracted text |
 | `GET /api/docs/{id}/versions` | The document's versions, newest first, each with its audio. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
-| `POST /api/docs/{id}/audio` | Generate another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional |
-| `GET /api/audio/{id}` | One audio, including its status, script and error |
+| `POST /api/docs/{id}/audio` | Queue another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional. Returns `{"audio_id", "job_id"}` |
+| `GET /api/audio/{id}` | One audio, including its script and its job's status, stage, error and hint |
 | `GET /api/audio/{id}/file` | The audio file, once its status is `done`. Accepts `?token=` in `network` and `proxy` modes |
+| `GET /api/queue` | Jobs, newest first, with `is_paused`. Filter with `?state=` (repeatable: `queued`, `running`, `done`, `failed`, `cancelled`). Paginated with `?limit=` and `?offset=` |
+| `POST /api/queue/{job_id}/cancel` | Cancel a queued or running job (a running step finishes, then its result is discarded). `409 invalid_job_state` otherwise |
+| `POST /api/queue/{job_id}/retry` | Queue a failed or cancelled job again; it resumes at narration when its script was already written. `409 invalid_job_state` otherwise |
+| `POST /api/queue/pause`, `POST /api/queue/resume` | Stop or restart picking up jobs; running steps finish. The flag survives restarts |
 | `POST /api/access/token` | Replace the access token and return the new one, `{"token": "phm_..."}`. The old token stops working at once. `409 setting_locked` while `PHEMIUS_ACCESS_TOKEN` is set |
 
 Errors share one shape:

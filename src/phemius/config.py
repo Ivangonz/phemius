@@ -92,6 +92,11 @@ class Settings(BaseModel):
     script_max_tokens: Annotated[
         int, Field(gt=0), EnvVar("PHEMIUS_SCRIPT_MAX_TOKENS")
     ] = 8000
+    # Read when the job runner starts, so a change applies on the next start.
+    # Voices always render one at a time; this bounds parallel script writing.
+    script_workers: Annotated[
+        int, Field(ge=1, le=8), EnvVar("PHEMIUS_SCRIPT_WORKERS")
+    ] = 2
     openrouter_api_key: Annotated[
         Annotated[SecretStr, Field(min_length=1)] | None,
         EnvVar("OPENROUTER_API_KEY", is_secret=True),

@@ -21,6 +21,7 @@ class AudioRequest(BaseModel):
 
 class AudioCreated(BaseModel):
     audio_id: int
+    job_id: int
 
 
 @router.get("")
@@ -62,5 +63,5 @@ def create_audio(document_id: int, request: AudioRequest) -> AudioCreated:
         raise InvalidInputError(
             f"Unknown tone; choose from {list(TONES)}", field="tone"
         )
-    audio_id = pipeline.build_audio(document_id, request.tone, request.voice)
-    return AudioCreated(audio_id=audio_id)
+    queued = pipeline.build_audio(document_id, request.tone, request.voice)
+    return AudioCreated(audio_id=queued.audio_id, job_id=queued.job_id)

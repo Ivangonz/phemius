@@ -14,7 +14,7 @@ flowchart LR
     watch["Watched folder<br/>PHEMIUS_WATCH_DIR"] --> ingest
     ingest["Ingest<br/>extract text, guess title"] --> analysis
     analysis["Analysis<br/>category, summary, suggested tone"] --> store[("Library<br/>SQLite + audio folder")]
-    store --> script["Script<br/>script model writes a spoken version in a tone"]
+    store --> script["Script<br/>queued job; script model writes a spoken version in a tone"]
     script --> narration["Narration<br/>voice engine, one at a time"]
     narration --> convert["Convert<br/>optional ffmpeg to M4A or MP3"]
     convert --> store
@@ -33,24 +33,59 @@ flowchart LR
    from the same source, compared by a SHA-256 hash, adds a version, and the
    same text adds nothing. Each audio belongs to one version, so earlier audio is
    kept.
-4. **Script.** For each audio (one per tone and voice), `services/pipeline.py`
-   resolves the voice through `services/voices.py` and starts a background
-   thread, which asks the script model for a spoken script. `services/agent.py`
-   first prepares the text with `models/spoken_text.py` (code blocks marked for
-   description, tables flattened, URLs and images removed; see
-   [script-evaluation.md](script-evaluation.md)). A model failure,
-   a cut-off reply or a document over 40,000 characters raises `ModelError`, and
-   the audio fails with a hint. A configured model never falls back to an offline
-   script.
+4. **Script.** Each audio (one per tone and voice) is a job in the queue (see
+   [Job queue](#job-queue)). A script worker asks the script model for a spoken
+   script of the audio's version. `services/agent.py` first prepares the text
+   with `models/spoken_text.py` (code blocks marked for description, tables
+   flattened, URLs and images removed; see
+   [script-evaluation.md](script-evaluation.md)). A model failure, a cut-off
+   reply or a document over 40,000 characters raises `ModelError`, and the job
+   fails with its message and hint. A configured model never falls back to an
+   offline script.
 5. **Narration.** The configured voice engine (`PHEMIUS_TTS`) writes a WAV file.
-   A lock keeps synthesis to one audio at a time, because local voice models are
-   heavy. Script writing for several audios can run in parallel.
+   A single narration worker keeps synthesis to one audio at a time, because
+   local voice models are heavy.
 6. **Convert.** If `PHEMIUS_FORMAT` asks for M4A, MP4 or MP3 and `ffmpeg` is on
-   the `PATH`, the WAV is converted. Otherwise the WAV is kept.
+   the `PATH`, the WAV is converted, still in the `narrating` stage. Otherwise
+   the WAV is kept.
 
-Each audio row records its progress: `pending`, `scripting`, `synthesizing`, then
-`done` with a file path, or `error` with the message and hint. Clients read it
-from `GET /api/docs` and `GET /api/audio/{id}`.
+### Job queue
+
+Background work is persisted in the `jobs` table (`store/jobs.py`) and run by
+`services/runner.py`: `PHEMIUS_SCRIPT_WORKERS` threads (default 2) write scripts
+in parallel and one thread narrates. Workers poll the table and are woken when
+work is queued, retried or resumed. There is no broker (ADR-001).
+
+Every screen and endpoint uses one vocabulary:
+
+| Field | Values |
+| --- | --- |
+| `state` | `queued` (waiting for a worker), `running`, `done`, `failed`, `cancelled` |
+| `stage` | `writing_script`, then `narrating`: the step a job is running or waiting for |
+| `progress` | Fraction of the current stage, 0 to 1. Engines do not report partial progress yet, so it moves from 0 to 1 at the end of a stage |
+| `error`, `hint` | Message and hint of the `ModelError` or `VoiceError` that failed the job, stored separately |
+| `attempts` | 1, plus one per retry |
+
+An audio has exactly one job, and its `status`, `stage`, `error` and `hint` in
+`GET /api/docs` and `GET /api/audio/{id}` are read from that job; the audio row
+stores only the script and the file path, so the two cannot disagree.
+
+- **Stages.** A worker claims the oldest job queued for its stage and marks it
+  `running`. When the script is written the job goes back to `queued` at
+  `narrating`, so a job waits for the narration worker without holding a
+  script worker.
+- **Pause** is a queue flag, not a job state: while paused, workers claim
+  nothing, and running steps finish. It is stored, so it survives a restart.
+- **Cancel** applies to `queued` and `running` jobs. A running step cannot be
+  interrupted, so it finishes and its result is discarded.
+- **Retry** applies to `failed` and `cancelled` jobs. A job whose script was
+  written resumes at `narrating`, so a voice failure does not pay for a second
+  script. Re-running a stage overwrites that job's script or file.
+- **Restart.** On startup every `running` job becomes `failed` with "Interrupted
+  by a restart" and can be retried; `queued` jobs resume.
+- **Fencing.** Workers write a stage's result only if the job is still
+  `running` on the same attempt, so a step that finishes after a cancel or a
+  retry cannot overwrite the newer state.
 
 ### Configuration
 
@@ -69,18 +104,24 @@ against changes through `PATCH /api/settings`.
 | `src/phemius/app.py` | FastAPI app: startup (logging, library permissions, database, audio folder, access token, folder watcher, voice engine check), request logging, the access token check, routers, and the built UI with a fallback to `index.html` for client-side routes |
 | `src/phemius/cli.py` | `phemius serve`: opens the library, binds to the address the access mode allows (`127.0.0.1` for `local` and `proxy`, `0.0.0.0` for `network`) and runs uvicorn without its access log, which would print query-string tokens |
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
-| `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
+| `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
-| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs`, `audio`, `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes), plus `errors.py`, which maps every error to `{detail, code, hint, errors}` |
-| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `pipeline` (import and audio generation in threads), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored), `uploads`, `health` |
-| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets). `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, and `spoken_text.py` prepares document text for any model |
+4. **Script.** Each audio (one per tone and voice) is a job in the queue (see
+   [Job queue](#job-queue)). A script worker asks the script model for a spoken
+   script of the audio's version. `services/agent.py` first prepares the text
+   with `models/spoken_text.py` (code blocks marked for description, tables
+   flattened, URLs and images removed; see
+   [script-evaluation.md](script-evaluation.md)). A model failure, a cut-off
+   reply or a document over 40,000 characters raises `ModelError`, and the job
+   fails with its message and hint. A configured model never falls back to an
+   offline script.
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra) and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
-| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings. `permissions.py` keeps the library folder and database owner-only |
+| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio, jobs and saved settings. `permissions.py` keeps the library folder and database owner-only |
 | `frontend/` | React, Vite and TypeScript UI with TanStack Router and Query and Tailwind CSS. `make build` writes it to `src/phemius/static` (not committed); in development, Vite serves it on port 5173 and proxies `/api`. API types in `src/lib/api-schema.d.ts` are generated from `frontend/openapi.json`. Node is needed only to develop or build it |
 
 The library is one folder (`PHEMIUS_DATA_DIR`, default `~/.phemius`) holding
-`library.db` (documents, audio records and saved settings, including any saved
+`library.db` (documents, audio records, jobs and saved settings, including any saved
 API key) and `audio/`. Back it up by copying the folder while Phemius is
 stopped.
 

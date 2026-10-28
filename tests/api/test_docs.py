@@ -15,7 +15,7 @@ def _wait_for_audio(client: TestClient, audio_id: int) -> dict[str, Any]:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         audio: dict[str, Any] = client.get(f"/api/audio/{audio_id}").json()
-        if audio["status"] in {"done", "error"}:
+        if audio["status"] in {"done", "failed", "cancelled"}:
             return audio
         time.sleep(0.05)
     raise AssertionError(f"audio {audio_id} did not finish")
@@ -145,8 +145,11 @@ def test_failing_script_model_fails_audio_with_hint(
     created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
     audio = _wait_for_audio(client, created.json()["audio_id"])
 
-    assert audio["status"] == "error"
-    assert audio["error"] == "Provider returned 402. Add provider credits."
+    assert (audio["status"], audio["stage"]) == ("failed", "writing_script")
+    assert (audio["error"], audio["hint"]) == (
+        "Provider returned 402.",
+        "Add provider credits.",
+    )
     assert audio["path"] is None
 
 

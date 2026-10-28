@@ -161,6 +161,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_api_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/queue/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Queue */
+        post: operations["pause_queue_api_queue_pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/queue/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Queue */
+        post: operations["resume_queue_api_queue_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/queue/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Job */
+        post: operations["cancel_job_api_queue__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/queue/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Job */
+        post: operations["retry_job_api_queue__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -201,13 +286,18 @@ export interface components {
             doc_id: number;
             /** Error */
             error: string | null;
+            /** Hint */
+            hint: string | null;
             /** Id */
             id: number;
+            /** Job Id */
+            job_id: number;
             /** Path */
             path: string | null;
             /** Script */
             script: string | null;
-            status: components["schemas"]["AudioStatus"];
+            stage: components["schemas"]["JobStage"];
+            status: components["schemas"]["JobState"];
             /** Tone */
             tone: string;
             /** Version Id */
@@ -219,6 +309,8 @@ export interface components {
         AudioCreated: {
             /** Audio Id */
             audio_id: number;
+            /** Job Id */
+            job_id: number;
         };
         /** AudioRequest */
         AudioRequest: {
@@ -227,15 +319,18 @@ export interface components {
             /** Voice */
             voice?: string | null;
         };
-        /** @enum {string} */
-        AudioStatus: "pending" | "scripting" | "synthesizing" | "done" | "error";
         /** AudioSummary */
         AudioSummary: {
             /** Error */
             error: string | null;
+            /** Hint */
+            hint: string | null;
             /** Id */
             id: number;
-            status: components["schemas"]["AudioStatus"];
+            /** Job Id */
+            job_id: number;
+            stage: components["schemas"]["JobStage"];
+            status: components["schemas"]["JobState"];
             /** Tone */
             tone: string;
             /** Version */
@@ -302,6 +397,48 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** Job */
+        Job: {
+            /** Attempts */
+            attempts: number;
+            /** Audio Id */
+            audio_id: number | null;
+            /** Created */
+            created: number;
+            /** Document Id */
+            document_id: number | null;
+            /** Error */
+            error: string | null;
+            /** Finished */
+            finished: number | null;
+            /** Hint */
+            hint: string | null;
+            /** Id */
+            id: number;
+            /** Progress */
+            progress: number;
+            stage: components["schemas"]["JobStage"];
+            /** Started */
+            started: number | null;
+            state: components["schemas"]["JobState"];
+            /** Title */
+            title: string | null;
+            /** Tone */
+            tone: string | null;
+            type: components["schemas"]["JobType"];
+            /** Updated */
+            updated: number;
+            /** Version */
+            version: number | null;
+            /** Voice */
+            voice: string | null;
+        };
+        /** @enum {string} */
+        JobStage: "writing_script" | "narrating";
+        /** @enum {string} */
+        JobState: "queued" | "running" | "done" | "failed" | "cancelled";
+        /** @constant */
+        JobType: "audio";
         /** @enum {string} */
         OutputFormat: "wav" | "m4a" | "mp3" | "mp4";
         /** Page[VersionSummary] */
@@ -314,6 +451,24 @@ export interface components {
             offset: number;
             /** Total */
             total: number;
+        };
+        /** QueuePage */
+        QueuePage: {
+            /** Is Paused */
+            is_paused: boolean;
+            /** Items */
+            items: components["schemas"]["Job"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** QueueStatus */
+        QueueStatus: {
+            /** Is Paused */
+            is_paused: boolean;
         };
         /** SecretStatus */
         SecretStatus: {
@@ -397,6 +552,11 @@ export interface components {
             script_max_tokens?: number;
             /** Script Provider */
             script_provider?: string | null;
+            /**
+             * Script Workers
+             * @default 2
+             */
+            script_workers?: number;
             /**
              * Voice Engine
              * @default kokoro
@@ -751,6 +911,141 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    list_jobs_api_queue_get: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["JobState"][] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueuePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_queue_api_queue_pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueStatus"];
+                };
+            };
+        };
+    };
+    resume_queue_api_queue_resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueStatus"];
+                };
+            };
+        };
+    };
+    cancel_job_api_queue__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_job_api_queue__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

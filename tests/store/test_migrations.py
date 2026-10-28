@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
+from phemius.store import audio as audio_store
 from phemius.store import database, migrations
+from phemius.store import jobs as job_store
 from phemius.store.migrations import MIGRATIONS
 
 
@@ -134,13 +136,15 @@ def test_existing_documents_become_version_one_without_loss(
             " FROM docs d JOIN doc_versions v ON v.doc_id = d.id ORDER BY d.id"
         ).fetchall()
         audio = connection.execute(
-            "SELECT a.id, a.doc_id, a.tone, a.voice, a.script, a.path, a.status,"
-            " a.error, a.created, v.doc_id AS version_doc_id"
+            "SELECT a.id, a.doc_id, a.tone, a.voice, a.script, a.path,"
+            " a.created, v.doc_id AS version_doc_id"
             " FROM audio a JOIN doc_versions v ON v.id = a.version_id ORDER BY a.id"
         ).fetchall()
         settings = connection.execute("SELECT key FROM settings").fetchall()
     assert [tuple(row) for row in documents] == [(*doc, 1) for doc in LEGACY_DOCS]
-    assert [tuple(row)[:-1] for row in audio] == LEGACY_AUDIO
+    assert [tuple(row)[:-1] for row in audio] == [
+        (*row[:6], row[8]) for row in LEGACY_AUDIO
+    ]
     assert [row["version_doc_id"] for row in audio] == [1, 3]
     assert [row["key"] for row in settings] == ["output_format"]
 
@@ -186,3 +190,73 @@ def test_failed_migration_leaves_the_library_unchanged(
     connection.close()
     assert version == 3
     assert [title for (title,) in titles] == ["Deploy guide", "Notes", "Notes"]
+
+
+# (id, script, status, error) for audio saved before the job queue existed.
+AUDIO_BEFORE_JOBS = [
+    (1, "Script.", "done", None),
+    (2, None, "error", "Provider returned 402. Add provider credits."),
+    (3, None, "scripting", None),
+    (4, "Script.", "synthesizing", None),
+]
+
+
+def _library_before_jobs(db_path: Path) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(db_path)
+    with connection:
+        for migration in MIGRATIONS[:5]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=5")
+        connection.execute("INSERT INTO docs (id, source, created) VALUES (1, 'a', 1)")
+        connection.execute(
+            "INSERT INTO doc_versions (id, doc_id, number, title, text, created)"
+            " VALUES (1, 1, 1, 'Guide', 'Install it.', 1)"
+        )
+        connection.executemany(
+            "INSERT INTO audio (id, doc_id, version_id, tone, voice, script, path,"
+            " status, error, created) VALUES (?, 1, 1, 'teacher', 'stub:silent',"
+            " ?, NULL, ?, ?, 10)",
+            AUDIO_BEFORE_JOBS,
+        )
+    connection.close()
+
+
+def test_existing_audio_becomes_jobs_and_unfinished_audio_fails(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+
+    database.init_database(db_path)
+
+    with database.transaction() as connection:
+        jobs = connection.execute(
+            "SELECT audio_id, version_id, state, stage, progress, error_message,"
+            " error_hint IS NOT NULL AS has_hint, attempts FROM jobs ORDER BY id"
+        ).fetchall()
+        audio_columns = connection.execute("PRAGMA table_info(audio)").fetchall()
+    interrupted = "Interrupted by a restart"
+    assert [tuple(row) for row in jobs] == [
+        (1, 1, "done", "narrating", 1, None, 0, 1),
+        (2, 1, "failed", "writing_script", 0, AUDIO_BEFORE_JOBS[1][3], 0, 1),
+        (3, 1, "failed", "writing_script", 0, interrupted, 1, 1),
+        (4, 1, "failed", "narrating", 0, interrupted, 1, 1),
+    ]
+    assert {"status", "error"}.isdisjoint(column["name"] for column in audio_columns)
+    assert job_store.is_queue_paused() is False
+
+
+def test_migrated_audio_reads_its_status_from_its_job(isolated_env: Path) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+
+    database.init_database(db_path)
+
+    audio = audio_store.get_audio(2)
+    assert audio is not None
+    assert (audio["status"], audio["error"], audio["tone"]) == (
+        "failed",
+        AUDIO_BEFORE_JOBS[1][3],
+        "teacher",
+    )

@@ -126,12 +126,95 @@ def _add_document_versions(connection: sqlite3.Connection) -> None:
         connection.execute(statement)
 
 
+_JOB_QUEUE_STATEMENTS = [
+    # audio is renamed before jobs exists, so the jobs foreign key is not
+    # rewritten to point at legacy_audio.
+    "ALTER TABLE audio RENAME TO legacy_audio",
+    """
+    CREATE TABLE audio (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_id INTEGER,
+        version_id INTEGER REFERENCES doc_versions (id),
+        tone TEXT,
+        voice TEXT,
+        script TEXT,
+        path TEXT,
+        created REAL
+    )
+    """,
+    "INSERT INTO audio (id, doc_id, version_id, tone, voice, script, path, created)"
+    " SELECT id, doc_id, version_id, tone, voice, script, path, created"
+    " FROM legacy_audio",
+    """
+    CREATE TABLE jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        audio_id INTEGER REFERENCES audio (id),
+        version_id INTEGER REFERENCES doc_versions (id),
+        state TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        progress REAL NOT NULL DEFAULT 0,
+        error_message TEXT,
+        error_hint TEXT,
+        attempts INTEGER NOT NULL DEFAULT 1,
+        created REAL NOT NULL,
+        started REAL,
+        updated REAL NOT NULL,
+        finished REAL
+    )
+    """,
+    "CREATE INDEX jobs_pickup ON jobs (state, stage, created)",
+    "CREATE INDEX jobs_created ON jobs (created)",
+    "CREATE UNIQUE INDEX jobs_audio ON jobs (audio_id)",
+    """
+    INSERT INTO jobs (type, audio_id, version_id, state, stage, progress,
+        error_message, error_hint, created, updated)
+    SELECT 'audio', id, version_id,
+        CASE WHEN status = 'done' THEN 'done' ELSE 'failed' END,
+        CASE WHEN script IS NULL THEN 'writing_script' ELSE 'narrating' END,
+        CASE WHEN status = 'done' THEN 1 ELSE 0 END,
+        CASE
+            WHEN status = 'done' THEN NULL
+            WHEN status = 'error' THEN error
+            ELSE 'Interrupted by a restart'
+        END,
+        CASE
+            WHEN status IN ('done', 'error') THEN NULL
+            ELSE 'Retry the job to generate this audio.'
+        END,
+        COALESCE(created, 0), COALESCE(created, 0)
+    FROM legacy_audio ORDER BY id
+    """,
+    "DROP TABLE legacy_audio",
+    """
+    CREATE TABLE queue (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        is_paused INTEGER NOT NULL
+    )
+    """,
+    "INSERT INTO queue (id, is_paused) VALUES (1, 0)",
+]
+
+
+def _add_job_queue(connection: sqlite3.Connection) -> None:
+    """Move audio progress into persisted jobs, one per existing audio.
+
+    The audio status and error columns are dropped (by rebuilding the table, as
+    older SQLite cannot drop columns) so a job is the only place state lives.
+    Unfinished legacy audio was lost by the restart that runs this migration, so
+    it becomes a failed job the user can retry rather than a surprise rerun.
+    """
+    for statement in _JOB_QUEUE_STATEMENTS:
+        connection.execute(statement)
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
     _create_settings_table,
     _create_access_token_table,
     _add_document_versions,
+    _add_job_queue,
 ]
 
 

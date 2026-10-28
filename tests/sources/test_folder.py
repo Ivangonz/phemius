@@ -1,8 +1,10 @@
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+from phemius.services.runner import start_runner
 from phemius.sources.folder import import_existing_files, import_watched_file
 from phemius.store import audio as audio_store
 from phemius.store import database
@@ -12,18 +14,20 @@ from tests.models.fakes import FakeScriptModel, UseScriptModel
 
 
 @pytest.fixture
-def watched(isolated_env: Path, tmp_path: Path) -> Path:
+def watched(isolated_env: Path, tmp_path: Path) -> Iterator[Path]:
     database.init_database(isolated_env / "library.db")
     folder = tmp_path / "watched"
     folder.mkdir()
-    return folder
+    runner = start_runner()
+    yield folder
+    runner.stop()
 
 
 def _wait_until_finished(audio_id: int) -> Audio:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         audio = audio_store.get_audio(audio_id)
-        if audio and audio["status"] in {"done", "error"}:
+        if audio and audio["status"] in {"done", "failed", "cancelled"}:
             return audio
         time.sleep(0.05)
     raise AssertionError(f"audio {audio_id} did not finish")

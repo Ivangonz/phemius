@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from phemius.store import audio as audio_store
 from phemius.store import database
 from phemius.store import documents as document_store
+from phemius.store import jobs as job_store
 from phemius.store.documents import NewDocument
 
 
@@ -61,10 +61,9 @@ def test_new_version_keeps_earlier_audio_and_marks_document_changed() -> None:
     first = document_store.add_document(_document("Install it."))
     document = document_store.get_document(first.document_id)
     assert document is not None
-    audio_id = audio_store.create_audio(
+    audio_id = job_store.enqueue_audio(
         first.document_id, document["version_id"], "teacher", "stub:silent"
-    )
-    audio_store.mark_done(audio_id, "/audio/1.wav")
+    ).audio_id
 
     document_store.add_document(_document("Install it with uv."))
 
@@ -81,9 +80,9 @@ def test_list_versions_pages_newest_first_with_their_audio() -> None:
         stored = document_store.add_document(_document(text))
     document = document_store.get_document(stored.document_id)
     assert document is not None
-    audio_id = audio_store.create_audio(
+    audio_id = job_store.enqueue_audio(
         stored.document_id, document["version_id"], "teacher", "stub:silent"
-    )
+    ).audio_id
 
     page = document_store.list_versions(stored.document_id, limit=2, offset=0)
     rest = document_store.list_versions(stored.document_id, limit=2, offset=2)

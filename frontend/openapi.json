@@ -43,8 +43,23 @@
             ],
             "title": "Error"
           },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
           "id": {
             "title": "Id",
+            "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
             "type": "integer"
           },
           "path": {
@@ -69,8 +84,11 @@
             ],
             "title": "Script"
           },
+          "stage": {
+            "$ref": "#/components/schemas/JobStage"
+          },
           "status": {
-            "$ref": "#/components/schemas/AudioStatus"
+            "$ref": "#/components/schemas/JobState"
           },
           "tone": {
             "title": "Tone",
@@ -107,9 +125,12 @@
           "voice",
           "script",
           "path",
+          "created",
+          "job_id",
           "status",
+          "stage",
           "error",
-          "created"
+          "hint"
         ],
         "title": "Audio",
         "type": "object"
@@ -119,10 +140,15 @@
           "audio_id": {
             "title": "Audio Id",
             "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "integer"
           }
         },
         "required": [
-          "audio_id"
+          "audio_id",
+          "job_id"
         ],
         "title": "AudioCreated",
         "type": "object"
@@ -155,16 +181,6 @@
         "title": "AudioRequest",
         "type": "object"
       },
-      "AudioStatus": {
-        "enum": [
-          "pending",
-          "scripting",
-          "synthesizing",
-          "done",
-          "error"
-        ],
-        "type": "string"
-      },
       "AudioSummary": {
         "properties": {
           "error": {
@@ -178,12 +194,30 @@
             ],
             "title": "Error"
           },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
           },
+          "job_id": {
+            "title": "Job Id",
+            "type": "integer"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/JobStage"
+          },
           "status": {
-            "$ref": "#/components/schemas/AudioStatus"
+            "$ref": "#/components/schemas/JobState"
           },
           "tone": {
             "title": "Tone",
@@ -217,8 +251,11 @@
           "version",
           "tone",
           "voice",
+          "job_id",
           "status",
-          "error"
+          "stage",
+          "error",
+          "hint"
         ],
         "title": "AudioSummary",
         "type": "object"
@@ -380,6 +417,192 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "Job": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "audio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Id"
+          },
+          "created": {
+            "title": "Created",
+            "type": "number"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "number"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/JobStage"
+          },
+          "started": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          },
+          "type": {
+            "$ref": "#/components/schemas/JobType"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "number"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "state",
+          "stage",
+          "progress",
+          "error",
+          "hint",
+          "attempts",
+          "audio_id",
+          "document_id",
+          "version",
+          "title",
+          "tone",
+          "voice",
+          "created",
+          "started",
+          "updated",
+          "finished"
+        ],
+        "title": "Job",
+        "type": "object"
+      },
+      "JobStage": {
+        "enum": [
+          "writing_script",
+          "narrating"
+        ],
+        "type": "string"
+      },
+      "JobState": {
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "failed",
+          "cancelled"
+        ],
+        "type": "string"
+      },
+      "JobType": {
+        "const": "audio",
+        "type": "string"
+      },
       "OutputFormat": {
         "enum": [
           "wav",
@@ -418,6 +641,55 @@
           "offset"
         ],
         "title": "Page[VersionSummary]",
+        "type": "object"
+      },
+      "QueuePage": {
+        "properties": {
+          "is_paused": {
+            "title": "Is Paused",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset",
+          "is_paused"
+        ],
+        "title": "QueuePage",
+        "type": "object"
+      },
+      "QueueStatus": {
+        "properties": {
+          "is_paused": {
+            "title": "Is Paused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "is_paused"
+        ],
+        "title": "QueueStatus",
         "type": "object"
       },
       "SecretStatus": {
@@ -657,6 +929,13 @@
               }
             ],
             "title": "Script Provider"
+          },
+          "script_workers": {
+            "default": 2,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Script Workers",
+            "type": "integer"
           },
           "voice_engine": {
             "default": "kokoro",
@@ -1259,6 +1538,207 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/queue": {
+      "get": {
+        "operationId": "list_jobs_api_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/JobState"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueuePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Jobs",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/queue/pause": {
+      "post": {
+        "operationId": "pause_queue_api_queue_pause_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Pause Queue",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/queue/resume": {
+      "post": {
+        "operationId": "resume_queue_api_queue_resume_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Resume Queue",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/queue/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job_api_queue__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/queue/{job_id}/retry": {
+      "post": {
+        "operationId": "retry_job_api_queue__job_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Job",
+        "tags": [
+          "queue"
         ]
       }
     },

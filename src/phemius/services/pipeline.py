@@ -1,25 +1,27 @@
-"""Import documents and generate their audio in background threads."""
+"""Import documents, queue their audio and run each audio job stage.
+
+The job runner (`services/runner.py`) calls the stages; it runs a single
+narration worker, so synthesis happens one audio at a time.
+"""
 
 import shutil
 import subprocess
-import threading
 from pathlib import Path
 
 import structlog
 
 from phemius.config import load_config
 from phemius.errors import NotFoundError, PhemiusError
-from phemius.services import agent, ingest, voices
+from phemius.services import agent, ingest, queue, voices
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
-from phemius.store.documents import Document, NewDocument, StoredVersion
+from phemius.store import jobs as job_store
+from phemius.store.documents import NewDocument, StoredVersion
+from phemius.store.jobs import ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
 
 log = structlog.get_logger(__name__)
-
-# One synthesis at a time; local voice models are heavy.
-_synthesis_lock = threading.Lock()
 
 # output format -> (extension, ffmpeg codec arguments)
 FORMATS = {
@@ -57,8 +59,8 @@ def _store_analyzed(path: Path, source: str, text: str) -> StoredVersion:
 
 def build_audio(
     document_id: int, tone: str | None = None, voice: str | None = None
-) -> int:
-    """Create an audio record and generate it in a background thread.
+) -> QueuedAudio:
+    """Queue audio for a document's latest version in `tone` and `voice`.
 
     Raises `InvalidInputError` for a voice the configured engine does not offer
     and `VoiceError` when PHEMIUS_TTS or PHEMIUS_VOICE is misconfigured.
@@ -68,28 +70,31 @@ def build_audio(
         raise NotFoundError(f"Document {document_id} not found")
     tone = tone or document["suggested_tone"]
     voice = voices.resolve_voice(voice)
-    audio_id = audio_store.create_audio(
-        document_id, document["version_id"], tone, voice
-    )
-    threading.Thread(
-        target=generate_audio, args=(audio_id, document, tone, voice), daemon=True
-    ).start()
-    return audio_id
+    queued = job_store.enqueue_audio(document_id, document["version_id"], tone, voice)
+    log.info("audio_queued", audio_id=queued.audio_id, job_id=queued.job_id)
+    queue.notify_workers()
+    return queued
 
 
-def generate_audio(audio_id: int, document: Document, tone: str, voice: str) -> None:
-    log.info("audio_started", audio_id=audio_id, document_id=document["id"])
-    try:
-        audio_store.mark_scripting(audio_id)
-        script = agent.make_script(document["title"], document["text"], tone)
-        audio_store.save_script(audio_id, script)
-        out_path = _synthesize(audio_id, script, voice)
-        audio_store.mark_done(audio_id, str(_convert(out_path)))
-    except Exception as error:  # stored on the audio row and shown in the UI
-        log.warning("audio_failed", audio_id=audio_id, error_type=type(error).__name__)
-        audio_store.mark_failed(audio_id, error_text(error))
-        return
-    log.info("audio_finished", audio_id=audio_id)
+def write_script(job: ClaimedJob) -> bool:
+    """The `writing_script` stage. False if the job was cancelled meanwhile."""
+    source = audio_store.get_script_input(job.audio_id)
+    if source is None:
+        raise NotFoundError("The document version for this audio no longer exists.")
+    script = agent.make_script(source.title, source.text, source.tone)
+    return job_store.finish_script(job, script)
+
+
+def narrate(job: ClaimedJob) -> bool:
+    """The `narrating` stage. False if the job was cancelled meanwhile."""
+    audio = audio_store.get_audio(job.audio_id)
+    if audio is None or not audio["script"] or not audio["voice"]:
+        raise NotFoundError("This audio has no script to narrate.")
+    out_path = _convert(_synthesize(job.audio_id, audio["script"], audio["voice"]))
+    if job_store.finish_audio(job, str(out_path)):
+        return True
+    out_path.unlink(missing_ok=True)
+    return False
 
 
 def error_text(error: Exception) -> str:
@@ -101,10 +106,9 @@ def error_text(error: Exception) -> str:
 def _synthesize(audio_id: int, script: str, voice: str) -> Path:
     config = load_config()
     create_private_dir(config.audio_dir)
-    with _synthesis_lock:
-        engine = get_engine(config)
-        out_path = config.audio_dir / f"{audio_id}.{engine.extension}"
-        engine.synthesize(script, out_path, voice)
+    engine = get_engine(config)
+    out_path = config.audio_dir / f"{audio_id}.{engine.extension}"
+    engine.synthesize(script, out_path, voice)
     return out_path
 
 
