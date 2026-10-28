@@ -67,7 +67,7 @@ against changes through `PATCH /api/settings`.
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
 | `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs`, `audio`, plus `errors.py`, which maps every error to `{detail, code, hint, errors}` |
 | `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `pipeline` (import and audio generation in threads), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `uploads`, `health` |
-| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openrouter.py`. `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
+| `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets). `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra) and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
 | `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio and saved settings |
@@ -145,8 +145,8 @@ outside these two packages.
   adapter.
 
 **Current state.** Both registries exist. `ScriptModel` (`models/base.py`) has
-the `offline` and `openrouter` adapters in `SCRIPT_MODELS`, selected with
-`PHEMIUS_SCRIPT_PROVIDER`; `services/agent.py` reaches them only through
+the `offline` and `openai_compatible` adapters in `SCRIPT_MODELS`, plus the
+`openai` and `openrouter` presets, selected with `PHEMIUS_SCRIPT_PROVIDER`; `services/agent.py` reaches them only through
 `get_script_model()`. `VoiceEngine` (`voices/base.py`) has the `kokoro` and
 `stub` engines in `ENGINES`, selected with `PHEMIUS_TTS`. Voice ids are
 namespaced by engine (`kokoro:af_heart`), and each engine reports whether it is

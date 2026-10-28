@@ -18,9 +18,9 @@ keeps its library in one folder, and works fully offline.
 - **Categorize and suggest a tone.** Each document gets a category (for example
   "how-to / tutorial" or "meeting notes / status"), a one-sentence summary and a
   suggested tone: `neutral`, `conversational`, `podcast`, `teacher` or `executive`.
-- **Write a spoken script** with a hosted model on
-  [OpenRouter](https://openrouter.ai), or with offline rules that need no model
-  at all.
+- **Write a spoken script** with any server that speaks the OpenAI chat API:
+  [OpenRouter](https://openrouter.ai), OpenAI, or a local server such as LM
+  Studio, vLLM or LiteLLM. Offline rules need no model at all.
 - **Narrate locally** with [Kokoro](https://github.com/hexgrad/kokoro) and one of
   11 American and British English voices.
 - **Keep a library** of documents and their audio, with more versions per
@@ -32,8 +32,8 @@ The web UI is in early development. Its Library, Sources, Queue and Settings
 pages are placeholders, so for now you add documents and play audio through the
 API (see [Hear your first document](#hear-your-first-document)).
 
-Not available yet: Docker and `uv tool install` installs, other model providers
-(OpenAI-compatible servers, Ollama), other voice engines, GitHub and Confluence
+Not available yet: Docker and `uv tool install` installs, the Ollama model
+provider, other voice engines, GitHub and Confluence
 sources, and the access token. Until the access token exists, keep Phemius bound
 to `127.0.0.1`, as `make run` does.
 
@@ -175,7 +175,9 @@ The stub works even if you installed without the Kokoro extra (plain `uv sync`).
 | Provider | What it does | Network |
 | --- | --- | --- |
 | `offline` | Rules: strip markdown, turn headings into "Section: ..." and numbered lists into "Step 1. ...", and replace code blocks with a short spoken note | None |
-| `openrouter` | The model in `PHEMIUS_MODEL` on OpenRouter (default `anthropic/claude-sonnet-4.5`) | Calls `openrouter.ai` |
+| `openrouter` | The model in `PHEMIUS_MODEL` on OpenRouter (default `anthropic/claude-sonnet-4.5`), with `OPENROUTER_API_KEY` | Calls `openrouter.ai` |
+| `openai` | The model in `PHEMIUS_MODEL` on OpenAI (set it, for example `gpt-4.1-mini`), with `OPENAI_API_KEY` | Calls `api.openai.com` |
+| `openai_compatible` | The model in `PHEMIUS_MODEL` on the server at `PHEMIUS_SCRIPT_BASE_URL`, with the optional `PHEMIUS_SCRIPT_API_KEY` | Calls that server only |
 
 When `PHEMIUS_SCRIPT_PROVIDER` is not set, Phemius uses `openrouter` if an
 OpenRouter API key is configured and `offline` otherwise. So the shortest setup
@@ -187,13 +189,33 @@ export PHEMIUS_MODEL=anthropic/claude-sonnet-4.5   # optional; any slug from ope
 make run
 ```
 
+`openai` and `openrouter` are presets of `openai_compatible` that only fill in
+the base URL and read their own key. To use LM Studio, vLLM, LiteLLM or any
+other server that speaks the OpenAI chat completions API, point Phemius at its
+base URL (usually ending in `/v1`):
+
+```bash
+export PHEMIUS_SCRIPT_PROVIDER=openai_compatible
+export PHEMIUS_SCRIPT_BASE_URL=http://localhost:1234/v1   # LM Studio's default
+export PHEMIUS_MODEL=qwen2.5-7b-instruct                  # a model the server lists
+export PHEMIUS_SCRIPT_API_KEY=...                         # only if the server needs one
+make run
+```
+
+Without `PHEMIUS_SCRIPT_API_KEY`, Phemius sends a placeholder key, which local
+servers ignore; it never sends your `OPENAI_API_KEY` to another server.
+
 `GET /api/config` reports the provider in use (`script_provider`) and the model.
 
 When a configured model fails:
 
 - **Script writing** fails the audio. Its status becomes `error`, and its
   `error` field holds the reason and a hint, for example `OpenRouter returned
-  401. Check OPENROUTER_API_KEY.` Phemius never falls back to an offline script
+  401. Check OPENROUTER_API_KEY.` A rejected key (401), missing credit (402),
+  an unknown model (404), a rate limit (429), a server that refuses the
+  connection and a server that does not answer in time each get their own hint;
+  errors name a self-hosted server by its host and port, for example `Could not
+  reach localhost:1234.` Phemius never falls back to an offline script
   and never keeps a script that was cut off: if the model hits
   `PHEMIUS_SCRIPT_MAX_TOKENS`, the audio fails with a hint to raise the limit.
 - **Long documents** fail the same way. With a model provider, one script covers
@@ -222,6 +244,7 @@ curl -X PATCH http://127.0.0.1:8000/api/settings \
 - A saved key is stored in `library.db` in the data folder. Protect that folder
   like any file that holds a secret; restricting the file's permissions is
   tracked in #53.
+- The same works for `openai_api_key` and `script_api_key`.
 - Send `{"openrouter_api_key": null}` to remove a saved key.
 - Saving a key also switches the default provider to `openrouter`, unless
   `PHEMIUS_SCRIPT_PROVIDER` says otherwise.
@@ -287,10 +310,13 @@ starts; saved settings apply on their next use without a restart (except
 | --- | --- | --- | --- |
 | `PHEMIUS_DATA_DIR` | environment only | `~/.phemius` | Library folder. Holds `library.db` (SQLite, including saved settings) and `audio/`. Created on startup. |
 | `PHEMIUS_LOG_LEVEL` | environment only | `info` | Log level: `debug`, `info`, `warning` or `error`. |
-| `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline` or `openrouter`. See [Script model](#script-model). |
-| `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | OpenRouter model slug. Used only by the `openrouter` provider. |
+| `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline`, `openrouter`, `openai` or `openai_compatible`. See [Script model](#script-model). |
+| `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | Model name sent to the script provider, for example an OpenRouter slug. Set it when you use `openai` or `openai_compatible`. |
 | `PHEMIUS_SCRIPT_MAX_TOKENS` | `script_max_tokens` | `8000` | Maximum tokens a model may write for one script. A positive whole number. |
 | `OPENROUTER_API_KEY` | `openrouter_api_key` | not set | OpenRouter API key. Write-only through the API. See [API keys](#api-keys). |
+| `OPENAI_API_KEY` | `openai_api_key` | not set | OpenAI API key, used by the `openai` provider. Write-only through the API. |
+| `PHEMIUS_SCRIPT_BASE_URL` | `script_base_url` | not set | Base URL of an OpenAI-compatible server, for example `http://localhost:1234/v1`. Used by the `openai_compatible` provider. Must start with `http://` or `https://`. |
+| `PHEMIUS_SCRIPT_API_KEY` | `script_api_key` | not set | API key for the `openai_compatible` server, if it needs one. Write-only through the API. |
 | `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro` or `stub` (silent audio, no model download). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
