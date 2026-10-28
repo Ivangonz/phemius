@@ -37,6 +37,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project \
       $([ "$WITH_KOKORO" = "true" ] && echo --extra kokoro)
 
+# hatch reads the readme and license named in pyproject.toml.
+COPY README.md LICENSE ./
 COPY src/ src/
 COPY --from=ui /app/src/phemius/static src/phemius/static
 RUN uv sync --locked --no-dev --no-editable \
