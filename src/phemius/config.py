@@ -29,6 +29,7 @@ OFFLINE_PROVIDER = "offline"
 
 type SettingSource = Literal["env", "saved", "default"]
 type OutputFormat = Literal["wav", "m4a", "mp3", "mp4"]
+type AccessMode = Literal["local", "network", "proxy"]
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,11 @@ class Settings(BaseModel):
         Annotated[SecretStr, Field(min_length=1)] | None,
         EnvVar("OPENROUTER_API_KEY", is_secret=True),
     ] = None
+    # Read once at startup: it decides the bind address and whether a token is
+    # required, so a change applies on the next start.
+    access_mode: Annotated[
+        AccessMode, BeforeValidator(_lower), EnvVar("PHEMIUS_ACCESS_MODE")
+    ] = "local"
 
 
 class Config(Settings):

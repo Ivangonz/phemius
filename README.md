@@ -34,8 +34,7 @@ API (see [Hear your first document](#hear-your-first-document)).
 
 Not available yet: Docker and `uv tool install` installs, other model providers
 (OpenAI-compatible servers, Ollama), other voice engines, GitHub and Confluence
-sources, and the access token. Until the access token exists, keep Phemius bound
-to `127.0.0.1`, as `make run` does.
+sources.
 
 ## Contents
 
@@ -48,6 +47,7 @@ to `127.0.0.1`, as `make run` does.
 - [API keys](#api-keys)
 - [Voices](#voices)
 - [Watched folder](#watched-folder)
+- [Access from other devices](#access-from-other-devices)
 - [Configuration](#configuration)
 - [API](#api)
 - [Troubleshooting](#troubleshooting)
@@ -90,7 +90,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/Ivangonz/phemius.git
 cd phemius
 make install   # uv sync --extra kokoro, then npm install in frontend/
-make run       # API on 127.0.0.1:8000 and the UI dev server on port 5173
+make run       # API on 127.0.0.1:8000 (phemius serve) and the UI dev server on port 5173
 ```
 
 `make run` starts two servers with reload. Stop both with `Ctrl+C`.
@@ -268,6 +268,39 @@ PHEMIUS_WATCH_DIR=~/Documents/listen make run
 - The folder is read at startup, so restart after changing it, including when
   you change a saved `watch_dir` setting.
 
+## Access from other devices
+
+Phemius has no user accounts. Anyone who can reach its port can read and delete
+the library, so `PHEMIUS_ACCESS_MODE` decides who can reach it:
+
+| Mode | Listens on | Access token |
+| --- | --- | --- |
+| `local` (default) | `127.0.0.1`, this computer only | Not needed |
+| `network` | `0.0.0.0`, every device on your network | Required |
+| `proxy` | `127.0.0.1`, for a reverse proxy on the same computer that adds HTTPS or a domain; trusts its `X-Forwarded-*` headers | Required |
+
+`phemius serve` (and `make run`) pick the address from the mode, so start the
+server through them rather than calling `uvicorn` with your own `--host`. The
+mode is read when the server starts; restart after changing it.
+
+```bash
+PHEMIUS_ACCESS_MODE=network make run backend
+# Phemius access token (shown once, save it now): phm_...
+```
+
+The first start in `network` or `proxy` mode creates a token and prints it once.
+Phemius stores only a hash of it, so it cannot show it again. Send it with every
+API request as `Authorization: Bearer phm_...`; without it, requests get
+`401 unauthorized`. An `<audio>` element cannot send headers, so
+`GET /api/audio/{id}/file` also accepts `?token=phm_...`. `GET /api/health` and
+the UI files load without a token, and the UI asks for the token on the first
+`401`.
+
+To replace the token, call `POST /api/access/token` with the current one. The
+response holds the new token, and the old one stops working at once. If you
+lost the token, restart in `local` mode, call the endpoint from the same
+computer, and restart in your previous mode.
+
 ## Configuration
 
 Each setting is resolved in this order:
@@ -294,6 +327,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro` or `stub` (silent audio, no model download). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
 | `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
+| `PHEMIUS_ACCESS_MODE` | `access_mode` | `local` | Who can reach the server: `local`, `network` or `proxy`. See [Access from other devices](#access-from-other-devices). Applies on the next start. |
 | `PHEMIUS_FORMAT` | `output_format` | `wav` | Audio file format: `wav`, `m4a`, `mp4` or `mp3`. Formats other than WAV need `ffmpeg` on your `PATH`; without it, Phemius keeps the WAV file. |
 
 Invalid values are reported as follows:
@@ -306,8 +340,8 @@ Invalid values are reported as follows:
 | Unknown `PHEMIUS_SCRIPT_PROVIDER` | Categorizing falls back to the offline rules; scripts fail with `Unknown script provider '...'.` and the valid names. |
 | `PHEMIUS_SCRIPT_PROVIDER=openrouter` without a key | Scripts fail with `OpenRouter needs an API key.` |
 
-`make run` also accepts `HOST` (default `127.0.0.1`) and `PORT` (default `8000`)
-as make variables for the API. The UI dev server always proxies to
+`make run` also accepts `PORT` (default `8000`) as a make variable for the API;
+the address comes from `PHEMIUS_ACCESS_MODE`. The UI dev server always proxies to
 `127.0.0.1:8000`, so change `PORT` only together with `make run backend` and a
 built UI.
 
@@ -327,7 +361,8 @@ Every endpoint is listed with its schema in the interactive docs at
 | `GET /api/docs/{id}` | One document, including its extracted text |
 | `POST /api/docs/{id}/audio` | Generate another audio. Body: `{"tone": "teacher", "voice": "kokoro:bf_emma"}`; both fields optional |
 | `GET /api/audio/{id}` | One audio, including its status, script and error |
-| `GET /api/audio/{id}/file` | The audio file, once its status is `done` |
+| `GET /api/audio/{id}/file` | The audio file, once its status is `done`. Accepts `?token=` in `network` and `proxy` modes |
+| `POST /api/access/token` | Replace the access token and return the new one, `{"token": "phm_..."}`. The old token stops working at once |
 
 Errors share one shape:
 

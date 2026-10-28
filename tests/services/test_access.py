@@ -1,0 +1,76 @@
+from pathlib import Path
+
+import pytest
+
+from phemius.config import AccessMode
+from phemius.services import access
+from phemius.services.access import BindOptions
+from phemius.store import access as access_store
+from phemius.store import database
+
+
+@pytest.fixture(autouse=True)
+def library(isolated_env: Path) -> None:
+    database.init_database(isolated_env / "library.db")
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("local", BindOptions(host="127.0.0.1", is_proxy_trusted=False)),
+        ("network", BindOptions(host="0.0.0.0", is_proxy_trusted=False)),
+        ("proxy", BindOptions(host="127.0.0.1", is_proxy_trusted=True)),
+    ],
+)
+def test_bind_options_follow_the_access_mode(
+    mode: AccessMode, expected: BindOptions
+) -> None:
+    assert access.bind_options(mode) == expected
+
+
+@pytest.mark.parametrize(
+    ("mode", "is_required"), [("local", False), ("network", True), ("proxy", True)]
+)
+def test_token_is_required_beyond_local_mode(
+    mode: AccessMode, is_required: bool
+) -> None:
+    assert access.is_token_required(mode) is is_required
+
+
+def test_ensure_creates_a_token_only_once() -> None:
+    created = access.ensure_access_token()
+
+    assert created is not None
+    assert created.startswith("phm_")
+    assert access.ensure_access_token() is None
+    assert access.is_valid_token(created)
+
+
+def test_only_a_hash_of_the_token_is_stored() -> None:
+    token = access.regenerate_token()
+
+    stored = access_store.read_token_hash()
+
+    assert stored is not None
+    assert token not in stored
+
+
+def test_regenerating_invalidates_the_old_token() -> None:
+    old_token = access.regenerate_token()
+
+    new_token = access.regenerate_token()
+
+    assert new_token != old_token
+    assert not access.is_valid_token(old_token)
+    assert access.is_valid_token(new_token)
+
+
+@pytest.mark.parametrize("candidate", ["", "phm_wrong", None])
+def test_invalid_tokens_are_rejected(candidate: str | None) -> None:
+    access.regenerate_token()
+
+    assert not access.is_valid_token(candidate)
+
+
+def test_no_token_is_valid_before_one_exists() -> None:
+    assert not access.is_valid_token("phm_anything")

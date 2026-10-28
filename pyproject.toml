@@ -15,6 +15,9 @@ dependencies = [
     "openai>=1.50",
 ]
 
+[project.scripts]
+phemius = "phemius.cli:main"
+
 [project.optional-dependencies]
 kokoro = [
     "kokoro>=0.9",

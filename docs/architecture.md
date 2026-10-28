@@ -61,12 +61,13 @@ against changes through `PATCH /api/settings`.
 
 | Package | Responsibility |
 | --- | --- |
-| `src/phemius/app.py` | FastAPI app: startup (logging, database, audio folder, folder watcher, voice engine check), request logging, routers, and the built UI with a fallback to `index.html` for client-side routes |
+| `src/phemius/app.py` | FastAPI app: startup (logging, database, audio folder, access token, folder watcher, voice engine check), request logging, the access token check, routers, and the built UI with a fallback to `index.html` for client-side routes |
+| `src/phemius/cli.py` | `phemius serve`: opens the library, binds to the address the access mode allows (`127.0.0.1` for `local` and `proxy`, `0.0.0.0` for `network`) and runs uvicorn without its access log, which would print query-string tokens |
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
-| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs`, `audio`, plus `errors.py`, which maps every error to `{detail, code, hint, errors}` |
-| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `pipeline` (import and audio generation in threads), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `uploads`, `health` |
+| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs`, `audio`, `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes), plus `errors.py`, which maps every error to `{detail, code, hint, errors}` |
+| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `pipeline` (import and audio generation in threads), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address, token creation, regeneration and constant-time check; only a SHA-256 hash is stored), `uploads`, `health` |
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network) and `openrouter.py`. `chat.py` is the shared base for chat-completion providers, and `prompts.py` holds the tones, categories and prompts every model uses |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra) and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |

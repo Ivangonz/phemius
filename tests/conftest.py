@@ -20,6 +20,7 @@ ENV_NAMES = [
     "FORMAT",
     "SCRIPT_MAX_TOKENS",
     "LOG_LEVEL",
+    "ACCESS_MODE",
 ]
 
 
