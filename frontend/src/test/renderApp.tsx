@@ -1,6 +1,8 @@
+import type { ReactNode } from "react"
 import { render } from "@testing-library/react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient } from "@tanstack/react-query"
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router"
+import { AppProviders } from "@/components/AppProviders"
 import { createAppRouter } from "@/lib/router"
 
 export function createTestQueryClient() {
@@ -12,16 +14,17 @@ export function createTestQueryClient() {
   })
 }
 
-export function renderAppAt(path: string) {
+export function renderAppAt(path: string, outsideRouter?: ReactNode) {
   const queryClient = createTestQueryClient()
   const router = createAppRouter(
     queryClient,
     createMemoryHistory({ initialEntries: [path] }),
   )
   render(
-    <QueryClientProvider client={queryClient}>
+    <AppProviders queryClient={queryClient}>
       <RouterProvider router={router} />
-    </QueryClientProvider>,
+      {outsideRouter}
+    </AppProviders>,
   )
   return { router, queryClient }
 }
