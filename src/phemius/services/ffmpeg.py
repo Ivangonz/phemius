@@ -17,7 +17,7 @@ from phemius.store.jobs import AudioFormat
 log = structlog.get_logger(__name__)
 
 type CompressedFormat = Literal["m4a", "mp3"]
-type CheckStatus = Literal["ok", "optional"]
+type FfmpegCheckStatus = Literal["ok", "optional"]
 
 CODEC_ARGUMENTS: dict[CompressedFormat, list[str]] = {
     "m4a": ["-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart"],
@@ -45,7 +45,7 @@ class Conversion:
 class FfmpegCheck:
     is_present: bool
     version: str | None
-    status: CheckStatus
+    status: FfmpegCheckStatus
     message: str
     hint: str | None = None
 

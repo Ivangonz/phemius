@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from phemius.app import create_app
+from phemius.services.library_config import LibraryConfig
 from phemius.voices.kokoro import INSTALL_HINT
 from tests.conftest import LOCAL_URL
 from tests.services.fakes import FakeFfmpeg, UseFfmpeg
@@ -86,6 +87,7 @@ def test_config_reports_the_model_of_the_configured_provider(
     assert body["script_provider"] == provider
     assert body["model"] == expected_model
     assert body["llm_hint"] is None
+    assert LibraryConfig.model_validate(body).model_dump() == body
 
 
 def test_config_answers_with_a_hint_when_the_provider_key_is_missing(
@@ -100,6 +102,7 @@ def test_config_answers_with_a_hint_when_the_provider_key_is_missing(
     assert response.json()["model"] == "gpt-4o-mini"
     assert response.json()["llm_error"] == "OpenAI needs an API key."
     assert "OPENAI_API_KEY" in response.json()["llm_hint"]
+    LibraryConfig.model_validate(response.json())
 
 
 def test_config_reports_ffmpeg_version(
@@ -127,3 +130,16 @@ def test_config_reports_missing_ffmpeg_as_optional(
 
     assert (ffmpeg_check["is_present"], ffmpeg_check["status"]) == (False, "optional")
     assert ffmpeg_check["hint"]
+
+
+def test_config_schema_names_every_field_of_the_response(client: TestClient) -> None:
+    body = client.get("/api/config").json()
+    schema = client.get("/openapi.json").json()
+
+    response_schema = schema["paths"]["/api/config"]["get"]["responses"]["200"]
+    assert response_schema["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/LibraryConfig"
+    }
+    assert set(schema["components"]["schemas"]["LibraryConfig"]["properties"]) == set(
+        body
+    )
