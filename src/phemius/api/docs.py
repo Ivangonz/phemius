@@ -8,7 +8,6 @@ from phemius.services import agent, pipeline
 from phemius.services.uploads import UploadResult, import_upload
 from phemius.store import documents as document_store
 from phemius.store.documents import Document, DocumentSummary
-from phemius.voices import VOICES
 
 router = APIRouter(prefix="/api/docs", tags=["docs"])
 
@@ -50,10 +49,6 @@ def create_audio(document_id: int, request: AudioRequest) -> AudioCreated:
     if request.tone and request.tone not in agent.TONES:
         raise InvalidInputError(
             f"Unknown tone; choose from {list(agent.TONES)}", field="tone"
-        )
-    if request.voice and request.voice not in VOICES:
-        raise InvalidInputError(
-            f"Unknown voice; choose from {list(VOICES)}", field="voice"
         )
     audio_id = pipeline.build_audio(document_id, request.tone, request.voice)
     return AudioCreated(audio_id=audio_id)

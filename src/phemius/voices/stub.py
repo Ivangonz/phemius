@@ -3,13 +3,21 @@
 import wave
 from pathlib import Path
 
+from phemius.voices.base import Voice, VoiceCheck
 from phemius.voices.text import split_chunks
 
 SAMPLE_RATE = 16000
+VOICES = [Voice(id="stub:silent", label="Silent (test engine)", accent=None)]
 
 
 class StubEngine:
     extension = "wav"
+
+    def voices(self) -> list[Voice]:
+        return VOICES
+
+    def check(self) -> VoiceCheck:
+        return VoiceCheck(is_ready=True, message="The stub engine writes silence.")
 
     def synthesize(self, script: str, out_path: Path, voice: str) -> None:
         seconds = max(1, len(split_chunks(script)))

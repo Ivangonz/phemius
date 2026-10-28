@@ -7,6 +7,7 @@ from typing import BinaryIO
 
 from pydantic import BaseModel
 
+from phemius.errors import PhemiusError
 from phemius.services import ingest, pipeline
 
 
@@ -32,6 +33,10 @@ def import_upload(
             document_id, is_created = pipeline.import_file(path, source=filename)
         except Exception as error:  # reported per file in the response
             return UploadResult(file=filename, error=str(error))
+    result = UploadResult(file=filename, doc_id=document_id, duplicate=not is_created)
     if is_created and is_auto_audio:
-        pipeline.build_audio(document_id)
-    return UploadResult(file=filename, doc_id=document_id, duplicate=not is_created)
+        try:
+            pipeline.build_audio(document_id)
+        except PhemiusError as error:  # the document is kept; only audio failed
+            result.error = pipeline.error_text(error)
+    return result
