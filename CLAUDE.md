@@ -44,6 +44,8 @@ phemius/
 └── CLAUDE.md
 ```
 
+This is the target layout. Some adapters, routers, connectors and `frontend/` are added by later issues; check `src/phemius` for what exists today. The repository root also has `README.md`, `CONTRIBUTING.md` and `LICENSE` (Apache-2.0).
+
 ## Backend
 
 **Language:** Python 3.12 (Kokoro supports only 3.10 to 3.12, so never raise the floor or ceiling without an ADR)
@@ -162,7 +164,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 ```
 
-`make check` runs everything CI runs: `ruff check`, `ruff format --check`, `mypy`, `pytest`, and the frontend lint, typecheck, format check and tests.
+`make check` runs everything CI runs: `ruff check`, `ruff format --check`, `mypy`, `pytest`, and, once `frontend/` exists, the frontend lint, typecheck, format check and tests.
 
 ### Code Review Checklist
 
