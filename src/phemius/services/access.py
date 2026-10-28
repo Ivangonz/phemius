@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import ipaddress
 import secrets
 from dataclasses import dataclass
 
@@ -26,11 +27,41 @@ class BindOptions:
     is_proxy_trusted: bool
 
 
-def bind_options(mode: AccessMode) -> BindOptions:
-    """Where the server listens. A proxy is expected on the same host."""
+def bind_options(mode: AccessMode, host: str | None = None) -> BindOptions:
+    """Where the server listens: the mode's address, or `host` when it is safe.
+
+    A proxy is expected on the same host.
+    """
+    is_proxy_trusted = mode == "proxy"
+    if host is not None:
+        _refuse_unprotected_host(mode, host)
+        return BindOptions(host=host, is_proxy_trusted=is_proxy_trusted)
     if mode == "network":
         return BindOptions(host=ALL_INTERFACES_HOST, is_proxy_trusted=False)
-    return BindOptions(host=LOOPBACK_HOST, is_proxy_trusted=mode == "proxy")
+    return BindOptions(host=LOOPBACK_HOST, is_proxy_trusted=is_proxy_trusted)
+
+
+def _refuse_unprotected_host(mode: AccessMode, host: str) -> None:
+    """Without a token, only this computer may reach the library."""
+    if is_token_required(mode) or is_loopback_host(host):
+        return
+    raise PhemiusError(
+        f"Refusing to listen on {host} in local access mode: anyone who can reach"
+        " it could read and delete the library without an access token.",
+        hint=f"Set {ENV_PREFIX}ACCESS_MODE=network to require an access token"
+        f" (choose it with {ENV_PREFIX}{ENV_TOKEN_NAME}), or listen on"
+        f" {LOOPBACK_HOST}.",
+    )
+
+
+def is_loopback_host(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # A host name other than localhost may resolve beyond this computer.
+        return False
 
 
 def is_token_required(mode: AccessMode) -> bool:
