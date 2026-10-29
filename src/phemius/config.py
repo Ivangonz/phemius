@@ -197,6 +197,10 @@ def setting_env(key: str) -> EnvVar:
     return next(item for item in metadata if isinstance(item, EnvVar))
 
 
+def secret_setting_keys() -> list[str]:
+    return [key for key in Settings.model_fields if setting_env(key).is_secret]
+
+
 def env_override(key: str) -> str | None:
     return os.environ.get(setting_env(key).name) or None
 

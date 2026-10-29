@@ -45,6 +45,13 @@ class JobStateError(PhemiusError):
     status_code = 409
 
 
+class LibraryBusyError(PhemiusError):
+    """A whole-library operation cannot run while jobs or another one are running."""
+
+    code = "library_busy"
+    status_code = 409
+
+
 class ServiceUnavailableError(PhemiusError):
     code = "unavailable"
     status_code = 503

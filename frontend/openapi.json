@@ -200,6 +200,19 @@
         "title": "AudioCreated",
         "type": "object"
       },
+      "AudioDeleted": {
+        "properties": {
+          "deleted_files": {
+            "title": "Deleted Files",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted_files"
+        ],
+        "title": "AudioDeleted",
+        "type": "object"
+      },
       "AudioFormat": {
         "enum": [
           "wav",
@@ -2436,6 +2449,46 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/library/audio": {
+      "delete": {
+        "description": "Delete every audio file. Documents and scripts stay, and each audio's job\nbecomes cancelled so a retry narrates its saved script again.",
+        "operationId": "delete_all_audio_api_library_audio_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioDeleted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete All Audio",
+        "tags": [
+          "library"
+        ]
+      }
+    },
+    "/api/library/backup": {
+      "post": {
+        "description": "Download a zip of the library: database, audio files and settings\nwithout API keys or the access token.",
+        "operationId": "back_up_library_api_library_backup_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Back Up Library",
+        "tags": [
+          "library"
         ]
       }
     },

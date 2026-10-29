@@ -61,3 +61,18 @@ def transaction(is_immediate: bool = False) -> Iterator[sqlite3.Connection]:
 def ping() -> None:
     with transaction() as connection:
         connection.execute("SELECT 1").fetchone()
+
+
+def copy_to(target: Path) -> None:
+    """Write a consistent copy of the library to a new owner-only file.
+
+    Uses SQLite's backup API: copying the live file could catch a write half
+    done or miss pages still in the WAL.
+    """
+    create_private_file(target)
+    destination = sqlite3.connect(target)
+    try:
+        with transaction() as source:
+            source.backup(destination)
+    finally:
+        destination.close()

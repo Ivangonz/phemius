@@ -23,6 +23,7 @@ from phemius.api import (
     checks,
     docs,
     health,
+    library,
     library_config,
     queue,
     request_guard,
@@ -33,6 +34,7 @@ from phemius.api.errors import register_exception_handlers
 from phemius.config import Config, load_config
 from phemius.logs import configure_logging
 from phemius.services import access as access_service
+from phemius.services import backup
 from phemius.services.runner import start_runner
 from phemius.services.voices import check_engine
 from phemius.sources.folder import start_watcher
@@ -57,6 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_database(environment_config.db_path)
     config = load_config()
     create_private_dir(config.audio_dir)
+    backup.remove_leftovers(config.data_dir)
     _prepare_access(app, config)
     runner = start_runner()
     observer = start_watcher(config.watch_dir) if config.watch_dir else None
@@ -154,6 +157,7 @@ def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
         queue,
         checks,
         stats,
+        library,
         access,
     ):
         app.include_router(module.router)

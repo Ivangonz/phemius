@@ -202,6 +202,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete All Audio
+         * @description Delete every audio file. Documents and scripts stay, and each audio's job
+         *     becomes cancelled so a retry narrates its saved script again.
+         */
+        delete: operations["delete_all_audio_api_library_audio_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Back Up Library
+         * @description Download a zip of the library: database, audio files and settings
+         *     without API keys or the access token.
+         */
+        post: operations["back_up_library_api_library_backup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queue": {
         parameters: {
             query?: never;
@@ -381,6 +423,11 @@ export interface components {
             audio_id: number;
             /** Job Id */
             job_id: number;
+        };
+        /** AudioDeleted */
+        AudioDeleted: {
+            /** Deleted Files */
+            deleted_files: number;
         };
         /** @enum {string} */
         AudioFormat: "wav" | "m4a" | "mp3";
@@ -1247,6 +1294,46 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    delete_all_audio_api_library_audio_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudioDeleted"];
+                };
+            };
+        };
+    };
+    back_up_library_api_library_backup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
                 };
             };
         };

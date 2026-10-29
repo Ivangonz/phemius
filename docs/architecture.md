@@ -130,6 +130,33 @@ the running process's environment, which a restart can change, so they are not
 stored. There are no connector checks until the GitHub and Confluence
 connectors exist.
 
+### Library operations
+
+S7 backs up the library and deletes all audio through `/api/library`
+(`services/backup.py`, `services/library.py`).
+
+- **One at a time, never during a job.** Each operation closes the
+  maintenance gate (`services/maintenance.py`). Workers take a turn through
+  the gate for every claim and stage, so while it is closed they claim nothing.
+  An operation is refused with a 409 `library_busy` and a hint while a job is
+  `running` or another library operation holds the gate. Queued jobs wait.
+- **Backup** (`POST /api/library/backup`) downloads one zip: `manifest.json`
+  (format `phemius-backup`, `format_version` 1, app and schema versions, counts),
+  `library.db` and `audio/<file>` for each audio file. The database is copied
+  with SQLite's backup API, never by copying the live file. Saved API keys
+  (every setting whose `EnvVar` is secret) and the access token hash are
+  deleted from the copy, which is then vacuumed so no deleted page keeps them,
+  and audio paths become relative (`audio/12.wav`). The zip is written to an
+  owner-only temporary file in the library folder and streamed from disk; it is
+  deleted once sent, and startup removes any a stopped server left behind.
+- **Delete all audio** (`DELETE /api/library/audio`) removes every audio file
+  but keeps documents, versions and scripts. The script lives on the audio row,
+  so the rows stay with their file columns cleared, and every `done` or
+  `queued` job becomes `cancelled` with "Audio file deleted". Retrying one
+  narrates the saved script again without a model call. Rows change in one
+  transaction; the files, and any file in `audio/` no row points at, are
+  deleted after it commits. A file already missing is not an error.
+
 ## Components
 
 | Package | Responsibility |
@@ -137,20 +164,21 @@ connectors exist.
 | `src/phemius/app.py` | FastAPI app: startup (logging, library permissions, database, audio folder, access token, folder watcher, voice engine check), request logging, the access token check, routers, and the built UI with a fallback to `index.html` for client-side routes |
 | `src/phemius/cli.py` | `phemius serve`: opens the library, binds to the address the access mode allows (`127.0.0.1` for `local` and `proxy`, `0.0.0.0` for `network`) and runs uvicorn without its access log, which would print signed audio URLs |
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
-| `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
+| `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `LibraryBusyError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
-| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `stats` (today's totals), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), `request_guard` (the Host and Origin checks below), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
-| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
+| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `library` (backup and delete all audio), `stats` (today's totals), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), `request_guard` (the Host and Origin checks below), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
+| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `backup` (backup archives), `library` (delete all audio), `maintenance` (the gate that keeps workers and library operations apart), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network), `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets) and `ollama.py`. `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, `spoken_text.py` prepares document text for any model, and `suitability.py` rates how well a document suits listening when no model does |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra), `piper.py` (local, optional GPL extra, see ADR-003), `openai_speech.py`, `elevenlabs.py` and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
-| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio, jobs (with script usage and cost), daily totals and saved settings. `permissions.py` keeps the library folder and database owner-only |
+| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio, jobs (with script usage and cost), daily totals and saved settings, and `backup.py` for SQL on a library snapshot outside the live database. `permissions.py` keeps the library folder and database owner-only |
 | `frontend/` | React, Vite and TypeScript UI with TanStack Router and Query and Tailwind CSS. `make build` writes it to `src/phemius/static` (not committed); in development, Vite serves it on port 5173 and proxies `/api`. API types in `src/lib/api-schema.d.ts` are generated from `frontend/openapi.json`. Node is needed only to develop or build it |
 
 The library is one folder (`PHEMIUS_DATA_DIR`, default `~/.phemius`) holding
 `library.db` (documents, audio records, jobs and saved settings, including any saved
-API key) and `audio/`. Back it up by copying the folder while Phemius is
-stopped.
+API key) and `audio/`. Back it up from Settings (see
+[Library operations](#library-operations)), or by copying the folder while
+Phemius is stopped.
 
 A saved API key sits in `library.db` in plain text, as it would in a `.env`
 file, so the library is private to its owner. `store/permissions.py` creates

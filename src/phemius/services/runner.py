@@ -13,7 +13,7 @@ import structlog
 
 from phemius.config import load_config
 from phemius.errors import PhemiusError
-from phemius.services import pipeline, queue
+from phemius.services import maintenance, pipeline, queue
 from phemius.store import jobs as job_store
 from phemius.store.jobs import ClaimedJob, JobStage
 
@@ -82,12 +82,17 @@ def start_runner() -> JobRunner:
 
 
 def run_next(stage: JobStage) -> bool:
-    """Run the oldest job waiting for `stage`. False when there was none."""
-    job = job_store.claim_next(stage)
-    if job is None:
-        return False
-    run_stage(job)
-    return True
+    """Run the oldest job waiting for `stage`. False when there was none.
+
+    Nothing is claimed while a library operation (backup, restore, delete all
+    audio) holds the maintenance gate.
+    """
+    with maintenance.gate.worker_turn() as is_allowed:
+        job = job_store.claim_next(stage) if is_allowed else None
+        if job is None:
+            return False
+        run_stage(job)
+        return True
 
 
 def run_stage(job: ClaimedJob) -> None:
