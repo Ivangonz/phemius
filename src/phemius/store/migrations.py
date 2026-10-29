@@ -272,6 +272,53 @@ def _add_script_usage_and_audio_duration(connection: sqlite3.Connection) -> None
         connection.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
 
 
+_SOURCE_STATEMENTS = [
+    """
+    CREATE TABLE sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        config TEXT NOT NULL,
+        rules TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'active',
+        last_sync REAL,
+        error TEXT,
+        created REAL NOT NULL,
+        updated REAL NOT NULL,
+        UNIQUE (kind, config)
+    )
+    """,
+    """
+    CREATE TABLE source_activity (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id INTEGER NOT NULL REFERENCES sources (id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        item TEXT,
+        doc_id INTEGER,
+        detail TEXT,
+        created REAL NOT NULL
+    )
+    """,
+    "CREATE INDEX source_activity_created ON source_activity (created)",
+    "CREATE INDEX source_activity_source ON source_activity (source_id, item)",
+    "ALTER TABLE docs ADD COLUMN source_id INTEGER"
+    " REFERENCES sources (id) ON DELETE SET NULL",
+    "CREATE INDEX docs_source_id ON docs (source_id)",
+]
+
+
+def _add_sources(connection: sqlite3.Connection) -> None:
+    """Managed sources, their activity log, and the source each document came from.
+
+    Existing documents have no source; startup links those inside an adopted
+    watched folder. `config` is canonical JSON, so the unique pair stops the same
+    folder being added twice. Activity keeps `doc_id` without a foreign key: an
+    entry outlives the document it mentions.
+    """
+    for statement in _SOURCE_STATEMENTS:
+        connection.execute(statement)
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -283,6 +330,7 @@ MIGRATIONS: list[Migration] = [
     _add_audio_format_and_size,
     _add_audio_suitability,
     _add_script_usage_and_audio_duration,
+    _add_sources,
 ]
 
 

@@ -44,6 +44,13 @@ class SettingLockedError(PhemiusError):
     status_code = 409
 
 
+class DuplicateSourceError(PhemiusError):
+    """The same folder (or, later, repository or space) is already a source."""
+
+    code = "duplicate_source"
+    status_code = 409
+
+
 class JobStateError(PhemiusError):
     """A job action does not apply to the job's current state."""
 
@@ -74,4 +81,11 @@ class VoiceError(PhemiusError):
     """A voice engine failed."""
 
     code = "voice_error"
+    status_code = 502
+
+
+class SourceError(PhemiusError):
+    """A source cannot be read: a missing folder, later an expired token."""
+
+    code = "source_error"
     status_code = 502

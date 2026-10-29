@@ -24,15 +24,21 @@ from phemius.voices.wav import wav_duration_seconds
 log = structlog.get_logger(__name__)
 
 
-def import_file(path: Path, source: str | None = None) -> StoredVersion:
-    """Extract, categorize and store a document, or a new version of it."""
+def import_file(
+    path: Path, source: str | None = None, source_id: int | None = None
+) -> StoredVersion:
+    """Extract, categorize and store a document, or a new version of it.
+
+    `source` identifies the document (the path by default); `source_id` is the
+    managed source it came from, if any.
+    """
     text = ingest.extract_text(path)
     if not text.strip():
         raise ValueError(f"No text found in {path.name}")
     source = source or str(path)
     # Skips the model call on an unchanged save; editors save often.
     stored = document_store.find_unchanged(source, text) or _store_analyzed(
-        path, source, text
+        path, source, text, source_id
     )
     log.info(
         "document_imported",
@@ -43,10 +49,14 @@ def import_file(path: Path, source: str | None = None) -> StoredVersion:
     return stored
 
 
-def _store_analyzed(path: Path, source: str, text: str) -> StoredVersion:
+def _store_analyzed(
+    path: Path, source: str, text: str, source_id: int | None
+) -> StoredVersion:
     title = ingest.guess_title(text, path.stem)
     analysis = agent.analyze(title, text)
-    document = NewDocument(title=title, source=source, text=text, **analysis)
+    document = NewDocument(
+        title=title, source=source, text=text, source_id=source_id, **analysis
+    )
     return document_store.add_document(document)
 
 

@@ -35,10 +35,9 @@ from phemius.api.errors import register_exception_handlers
 from phemius.config import Config, load_config
 from phemius.logs import configure_logging
 from phemius.services import access as access_service
-from phemius.services import backup
+from phemius.services import backup, sources
 from phemius.services.runner import start_runner
 from phemius.services.voices import check_engine
-from phemius.sources.folder import start_watcher
 from phemius.store.database import init_database
 from phemius.store.permissions import (
     create_private_dir,
@@ -63,7 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     backup.remove_leftovers(config.data_dir)
     _prepare_access(app, config)
     runner = start_runner()
-    observer = start_watcher(config.watch_dir) if config.watch_dir else None
+    sources.start_sources()
     log.info(
         "phemius_started",
         version=__version__,
@@ -72,9 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     _warn_if_voice_engine_not_ready()
     yield
-    if observer:
-        observer.stop()
-        observer.join()
+    sources.stop_sources()
     runner.stop()
 
 

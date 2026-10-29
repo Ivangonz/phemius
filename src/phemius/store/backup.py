@@ -3,13 +3,14 @@
 import json
 import sqlite3
 import time
-from collections.abc import Collection, Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 from phemius.store.jobs import INTERRUPTED_HINT, INTERRUPTED_MESSAGE
 from phemius.store.migrations import MIGRATIONS, run_migrations
+from phemius.store.sources import KeptSource, replace_sources
 
 # In a snapshot, audio paths are relative to the library folder, so an archive
 # neither reveals nor depends on where the library it came from lived.
@@ -111,6 +112,7 @@ class InstallationState:
     settings: Mapping[str, object]
     setting_keys: Collection[str]
     token_hash: str | None
+    sources: Sequence[KeptSource]
 
 
 def read_schema_version(path: Path) -> int:
@@ -215,3 +217,4 @@ def _apply_installation(
             "INSERT INTO access_token (id, token_hash, created) VALUES (1, ?, ?)",
             (installation.token_hash, now),
         )
+    replace_sources(connection, installation.sources)

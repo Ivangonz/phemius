@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from structlog.testing import capture_logs
 
 from phemius.app import create_app
+from phemius.store import sources as source_store
 from tests.conftest import LOCAL_URL
 
 INDEX_HTML = "<!doctype html><title>Phemius</title><div id='root'></div>"
@@ -109,3 +110,15 @@ def test_startup_leaves_the_watched_folder_alone(
         pass
 
     assert stat.S_IMODE(watched.stat().st_mode) == 0o755
+
+
+def test_startup_turns_the_watched_folder_into_a_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    watched = tmp_path / "watched"
+    monkeypatch.setenv("PHEMIUS_WATCH_DIR", str(watched))
+
+    with TestClient(create_app()):
+        sources = source_store.all_sources()
+
+    assert [source["config"] for source in sources] == [{"path": str(watched)}]

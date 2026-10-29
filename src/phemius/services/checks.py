@@ -6,7 +6,6 @@ process's environment (installed tools, reachable providers), which a restart
 can change, so after a restart there is no last run until the checks run again.
 """
 
-import os
 import shutil
 import sys
 import threading
@@ -24,6 +23,7 @@ from pydantic import BaseModel
 from phemius.config import OFFLINE_PROVIDER, load_config
 from phemius.errors import PhemiusError
 from phemius.models import get_script_model
+from phemius.services import sources
 from phemius.services.ffmpeg import check_ffmpeg
 from phemius.services.health import is_writable
 from phemius.services.script_models import active_model
@@ -232,20 +232,21 @@ def _library() -> Outcome:
 
 
 def _watch_folder() -> Outcome:
-    watch_dir = load_config().watch_dir
-    if watch_dir is None:
+    active = sources.active_sources()
+    if not active:
         return Outcome(
             "optional",
-            "No watched folder is set.",
+            "No sources are set.",
             "Set a watched folder (PHEMIUS_WATCH_DIR) to add documents automatically.",
         )
-    if not watch_dir.is_dir() or not os.access(watch_dir, os.R_OK | os.X_OK):
-        return Outcome(
-            "needs_attention",
-            f"{watch_dir} is not a readable folder.",
-            "Create the folder or fix its permissions, or choose another one.",
-        )
-    return Outcome("ok", f"{watch_dir} is readable.")
+    for source in active:
+        problem = sources.find_problem(source)
+        if problem is not None:
+            return Outcome(
+                "needs_attention", f"{source['name']}: {problem.message}", problem.hint
+            )
+    count = len(active)
+    return Outcome("ok", f"{count} source{'s are' if count > 1 else ' is'} readable.")
 
 
 def _ffmpeg() -> Outcome:
