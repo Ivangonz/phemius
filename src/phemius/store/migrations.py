@@ -260,6 +260,18 @@ def _add_audio_suitability(connection: sqlite3.Connection) -> None:
         connection.execute(f"ALTER TABLE doc_versions ADD COLUMN {column} TEXT")
 
 
+def _add_script_usage_and_audio_duration(connection: sqlite3.Connection) -> None:
+    # Nullable: work done before this has unknown usage and length, never a guess.
+    for table, column in [
+        ("jobs", "input_tokens INTEGER"),
+        ("jobs", "output_tokens INTEGER"),
+        ("jobs", "cost_usd REAL"),
+        ("jobs", "script_written REAL"),
+        ("audio", "duration_seconds REAL"),
+    ]:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -270,6 +282,7 @@ MIGRATIONS: list[Migration] = [
     _index_document_list,
     _add_audio_format_and_size,
     _add_audio_suitability,
+    _add_script_usage_and_audio_duration,
 ]
 
 

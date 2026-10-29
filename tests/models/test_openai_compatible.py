@@ -11,6 +11,7 @@ from structlog.testing import capture_logs
 from phemius.config import load_config
 from phemius.errors import ModelError
 from phemius.models import get_script_model, openai_compatible
+from phemius.models.base import TokenUsage
 from phemius.models.openai_compatible import OpenAICompatibleModel
 
 BASE_URL = "http://localhost:1234/v1"
@@ -66,7 +67,7 @@ def test_write_script_posts_to_the_base_url_with_the_key() -> None:
 
     script = _model(handler).write_script("Setup", "# Setup", "neutral")
 
-    assert script == "A spoken script."
+    assert script.text == "A spoken script."
     assert str(requests[0].url) == f"{BASE_URL}/chat/completions"
     assert requests[0].headers["Authorization"] == f"Bearer {SECRET}"
 
@@ -181,6 +182,31 @@ def test_api_key_never_appears_in_logs(caplog: pytest.LogCaptureFixture) -> None
     assert logs
     assert SECRET not in repr(logs)
     assert SECRET not in caplog.text
+
+
+def test_script_carries_the_token_counts_the_server_reported() -> None:
+    usage = {"prompt_tokens": 1200, "completion_tokens": 300, "total_tokens": 1500}
+    body = {**_completion("Script."), "usage": usage}
+
+    script = _model(_reply(200, body)).write_script("A", "B", "neutral")
+
+    assert script.usage == TokenUsage(input_tokens=1200, output_tokens=300)
+
+
+def test_script_carries_the_cost_a_provider_such_as_openrouter_reports() -> None:
+    usage = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+    body = {**_completion("Script."), "usage": {**usage, "cost": 0.0042}}
+
+    script = _model(_reply(200, body)).write_script("A", "B", "neutral")
+
+    assert script.usage.provider_cost_usd == 0.0042
+    assert not script.usage.is_local
+
+
+def test_script_without_reported_usage_has_unknown_tokens() -> None:
+    script = _model(_reply(200, _completion("Script."))).write_script("A", "B", "x")
+
+    assert script.usage == TokenUsage()
 
 
 def test_custom_server_needs_a_base_url(monkeypatch: pytest.MonkeyPatch) -> None:

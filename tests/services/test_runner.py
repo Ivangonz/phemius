@@ -7,6 +7,7 @@ import pytest
 
 from phemius.config import Config
 from phemius.errors import VoiceError
+from phemius.models.base import Script, TokenUsage
 from phemius.services import pipeline, queue, runner
 from phemius.services.runner import JobRunner
 from phemius.store import audio as audio_store
@@ -24,6 +25,9 @@ from tests.services.fakes import FakeFfmpeg, UseFfmpeg
 type StartRunner = Callable[[], JobRunner]
 
 FINISHED: set[JobState] = {"done", "failed", "cancelled"}
+# The stub engine writes one second of silence per text chunk, and the fake
+# model's script is one chunk.
+ONE_STUB_CHUNK_SECONDS = 1.0
 
 
 class CountingScriptModel(FakeScriptModel):
@@ -31,9 +35,9 @@ class CountingScriptModel(FakeScriptModel):
         super().__init__()
         self.write_calls = 0
 
-    def write_script(self, title: str, text: str, tone: str) -> str:
+    def write_script(self, title: str, text: str, tone: str) -> Script:
         self.write_calls += 1
-        return self.script
+        return super().write_script(title, text, tone)
 
 
 class BlockingScriptModel(FakeScriptModel):
@@ -44,10 +48,10 @@ class BlockingScriptModel(FakeScriptModel):
         self.is_writing = threading.Event()
         self.release = threading.Event()
 
-    def write_script(self, title: str, text: str, tone: str) -> str:
+    def write_script(self, title: str, text: str, tone: str) -> Script:
         self.is_writing.set()
         self.release.wait(timeout=5)
-        return self.script
+        return super().write_script(title, text, tone)
 
 
 class ParallelOnlyScriptModel(FakeScriptModel):
@@ -57,9 +61,9 @@ class ParallelOnlyScriptModel(FakeScriptModel):
         super().__init__()
         self.barrier = threading.Barrier(2, timeout=5)
 
-    def write_script(self, title: str, text: str, tone: str) -> str:
+    def write_script(self, title: str, text: str, tone: str) -> Script:
         self.barrier.wait()
-        return self.script
+        return super().write_script(title, text, tone)
 
 
 class FailingVoiceEngine(StubEngine):
@@ -212,6 +216,34 @@ def test_model_error_message_and_hint_are_stored(
     )
 
 
+def test_script_job_records_token_usage_and_estimated_cost(
+    use_script_model: UseScriptModel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_SCRIPT_INPUT_PRICE", "3")
+    monkeypatch.setenv("PHEMIUS_SCRIPT_OUTPUT_PRICE", "15")
+    use_script_model(FakeScriptModel(usage=TokenUsage(1000, 200)))
+    job_id = _queue_audio()
+
+    assert runner.run_next("writing_script")
+
+    job = _job(job_id)
+    assert (job["input_tokens"], job["output_tokens"]) == (1000, 200)
+    assert job["cost_usd"] == pytest.approx(0.006)
+
+
+def test_script_job_without_a_price_keeps_its_cost_unknown(
+    use_script_model: UseScriptModel,
+) -> None:
+    use_script_model(FakeScriptModel(usage=TokenUsage(1000, 200)))
+    job_id = _queue_audio()
+
+    assert runner.run_next("writing_script")
+
+    job = _job(job_id)
+    assert job["input_tokens"] == 1000
+    assert job["cost_usd"] is None
+
+
 def test_retry_requeues_a_failed_job(
     start_runner: StartRunner, use_script_model: UseScriptModel
 ) -> None:
@@ -277,9 +309,10 @@ def test_scripts_are_written_in_parallel(
     assert [job["state"] for job in jobs] == ["done", "done"], jobs
 
 
-def test_wav_output_finishes_at_narration_with_format_and_size(
-    start_runner: StartRunner,
+def test_wav_output_finishes_at_narration_with_format_size_and_length(
+    start_runner: StartRunner, use_script_model: UseScriptModel
 ) -> None:
+    use_script_model(FakeScriptModel())
     start_runner()
 
     job = _wait_until_finished(_queue_audio())
@@ -292,15 +325,18 @@ def test_wav_output_finishes_at_narration_with_format_and_size(
         None,
     )
     assert audio["size_bytes"] == Path(audio["path"]).stat().st_size
+    assert audio["duration_seconds"] == ONE_STUB_CHUNK_SECONDS
 
 
 def test_compressed_output_converts_and_deletes_the_wav(
     start_runner: StartRunner,
     use_ffmpeg: UseFfmpeg,
+    use_script_model: UseScriptModel,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PHEMIUS_FORMAT", "m4a")
     use_ffmpeg(FakeFfmpeg())
+    use_script_model(FakeScriptModel())
     start_runner()
 
     job = _wait_until_finished(_queue_audio())
@@ -313,6 +349,7 @@ def test_compressed_output_converts_and_deletes_the_wav(
     assert audio["size_bytes"] == path.stat().st_size
     assert audio["conversion_note"] is None
     assert not path.with_suffix(".wav").exists()
+    assert audio["duration_seconds"] == ONE_STUB_CHUNK_SECONDS
 
 
 def test_missing_ffmpeg_finishes_with_the_wav_and_a_reason(

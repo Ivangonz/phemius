@@ -11,6 +11,7 @@ import structlog
 from phemius.config import load_config
 from phemius.errors import NotFoundError, PhemiusError
 from phemius.services import agent, ffmpeg, ingest, queue, voices
+from phemius.services.usage import job_usage
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
@@ -18,6 +19,7 @@ from phemius.store.documents import Document, NewDocument, StoredVersion
 from phemius.store.jobs import AudioFile, AudioFormat, ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
+from phemius.voices.wav import wav_duration_seconds
 
 log = structlog.get_logger(__name__)
 
@@ -97,7 +99,15 @@ def write_script(job: ClaimedJob) -> bool:
     if source is None:
         raise NotFoundError("The document version for this audio no longer exists.")
     script = agent.make_script(source.title, source.text, source.tone)
-    return job_store.finish_script(job, script)
+    usage = job_usage(script.usage, load_config())
+    log.info(
+        "script_usage",
+        job_id=job.id,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cost_usd=usage.cost_usd,
+    )
+    return job_store.finish_script(job, script.text, usage)
 
 
 def narrate(job: ClaimedJob) -> bool:
@@ -110,7 +120,7 @@ def narrate(job: ClaimedJob) -> bool:
     if audio is None or not audio["script"] or not audio["voice"]:
         raise NotFoundError("This audio has no script to narrate.")
     wav_path = _synthesize(job.audio_id, audio["script"], audio["voice"])
-    wav = _audio_file(wav_path, "wav")
+    wav = _audio_file(wav_path, "wav", wav_duration_seconds(wav_path))
     is_wav_output = load_config().output_format == "wav"
     save = job_store.finish_audio if is_wav_output else job_store.queue_conversion
     if save(job, wav):
@@ -134,7 +144,12 @@ def convert(job: ClaimedJob) -> bool:
         )
     wav_path = Path(audio["path"])
     conversion = ffmpeg.convert(wav_path, load_config().output_format)
-    saved = _audio_file(conversion.path, conversion.format, conversion.note)
+    saved = _audio_file(
+        conversion.path,
+        conversion.format,
+        audio["duration_seconds"],
+        conversion.note,
+    )
     is_converted = conversion.path != wav_path
     if not job_store.finish_audio(job, saved):
         if is_converted:
@@ -168,6 +183,11 @@ def _synthesize(audio_id: int, script: str, voice: str) -> Path:
 
 
 def _audio_file(
-    path: Path, audio_format: AudioFormat, conversion_note: str | None = None
+    path: Path,
+    audio_format: AudioFormat,
+    duration_seconds: float | None,
+    conversion_note: str | None = None,
 ) -> AudioFile:
-    return AudioFile(str(path), audio_format, path.stat().st_size, conversion_note)
+    return AudioFile(
+        str(path), audio_format, path.stat().st_size, duration_seconds, conversion_note
+    )

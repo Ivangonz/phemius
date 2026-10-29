@@ -368,6 +368,20 @@ When a configured model fails:
   added. `GET /api/config` shows the error in `llm_error`. Categorizing reads
   only the first 6,000 characters of a document.
 
+### Usage and cost
+
+Each script job records the input and output tokens the provider reported and an
+estimated cost in US dollars, shown in `GET /api/queue`. Each audio records its
+length in `duration_seconds`.
+
+- OpenRouter reports the price it charged, and Phemius uses it as is.
+- For other providers, set `PHEMIUS_SCRIPT_INPUT_PRICE` and
+  `PHEMIUS_SCRIPT_OUTPUT_PRICE` (US dollars per million tokens, from the
+  provider's price list) to get an estimate. Without both, the cost is `null`:
+  Phemius never guesses one. Update them when you change the model.
+- Ollama and the offline rules cost nothing. A self-hosted OpenAI-compatible
+  server reports a cost only if you set its prices, which can be `0`.
+
 ## API keys
 
 For a deployment, pass API keys as environment variables, or keep them in a
@@ -617,6 +631,8 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_SCRIPT_PROVIDER` | `script_provider` | `openrouter` when an OpenRouter key is configured, otherwise `offline` | Who categorizes and writes scripts: `offline`, `openrouter`, `openai`, `openai_compatible` or `ollama`. See [Script model](#script-model). |
 | `PHEMIUS_MODEL` | `model` | `anthropic/claude-sonnet-4.5` | Model name sent to the script provider, for example an OpenRouter slug. Set it when you use `openai` or `openai_compatible`. |
 | `PHEMIUS_SCRIPT_MAX_TOKENS` | `script_max_tokens` | `8000` | Maximum tokens a model may write for one script. A positive whole number. |
+| `PHEMIUS_SCRIPT_INPUT_PRICE` | `script_input_price` | not set | US dollars per million input tokens, to estimate script cost when the provider does not report one. Zero or more. |
+| `PHEMIUS_SCRIPT_OUTPUT_PRICE` | `script_output_price` | not set | US dollars per million output tokens. Needed with `PHEMIUS_SCRIPT_INPUT_PRICE`. |
 | `PHEMIUS_SCRIPT_WORKERS` | `script_workers` | `2` | How many scripts may be written at the same time, from 1 to 8. Voices always narrate one audio at a time. Applies on the next start. |
 | `OPENROUTER_API_KEY` | `openrouter_api_key` | not set | OpenRouter API key. Write-only through the API. See [API keys](#api-keys). |
 | `OPENAI_API_KEY` | `openai_api_key` | not set | OpenAI API key, used by the `openai` provider. Write-only through the API. |

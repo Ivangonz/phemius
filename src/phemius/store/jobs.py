@@ -13,7 +13,7 @@ was cancelled mid-call and finishes late cannot overwrite the new attempt.
 
 import sqlite3
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Literal, TypedDict, cast
 
 from phemius.store.database import transaction
@@ -47,6 +47,12 @@ class Job(TypedDict):
     started: float | None
     updated: float
     finished: float | None
+    # None when the provider did not report it, or before the script is written.
+    input_tokens: int | None
+    output_tokens: int | None
+    cost_usd: float | None
+    # The narrated audio's length; None before narration.
+    duration_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -66,8 +72,16 @@ class AudioFile:
     path: str
     format: AudioFormat
     size_bytes: int
+    duration_seconds: float | None = None
     # Why the audio is WAV when another format was configured.
     conversion_note: str | None = None
+
+
+@dataclass(frozen=True)
+class JobUsage:
+    input_tokens: int | None
+    output_tokens: int | None
+    cost_usd: float | None
 
 
 @dataclass(frozen=True)
@@ -82,7 +96,8 @@ _JOB_COLUMNS = (
     "j.id, j.type, j.state, j.stage, j.progress, j.error_message AS error,"
     " j.error_hint AS hint, j.attempts, j.audio_id, a.doc_id AS document_id,"
     " v.number AS version, v.title, a.tone, a.voice, j.created, j.started,"
-    " j.updated, j.finished"
+    " j.updated, j.finished, j.input_tokens, j.output_tokens, j.cost_usd,"
+    " a.duration_seconds"
     " FROM jobs j LEFT JOIN audio a ON a.id = j.audio_id"
     " LEFT JOIN doc_versions v ON v.id = j.version_id"
 )
@@ -151,13 +166,19 @@ def claim_next(stage: JobStage) -> ClaimedJob | None:
     return ClaimedJob(row["id"], row["audio_id"], row["stage"], row["attempts"])
 
 
-def finish_script(job: ClaimedJob, script: str) -> bool:
-    """Save the script and queue the job for narration. False if superseded."""
+def finish_script(job: ClaimedJob, script: str, usage: JobUsage) -> bool:
+    """Save the script and its usage, and queue the job for narration.
+
+    False if superseded.
+    """
     with transaction() as connection:
         if not _advance(
             connection,
             job,
-            "state = 'queued', stage = 'narrating', progress = 0",
+            "state = 'queued', stage = 'narrating', progress = 0,"
+            " input_tokens = :input_tokens, output_tokens = :output_tokens,"
+            " cost_usd = :cost_usd, script_written = :now",
+            **asdict(usage),
         ):
             return False
         connection.execute(
@@ -184,11 +205,12 @@ def _save_audio_file(job: ClaimedJob, file: AudioFile, assignments: str) -> bool
             return False
         connection.execute(
             "UPDATE audio SET path = ?, format = ?, size_bytes = ?,"
-            " conversion_note = ? WHERE id = ?",
+            " duration_seconds = ?, conversion_note = ? WHERE id = ?",
             (
                 file.path,
                 file.format,
                 file.size_bytes,
+                file.duration_seconds,
                 file.conversion_note,
                 job.audio_id,
             ),

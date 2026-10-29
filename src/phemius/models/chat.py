@@ -6,11 +6,11 @@ analysis parsing and the cut-off check live here so every provider behaves the s
 
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from phemius.errors import ModelError
 from phemius.models import prompts
-from phemius.models.base import Analysis, ScriptModelCheck
+from phemius.models.base import Analysis, Script, ScriptModelCheck, TokenUsage
 
 CHECK_MAX_TOKENS = 16
 
@@ -19,6 +19,7 @@ CHECK_MAX_TOKENS = 16
 class ChatReply:
     content: str
     is_truncated: bool
+    usage: TokenUsage = field(default_factory=TokenUsage)
 
 
 class ChatScriptModel(ABC):
@@ -38,14 +39,15 @@ class ChatScriptModel(ABC):
             prompts.analysis_prompt(title, text),
             prompts.ANALYSIS_MAX_TOKENS,
         )
-        return prompts.parse_analysis(reply, text)
+        return prompts.parse_analysis(reply.content, text)
 
-    def write_script(self, title: str, text: str, tone: str) -> str:
-        return self._complete(
+    def write_script(self, title: str, text: str, tone: str) -> Script:
+        reply = self._complete(
             prompts.script_system(tone),
             prompts.script_prompt(title, text),
             self.script_max_tokens,
-        ).strip()
+        )
+        return Script(reply.content.strip(), reply.usage)
 
     def check(self) -> ScriptModelCheck:
         started = time.perf_counter()
@@ -64,7 +66,7 @@ class ChatScriptModel(ABC):
             is_reachable=True, model=self.model, latency_ms=latency_ms
         )
 
-    def _complete(self, system: str, user: str, max_tokens: int) -> str:
+    def _complete(self, system: str, user: str, max_tokens: int) -> ChatReply:
         reply = self._chat(system, user, max_tokens)
         if reply.is_truncated:
             # Never silently ship a script that was cut off mid-document.
@@ -72,4 +74,4 @@ class ChatScriptModel(ABC):
                 f"Model output hit the {max_tokens}-token limit.",
                 hint=self.length_hint,
             )
-        return reply.content
+        return reply

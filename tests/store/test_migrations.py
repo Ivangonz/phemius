@@ -326,3 +326,28 @@ def test_versions_analyzed_before_suitability_report_it_as_unknown(
         document["tone_rationale"],
         document["suitability_source"],
     ) == (None, None, None, None)
+
+
+def test_existing_jobs_and_audio_get_unknown_usage_and_duration(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS[5:9]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=9")
+    connection.close()
+
+    database.init_database(db_path)
+
+    job = job_store.get_job(1)
+    audio = audio_store.get_audio(1)
+    assert job is not None and audio is not None
+    assert (job["state"], audio["script"]) == ("done", "Script.")
+    assert (job["input_tokens"], job["output_tokens"], job["cost_usd"]) == (
+        None,
+        None,
+        None,
+    )
+    assert audio["duration_seconds"] is None
