@@ -1074,6 +1074,7 @@ export interface components {
             /** Total */
             total: number;
         };
+        QueryId: number;
         /** QueuePage */
         QueuePage: {
             /** Is Paused */
@@ -2242,7 +2243,7 @@ export interface operations {
     list_activity_api_sources_activity_get: {
         parameters: {
             query?: {
-                source_id?: number | null;
+                source_id?: components["schemas"]["QueryId"] | null;
                 limit?: number;
                 offset?: number;
             };

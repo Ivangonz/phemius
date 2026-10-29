@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
+from phemius.api.params import Id
 from phemius.services import queue
 from phemius.store.jobs import Job, JobState
 
@@ -47,10 +48,10 @@ def resume_queue() -> QueueStatus:
 
 
 @router.post("/{job_id}/cancel")
-def cancel_job(job_id: int) -> Job:
+def cancel_job(job_id: Id) -> Job:
     return queue.cancel_job(job_id)
 
 
 @router.post("/{job_id}/retry")
-def retry_job(job_id: int) -> Job:
+def retry_job(job_id: Id) -> Job:
     return queue.retry_job(job_id)

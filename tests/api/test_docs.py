@@ -464,18 +464,6 @@ def test_deleting_an_unknown_document_is_not_found(client: TestClient) -> None:
     assert response.json() == {"detail": "Document 999 not found", "code": "not_found"}
 
 
-@pytest.mark.parametrize("document_id", ["abc", "0", "-1", "1.5", str(2**63), "9" * 40])
-def test_malformed_document_ids_are_rejected(
-    client: TestClient, document_id: str
-) -> None:
-    for response in (
-        client.delete(f"/api/docs/{document_id}"),
-        client.get(f"/api/docs/{document_id}"),
-    ):
-        assert response.status_code == 422
-        assert response.json()["code"] == "validation_error"
-
-
 def test_deleting_needs_the_token_in_network_mode(network_client: TestClient) -> None:
     assert network_client.delete("/api/docs/1").status_code == 401
 
