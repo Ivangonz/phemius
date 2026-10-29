@@ -33,8 +33,19 @@ def _wait_for_activity(client: TestClient, count: int) -> dict[str, Any]:
     raise AssertionError(f"fewer than {count} activity entries")
 
 
+def _wait_for_first_sync(client: TestClient, source_id: int) -> None:
+    # The sync after adding runs in the background and sets last_sync.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if client.get(f"/api/sources/{source_id}").json()["last_sync"] is not None:
+            return
+        time.sleep(0.05)
+    raise AssertionError("the first sync did not finish")
+
+
 def test_add_list_and_get_a_folder_source(client: TestClient, tmp_path: Path) -> None:
     added = _add_folder(client, tmp_path / "team-docs")
+    _wait_for_first_sync(client, added["id"])
 
     listed = client.get("/api/sources").json()
     fetched = client.get(f"/api/sources/{added['id']}").json()
