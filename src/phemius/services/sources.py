@@ -7,6 +7,7 @@ folder source on startup (see `adopt_watch_folder`).
 
 import threading
 from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Annotated
@@ -22,11 +23,12 @@ from phemius.errors import (
     PhemiusError,
     SettingLockedError,
 )
-from phemius.services.import_rules import ImportRules, merge_rules
-from phemius.services.source_imports import failure_text, import_item
+from phemius.services.import_rules import EffectiveRules, ImportRules, merge_rules
+from phemius.services.source_imports import failure_text, import_item, rules_of
 from phemius.sources import Source, Watcher
 from phemius.store import sources as source_store
 from phemius.store.sources import (
+    ActivityPage,
     KeptSource,
     NewActivity,
     NewSource,
@@ -40,6 +42,19 @@ log = structlog.get_logger(__name__)
 type SourceName = Annotated[str, Field(min_length=1, max_length=200)]
 
 
+class NewSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(description="A registered source kind; today only folder.")
+    name: SourceName | None = Field(
+        default=None, description="Defaults to the folder's name."
+    )
+    config: dict[str, JsonValue] = Field(
+        description='The kind\'s settings; a folder takes {"path": "/absolute/path"}.'
+    )
+    rules: ImportRules = ImportRules()
+
+
 class SourceChange(BaseModel):
     """An edit: only the fields sent change, and rules merge (see `merge_rules`)."""
 
@@ -50,17 +65,64 @@ class SourceChange(BaseModel):
     rules: ImportRules | None = None
 
 
-class _Watchers:
-    """The running watchers. Sources start only once `start_sources` has run,
-    so a CLI command or a test that adds a source watches nothing."""
+class SourceView(BaseModel):
+    id: int
+    kind: str
+    name: str
+    config: dict[str, JsonValue]
+    status: SourceStatus
+    last_sync: float | None
+    error: str | None = Field(description="Why the last sync failed, if it did.")
+    created: float
+    updated: float
+    rules: ImportRules = Field(
+        description="This source's own rules; a null rule follows the global setting."
+    )
+    effective_rules: EffectiveRules
+    is_locked: bool = Field(
+        description="Set by PHEMIUS_WATCH_DIR: it cannot be moved or deleted."
+    )
+
+
+def describe_source(source: StoredSource) -> SourceView:
+    return SourceView.model_validate(
+        {
+            **source,
+            "effective_rules": rules_of(source),
+            "is_locked": _is_environment_folder(source),
+        }
+    )
+
+
+def list_sources(limit: int, offset: int) -> tuple[list[SourceView], int]:
+    page = source_store.list_sources(limit, offset)
+    return [describe_source(source) for source in page.items], page.total
+
+
+def list_activity(source_id: int | None, limit: int, offset: int) -> ActivityPage:
+    return source_store.list_activity(source_id, limit, offset)
+
+
+@dataclass(frozen=True)
+class _Sync:
+    source_id: int
+    stop: threading.Event
+
+
+class _Background:
+    """Running watchers and background syncs. Nothing starts until
+    `start_sources` has run, so a CLI command or a test that adds a source
+    watches nothing, and `stop_sources` waits for all of it so no import
+    outlives the app."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
-        self.by_source: dict[int, Watcher] = {}
+        self.watchers: dict[int, Watcher] = {}
+        self.syncs: dict[threading.Thread, _Sync] = {}
         self.is_running = False
 
 
-_watchers = _Watchers()
+_background = _Background()
 
 
 def create_source(
@@ -159,7 +221,7 @@ def delete_source(source_id: int) -> None:
 def request_sync(source_id: int) -> StoredSource:
     """Sync a source in the background; a paused source is not synced."""
     source = get_source(source_id)
-    threading.Thread(target=sync_source, args=(source_id,), daemon=True).start()
+    _sync_in_background(source_id)
     return source
 
 
@@ -188,14 +250,16 @@ def _watch_folder_adapter(path: Path) -> Source:
     return source_kinds.get_source("folder", {"path": str(path.absolute())})
 
 
-def _reject_if_environment_folder(source: StoredSource) -> None:
+def _is_environment_folder(source: StoredSource) -> bool:
     path = load_config().watch_dir
     if env_override("watch_dir") is None or path is None:
-        return
-    if (source["kind"], source["config"]) == (
-        "folder",
-        _watch_folder_adapter(path).config,
-    ):
+        return False
+    adopted = ("folder", _watch_folder_adapter(path).config)
+    return (source["kind"], source["config"]) == adopted
+
+
+def _reject_if_environment_folder(source: StoredSource) -> None:
+    if _is_environment_folder(source):
         raise SettingLockedError(
             "This folder is set by environment variable PHEMIUS_WATCH_DIR.",
             hint="Unset the variable and restart to move or delete it here.",
@@ -205,23 +269,34 @@ def _reject_if_environment_folder(source: StoredSource) -> None:
 def start_sources() -> None:
     """Adopt the watched folder, then watch and sync every active source."""
     adopt_watch_folder()
-    _watchers.is_running = True
+    _background.is_running = True
     for source in active_sources():
         _start(source["id"])
 
 
 def stop_sources() -> None:
-    with _watchers.lock:
-        _watchers.is_running = False
-        running = list(_watchers.by_source.values())
-        _watchers.by_source.clear()
-    for watcher in running:
+    """Stop every watcher and sync, then wait for the items being imported.
+
+    A sync stops between items, so shutdown waits at most for one import.
+    """
+    with _background.lock:
+        _background.is_running = False
+        watchers = list(_background.watchers.values())
+        _background.watchers.clear()
+        syncs = dict(_background.syncs)
+    for watcher in watchers:
         watcher.stop()
+    for sync in syncs.values():
+        sync.stop.set()
+    for watcher in watchers:
+        watcher.join()
+    for thread in syncs:
+        thread.join()
 
 
 def is_watching(source_id: int) -> bool:
-    with _watchers.lock:
-        return source_id in _watchers.by_source
+    with _background.lock:
+        return source_id in _background.watchers
 
 
 def active_sources() -> list[StoredSource]:
@@ -234,7 +309,7 @@ def _start(source_id: int) -> None:
     """(Re)start an active source's watcher and sync it in the background."""
     _stop(source_id)
     source = source_store.get_source(source_id)
-    if not _watchers.is_running or source is None or source["status"] != "active":
+    if not _background.is_running or source is None or source["status"] != "active":
         return
     try:
         watcher = _adapter(source).watch(partial(import_item, source_id))
@@ -242,28 +317,63 @@ def _start(source_id: int) -> None:
         _record_failure(source_id, error)
         return
     if watcher is not None:
-        with _watchers.lock:
-            _watchers.by_source[source_id] = watcher
-    threading.Thread(target=sync_source, args=(source_id,), daemon=True).start()
+        with _background.lock:
+            _background.watchers[source_id] = watcher
+    _sync_in_background(source_id)
 
 
 def _stop(source_id: int) -> None:
-    with _watchers.lock:
-        watcher = _watchers.by_source.pop(source_id, None)
+    """Stop a source's watcher and syncs without waiting for an item being
+    imported: this runs in a request, and `import_item` drops work for a
+    paused or deleted source."""
+    with _background.lock:
+        watcher = _background.watchers.pop(source_id, None)
+        syncs = [
+            sync for sync in _background.syncs.values() if sync.source_id == source_id
+        ]
     if watcher is not None:
         watcher.stop()
+    for sync in syncs:
+        sync.stop.set()
 
 
-def sync_source(source_id: int) -> None:
-    """Import every item the source holds now. Paused sources are skipped."""
+def _sync_in_background(source_id: int) -> None:
+    sync = _Sync(source_id, threading.Event())
+    thread = threading.Thread(
+        target=_run_sync, args=(sync,), name=f"source-sync-{source_id}", daemon=True
+    )
+    with _background.lock:
+        if not _background.is_running:
+            return
+        _background.syncs[thread] = sync
+    thread.start()
+
+
+def _run_sync(sync: _Sync) -> None:
+    try:
+        sync_source(sync.source_id, sync.stop)
+    finally:
+        with _background.lock:
+            _background.syncs.pop(threading.current_thread(), None)
+
+
+def sync_source(source_id: int, stop: threading.Event | None = None) -> None:
+    """Import every item the source holds now. Paused sources are skipped.
+
+    A sync ended early by `stop` does not count as a finished sync.
+    """
     source = source_store.get_source(source_id)
     if source is None or source["status"] != "active":
         return
+    stop = stop or threading.Event()
     log.info("source_sync_started", source_id=source_id)
     try:
-        _adapter(source).sync(partial(import_item, source_id))
+        _adapter(source).sync(partial(import_item, source_id), stop)
     except PhemiusError as error:
         _record_failure(source_id, error)
+        return
+    if stop.is_set():
+        log.info("source_sync_stopped", source_id=source_id)
         return
     source_store.finish_sync(source_id, error=None)
     log.info("source_sync_finished", source_id=source_id)

@@ -129,7 +129,8 @@ on.
 - **Kinds.** A kind implements the `Source` protocol (`sources/base.py`) and is
   registered in `SOURCE_KINDS` (`sources/__init__.py`): one module with a
   `from_config` factory that validates the config, and one registry line. A
-  source only finds documents: `sync()` hands every item it holds to a handler,
+  source only finds documents: `sync()` hands every item it holds to a handler
+  until its stop event is set,
   and `watch()` hands over new and changed items as they appear (None for a
   kind that cannot be watched). Each item has a stable `key`, stored as
   `docs.source`, so a changed item adds a version. Today the only kind is
@@ -168,8 +169,13 @@ on.
 - **Watchers follow the sources.** Startup adopts the old watched folder, then
   starts a watcher and a sync thread for each active source. Adding or
   resuming a source starts them, a new config restarts them, and pausing or
-  deleting stops them. An item a watcher had already scheduled is dropped if
-  its source was paused or deleted meanwhile.
+  deleting stops them. A sync takes a stop signal and ends between items;
+  pausing or deleting a source signals its running syncs without waiting, and
+  an item already being handed over is dropped because its source is no
+  longer active. Shutdown signals every watcher and sync and then waits for
+  them, so at most the item being imported finishes and nothing touches the
+  library after the app stops. A sync ended early does not update
+  `last_sync`.
 - **The old watched folder.** `PHEMIUS_WATCH_DIR` becomes a folder source on
   every start (nothing happens once that source exists), so the environment
   keeps winning as it does for settings; its source can be renamed, paused and
@@ -271,7 +277,7 @@ S7 backs up, restores and deletes all audio through `/api/library`
 | `src/phemius/config.py` | `Settings` (the options a user can save, each tied to its environment variable), `Config` and `load_config()` |
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `LibraryBusyError`, `InvalidBackupError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
-| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `library` (backup, restore and delete all audio), `stats` (today's totals), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), `request_guard` (the Host and Origin checks below), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
+| `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `library` (backup, restore and delete all audio), `stats` (today's totals), `sources` (sources CRUD, pause, resume, sync now and the activity log), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), `request_guard` (the Host and Origin checks below), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
 | `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `sources` (adding, editing, pausing and deleting sources, adopting the watched folder, watchers and syncs), `source_imports` (one item under its source's rules, and its activity entry), `import_rules` (per-source rules over the global settings), `backup` (backup archives), `restore` (archive checks and the swap), `library` (delete all audio), `maintenance` (the gate that keeps workers and library operations apart), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network), `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets) and `ollama.py`. `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, `spoken_text.py` prepares document text for any model, and `suitability.py` rates how well a document suits listening when no model does |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra), `piper.py` (local, optional GPL extra, see ADR-003), `openai_speech.py`, `elevenlabs.py` and `stub.py` (silent audio), plus shared text chunking |

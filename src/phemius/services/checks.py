@@ -237,7 +237,8 @@ def _watch_folder() -> Outcome:
         return Outcome(
             "optional",
             "No sources are set.",
-            "Set a watched folder (PHEMIUS_WATCH_DIR) to add documents automatically.",
+            "Add a folder source or set PHEMIUS_WATCH_DIR to add documents"
+            " automatically.",
         )
     for source in active:
         problem = sources.find_problem(source)

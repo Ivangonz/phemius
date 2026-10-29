@@ -4,6 +4,7 @@ A source only finds documents. Import rules, the library and the activity log
 belong to `services/sources.py`, so every kind behaves the same.
 """
 
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,8 +31,11 @@ type ItemHandler = Callable[[SourceItem], None]
 
 class Watcher(Protocol):
     def stop(self) -> None:
-        """Stop watching. An item already scheduled may still arrive, so the
-        handler checks the source is still active."""
+        """Stop handing over items, without waiting for one being handled."""
+        ...
+
+    def join(self) -> None:
+        """Wait, after `stop`, until no item is being handled."""
         ...
 
 
@@ -55,11 +59,12 @@ class Source(Protocol):
         """Raise `SourceError` with a hint when the source cannot be read."""
         ...
 
-    def sync(self, handle: ItemHandler) -> None:
+    def sync(self, handle: ItemHandler, stop: threading.Event) -> None:
         """Hand every item the source holds now to `handle`.
 
-        Raises `SourceError` when the source cannot be read at all; a problem
-        with one item is that item's, so `handle` deals with it.
+        Returns early, between items, once `stop` is set: shutdown, pause and
+        delete set it. Raises `SourceError` when the source cannot be read at
+        all; a problem with one item is that item's, so `handle` deals with it.
         """
         ...
 

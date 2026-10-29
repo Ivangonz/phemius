@@ -4,7 +4,7 @@ import os
 import threading
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import structlog
 from pydantic import AfterValidator, BaseModel, ConfigDict, ValidationError
@@ -42,9 +42,9 @@ def from_config(config: Mapping[str, object]) -> "FolderSource":
     except ValidationError as error:
         first = error.errors()[0]
         field = ".".join(str(part) for part in ("config", *first["loc"]))
+        message = first["msg"].removeprefix("Value error, ")
         raise InvalidInputError(
-            "The folder source needs an absolute path.",
-            field_errors={field: first["msg"]},
+            "The folder source needs an absolute path.", field_errors={field: message}
         ) from None
 
 
@@ -71,9 +71,11 @@ class FolderSource:
                 hint="Create the folder or fix its permissions, or edit the source.",
             )
 
-    def sync(self, handle: ItemHandler) -> None:
+    def sync(self, handle: ItemHandler, stop: threading.Event) -> None:
         self.check()
         for path in sorted(self.folder.rglob("*")):
+            if stop.is_set():
+                return
             item = self.item_at(path)
             if item is not None and path.is_file():
                 handle(item)
@@ -84,10 +86,11 @@ class FolderSource:
         except OSError:
             self.check()
         observer = Observer()
-        observer.schedule(_EventHandler(self, handle), str(self.folder), recursive=True)
+        handler = _EventHandler(self, handle)
+        observer.schedule(handler, str(self.folder), recursive=True)
         observer.start()
         log.info("folder_watch_started", folder=str(self.folder))
-        return FolderWatcher(observer)
+        return FolderWatcher(observer, handler)
 
     def item_at(self, path: Path) -> SourceItem | None:
         """The item for a file in this folder, or None if it is not a document.
@@ -111,25 +114,61 @@ class FolderSource:
 
 
 class FolderWatcher:
-    def __init__(self, observer: BaseObserver) -> None:
+    def __init__(self, observer: BaseObserver, handler: "_EventHandler") -> None:
         self.observer = observer
+        self.handler = handler
 
     def stop(self) -> None:
+        self.handler.stop()
         self.observer.stop()
+
+    def join(self) -> None:
         self.observer.join()
+        self.handler.join()
 
 
 class _EventHandler(FileSystemEventHandler):
     def __init__(self, source: FolderSource, handle: ItemHandler) -> None:
         self.source = source
         self.handle = handle
+        self.lock = threading.Lock()
+        self.pending: set[threading.Timer] = set()
+        self.is_stopped = False
 
     def _schedule(self, event: FileSystemEvent) -> None:
         if event.is_directory:
             return
         item = self.source.item_at(Path(os.fsdecode(event.src_path)))
-        if item is not None:
-            threading.Timer(SETTLE_SECONDS, self.handle, [item]).start()
+        if item is None:
+            return
+        timer = threading.Timer(SETTLE_SECONDS, self._handle_settled, [item])
+        timer.daemon = True
+        with self.lock:
+            if self.is_stopped:
+                return
+            self.pending.add(timer)
+        timer.start()
+
+    def _handle_settled(self, item: SourceItem) -> None:
+        try:
+            self.handle(item)
+        finally:
+            with self.lock:
+                self.pending.discard(cast(threading.Timer, threading.current_thread()))
+
+    def stop(self) -> None:
+        """Ignore new events and drop items still settling."""
+        with self.lock:
+            self.is_stopped = True
+            timers = list(self.pending)
+        for timer in timers:
+            timer.cancel()
+
+    def join(self) -> None:
+        with self.lock:
+            timers = list(self.pending)
+        for timer in timers:
+            timer.join()
 
     def on_created(self, event: FileSystemEvent) -> None:
         self._schedule(event)

@@ -452,6 +452,133 @@ export interface paths {
         patch: operations["update_settings_api_settings_patch"];
         trace?: never;
     };
+    "/api/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sources
+         * @description Sources in the order they were added.
+         */
+        get: operations["list_sources_api_sources_get"];
+        put?: never;
+        /**
+         * Add Source
+         * @description Add a source, then watch and sync it in the background.
+         */
+        post: operations["add_source_api_sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity
+         * @description Recent activity, newest first, for every source or one.
+         */
+        get: operations["list_activity_api_sources_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source */
+        get: operations["get_source_api_sources__source_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Source
+         * @description Delete a source and its activity. Its documents stay in the library.
+         */
+        delete: operations["delete_source_api_sources__source_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Source
+         * @description Partial update. Rules merge: a rule sent as null follows the global
+         *     setting again. A new config restarts the watcher and syncs.
+         */
+        patch: operations["update_source_api_sources__source_id__patch"];
+        trace?: never;
+    };
+    "/api/sources/{source_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Source */
+        post: operations["pause_source_api_sources__source_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Source
+         * @description Watch again and sync, which imports what changed while paused.
+         */
+        post: operations["resume_source_api_sources__source_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Source
+         * @description Sync now, in the background. A paused source is not synced.
+         */
+        post: operations["sync_source_api_sources__source_id__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/today": {
         parameters: {
             query?: never;
@@ -496,6 +623,26 @@ export interface components {
         AccessToken: {
             /** Token */
             token: string;
+        };
+        /** @enum {string} */
+        ActivityAction: "imported" | "updated" | "skipped" | "failed";
+        /** ActivityEntry */
+        ActivityEntry: {
+            action: components["schemas"]["ActivityAction"];
+            /** Created */
+            created: number;
+            /** Detail */
+            detail: string;
+            /** Document Id */
+            document_id: number | null;
+            /** Id */
+            id: number;
+            /** Item */
+            item: string | null;
+            /** Source Id */
+            source_id: number;
+            /** Source Name */
+            source_name: string;
         };
         /** Audio */
         Audio: {
@@ -696,6 +843,22 @@ export interface components {
             version: number;
         };
         DocumentStatus: components["schemas"]["JobState"] | "no_audio";
+        /**
+         * EffectiveRules
+         * @description The rules a source applies, with the global settings filled in.
+         */
+        EffectiveRules: {
+            /** Auto Audio */
+            auto_audio: boolean;
+            /** File Types */
+            file_types: string[];
+            /** Keep Versions */
+            keep_versions: boolean;
+            /** Regenerate On Change */
+            regenerate_on_change: boolean;
+            /** Skip Not Recommended */
+            skip_not_recommended: boolean;
+        };
         /** @enum {string} */
         FfmpegCheckStatus: "ok" | "optional";
         /**
@@ -713,10 +876,39 @@ export interface components {
             /** Version */
             version: string | null;
         };
+        FileTypes: string[];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ImportRules
+         * @description A source's own rules. None follows the global setting.
+         */
+        ImportRules: {
+            /**
+             * Auto Audio
+             * @description Generate audio for new documents.
+             */
+            auto_audio?: boolean | null;
+            /** @description Extensions to import, such as .md. */
+            file_types?: components["schemas"]["FileTypes"] | null;
+            /**
+             * Keep Versions
+             * @description Keep earlier versions and their audio when a document changes.
+             */
+            keep_versions?: boolean | null;
+            /**
+             * Regenerate On Change
+             * @description Generate audio for each new version.
+             */
+            regenerate_on_change?: boolean | null;
+            /**
+             * Skip Not Recommended
+             * @description Import documents rated not_recommended without audio.
+             */
+            skip_not_recommended?: boolean | null;
         };
         /** InstalledOllamaModel */
         InstalledOllamaModel: {
@@ -775,6 +967,7 @@ export interface components {
         JobState: "queued" | "running" | "done" | "failed" | "cancelled";
         /** @constant */
         JobType: "audio";
+        JsonValue: unknown;
         /** LibraryConfig */
         LibraryConfig: {
             /** Default Voice */
@@ -804,15 +997,56 @@ export interface components {
             /** Watch Dir */
             watch_dir: string | null;
         };
+        /** NewSourceRequest */
+        NewSourceRequest: {
+            /**
+             * Config
+             * @description The kind's settings; a folder takes {"path": "/absolute/path"}.
+             */
+            config: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Kind
+             * @description A registered source kind; today only folder.
+             */
+            kind: string;
+            /** @description Defaults to the folder's name. */
+            name?: components["schemas"]["SourceName"] | null;
+            /** @default {} */
+            rules?: components["schemas"]["ImportRules"];
+        };
         /** OllamaModelList */
         OllamaModelList: {
             /** Models */
             models: components["schemas"]["InstalledOllamaModel"][];
         };
+        /** Page[ActivityEntry] */
+        Page_ActivityEntry_: {
+            /** Items */
+            items: components["schemas"]["ActivityEntry"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** Page[DocumentListItem] */
         Page_DocumentListItem_: {
             /** Items */
             items: components["schemas"]["DocumentListItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** Page[SourceView] */
+        Page_SourceView_: {
+            /** Items */
+            items: components["schemas"]["SourceView"][];
             /** Limit */
             limit: number;
             /** Offset */
@@ -1029,6 +1263,54 @@ export interface components {
              */
             ran_at: string;
             summary: components["schemas"]["CheckSummary"];
+        };
+        /**
+         * SourceChange
+         * @description An edit: only the fields sent change, and rules merge (see `merge_rules`).
+         */
+        SourceChange: {
+            /** Config */
+            config?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            name?: components["schemas"]["SourceName"] | null;
+            rules?: components["schemas"]["ImportRules"] | null;
+        };
+        SourceName: string;
+        /** @enum {string} */
+        SourceStatus: "active" | "paused";
+        /** SourceView */
+        SourceView: {
+            /** Config */
+            config: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Created */
+            created: number;
+            effective_rules: components["schemas"]["EffectiveRules"];
+            /**
+             * Error
+             * @description Why the last sync failed, if it did.
+             */
+            error: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Is Locked
+             * @description Set by PHEMIUS_WATCH_DIR: it cannot be moved or deleted.
+             */
+            is_locked: boolean;
+            /** Kind */
+            kind: string;
+            /** Last Sync */
+            last_sync: number | null;
+            /** Name */
+            name: string;
+            /** @description This source's own rules; a null rule follows the global setting. */
+            rules: components["schemas"]["ImportRules"];
+            status: components["schemas"]["SourceStatus"];
+            /** Updated */
+            updated: number;
         };
         /** @enum {string} */
         SuitabilitySource: "model" | "heuristic";
@@ -1841,6 +2123,292 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sources_api_sources_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SourceView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_source_api_sources_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_activity_api_sources_activity_get: {
+        parameters: {
+            query?: {
+                source_id?: number | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ActivityEntry_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_source_api_sources__source_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_source_api_sources__source_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_source_api_sources__source_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_source_api_sources__source_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_source_api_sources__source_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_source_api_sources__source_id__sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceView"];
                 };
             };
             /** @description Validation Error */

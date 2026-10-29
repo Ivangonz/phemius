@@ -71,6 +71,12 @@ class NewActivity:
 
 
 @dataclass(frozen=True)
+class SourcePage:
+    items: list[StoredSource]
+    total: int
+
+
+@dataclass(frozen=True)
 class ActivityPage:
     items: list[ActivityEntry]
     total: int
@@ -139,6 +145,17 @@ def all_sources() -> list[StoredSource]:
     with transaction() as connection:
         rows = connection.execute(f"SELECT {_COLUMNS} FROM sources ORDER BY id")
         return [_stored(row) for row in rows]
+
+
+def list_sources(limit: int, offset: int) -> SourcePage:
+    """One page of sources in the order they were added."""
+    with transaction() as connection:
+        total: int = connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        rows = connection.execute(
+            f"SELECT {_COLUMNS} FROM sources ORDER BY created, id LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+    return SourcePage([_stored(row) for row in rows], total)
 
 
 def _stored(row: sqlite3.Row) -> StoredSource:

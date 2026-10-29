@@ -1,4 +1,5 @@
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ from phemius.sources.base import SourceItem
 
 def _synced(source: folder.FolderSource) -> list[SourceItem]:
     items: list[SourceItem] = []
-    source.sync(items.append)
+    source.sync(items.append, threading.Event())
     return sorted(items, key=lambda item: item.key)
 
 
@@ -32,11 +33,26 @@ def test_sync_finds_supported_files_in_subfolders(tmp_path: Path) -> None:
     assert all(item.path.is_file() for item in items)
 
 
+def test_a_stop_signal_ends_the_walk_before_the_next_item(tmp_path: Path) -> None:
+    for name in ("a.md", "b.md", "c.md"):
+        (tmp_path / name).write_text(f"# {name}")
+    stop = threading.Event()
+    handled: list[str] = []
+
+    def handle_then_stop(item: SourceItem) -> None:
+        handled.append(item.name)
+        stop.set()
+
+    folder.from_config({"path": str(tmp_path)}).sync(handle_then_stop, stop)
+
+    assert handled == ["a.md"]
+
+
 def test_sync_of_a_missing_folder_raises_a_source_error(tmp_path: Path) -> None:
     source = folder.from_config({"path": str(tmp_path / "missing")})
 
     with pytest.raises(SourceError) as raised:
-        source.sync(lambda item: None)
+        source.sync(lambda item: None, threading.Event())
 
     assert raised.value.hint is not None
 
