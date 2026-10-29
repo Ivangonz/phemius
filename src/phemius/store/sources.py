@@ -251,6 +251,31 @@ def _repeats_latest(connection: sqlite3.Connection, activity: NewActivity) -> bo
     return latest is not None and tuple(latest) == (activity.action, activity.detail)
 
 
+def exclude_items(
+    connection: sqlite3.Connection, source_id: int, keys: Sequence[str]
+) -> None:
+    """Keep a source's items out of later syncs, on the caller's transaction."""
+    now = time.time()
+    connection.executemany(
+        "INSERT INTO source_exclusions (source_id, item_key, created)"
+        " VALUES (?, ?, ?) ON CONFLICT (source_id, item_key) DO NOTHING",
+        [(source_id, key, now) for key in keys],
+    )
+
+
+def is_excluded(source_id: int, key: str) -> bool:
+    with transaction() as connection:
+        return is_excluded_on(connection, source_id, key)
+
+
+def is_excluded_on(connection: sqlite3.Connection, source_id: int, key: str) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM source_exclusions WHERE source_id = ? AND item_key = ?",
+        (source_id, key),
+    ).fetchone()
+    return row is not None
+
+
 def list_activity(source_id: int | None, limit: int, offset: int) -> ActivityPage:
     """One page of activity, newest first, for one source or for all."""
     where = "" if source_id is None else "WHERE a.source_id = ?"
@@ -273,9 +298,18 @@ def replace_sources(connection: sqlite3.Connection, kept: Sequence[KeptSource]) 
     """Swap a restored library's sources for `kept`, on `connection`.
 
     The restored activity log belonged to the other sources, so it goes too, and
-    documents are relinked by key prefix: source ids from another installation
-    mean nothing here.
+    documents and exclusions are relinked by key prefix: source ids from another
+    installation mean nothing here. An exclusion no kept source holds is dropped.
     """
+    # SQLite does not enforce column types, and an archive may be tampered with.
+    excluded_keys: list[str] = [
+        row[0]
+        for row in connection.execute(
+            "SELECT item_key FROM source_exclusions"
+            " WHERE typeof(item_key) = 'text' ORDER BY id"
+        )
+    ]
+    connection.execute("DELETE FROM source_exclusions")
     connection.execute("DELETE FROM source_activity")
     connection.execute("UPDATE docs SET source_id = NULL")
     connection.execute("DELETE FROM sources")
@@ -297,3 +331,8 @@ def replace_sources(connection: sqlite3.Connection, kept: Sequence[KeptSource]) 
             ),
         )
         _link_documents(connection, source["id"], item.key_prefix)
+        exclude_items(
+            connection,
+            source["id"],
+            [key for key in excluded_keys if key.startswith(item.key_prefix)],
+        )

@@ -8,7 +8,7 @@ from structlog.testing import capture_logs
 
 from phemius.errors import DuplicateSourceError, NotFoundError, SettingLockedError
 from phemius.models.base import Analysis
-from phemius.services import pipeline, source_imports
+from phemius.services import documents, pipeline, source_imports
 from phemius.services import sources as source_service
 from phemius.services.import_rules import ImportRules
 from phemius.services.runner import start_runner
@@ -529,6 +529,87 @@ def test_deleting_a_source_keeps_its_documents(watched: Path) -> None:
     assert document is not None and document["source_id"] is None
     assert source_store.get_source(source_id) is None
     assert _activity() == []
+
+
+def test_a_deleted_document_stays_deleted_after_syncs_and_edits(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    model = FakeScriptModel()
+    use_script_model(model)
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    guide = watched / "guide.md"
+    guide.write_text("# Guide\n\nInstall with pip.")
+    (watched / "notes.md").write_text("# Notes\n\nStandup.")
+    source_service.sync_source(source_id)
+    guide_id = next(
+        item["id"]
+        for item in document_list.list_documents().items
+        if item["title"] == "Guide"
+    )
+
+    documents.delete_document(guide_id)
+    source_service.sync_source(source_id)
+    guide.write_text("# Guide\n\nInstall with uv.")
+    source_service.sync_source(source_id)
+    source_imports.import_item(source_id, _item(watched, "guide.md"))
+
+    assert _titles() == ["Notes"]
+    assert model.analyze_calls == 2
+    assert _activity(source_id)[0] == (
+        "skipped",
+        "guide.md",
+        source_imports.DELETED_DETAIL,
+    )
+    assert [entry[1] for entry in _activity(source_id)].count("guide.md") == 2
+
+
+class DeletingAnalysisModel(FakeScriptModel):
+    """Deletes a document while analyzing, as a user deleting it mid-import."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.document_id: int | None = None
+
+    def analyze(self, title: str, text: str) -> Analysis:
+        if self.document_id is not None:
+            documents.delete_document(self.document_id)
+        return super().analyze(title, text)
+
+
+def test_a_document_deleted_during_its_import_is_not_recreated(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    model = DeletingAnalysisModel()
+    use_script_model(model)
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    guide = watched / "guide.md"
+    guide.write_text("# Guide\n\nInstall with pip.")
+    source_service.sync_source(source_id)
+    model.document_id = _only_document()["id"]
+
+    guide.write_text("# Guide\n\nInstall with uv.")
+    source_imports.import_item(source_id, _item(watched, "guide.md"))
+
+    assert _titles() == []
+    assert _activity(source_id) == [
+        ("skipped", "guide.md", source_imports.DELETED_DETAIL),
+        ("imported", "guide.md", "Auto-generate is off for this source."),
+    ]
+
+
+def test_a_folder_added_again_imports_what_was_deleted_from_it(
+    watched: Path,
+) -> None:
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    (watched / "guide.md").write_text("# Guide\n\nInstall it.")
+    source_service.sync_source(source_id)
+    documents.delete_document(_only_document()["id"])
+
+    source_service.delete_source(source_id)
+    added_again = _add_folder_with_rules(watched, auto_audio=False)
+    source_service.sync_source(added_again)
+
+    assert _titles() == ["Guide"]
 
 
 def test_unknown_sources_raise_not_found(library: None) -> None:

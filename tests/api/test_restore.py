@@ -498,6 +498,45 @@ def test_restore_relinks_documents_to_the_sources_they_live_in(
     assert _source_ids_of_documents() == [source_id]
 
 
+def _exclusions() -> list[tuple[int, str]]:
+    with database.transaction() as connection:
+        rows = connection.execute(
+            "SELECT source_id, item_key FROM source_exclusions ORDER BY id"
+        ).fetchall()
+    return [(row["source_id"], row["item_key"]) for row in rows]
+
+
+def test_a_deleted_document_stays_deleted_after_a_restore(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source_id = _folder_with_guide(tmp_path / "docs")
+    [document_id] = [item["id"] for item in client.get("/api/docs").json()["items"]]
+    assert client.delete(f"/api/docs/{document_id}").status_code == 204
+    archive = _download_backup(client)
+
+    assert _restore(client, archive).status_code == 200
+    source_service.sync_source(source_id)
+
+    assert _titles(client) == []
+    assert _exclusions() == [(source_id, str(tmp_path / "docs" / "guide.md"))]
+
+
+def test_an_archive_cannot_exclude_items_of_sources_it_does_not_have(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source_id = _folder_with_guide(tmp_path / "docs")
+    planted = (
+        "INSERT INTO source_exclusions (source_id, item_key, created)"
+        f" VALUES ({source_id + 1}, '/elsewhere/guide.md', 0),"
+        f" ({source_id}, 42, 'not a time'), ({source_id}, x'00', 0);"
+    )
+    archive = _rebuilt(_download_backup(client), _with_database_change(planted))
+
+    assert _restore(client, archive).status_code == 200
+
+    assert _exclusions() == []
+
+
 def test_restore_pauses_the_queue_so_queued_jobs_wait(client: TestClient) -> None:
     _generate_audio(client, "deploy-guide.md")
     client.post("/api/queue/pause")
