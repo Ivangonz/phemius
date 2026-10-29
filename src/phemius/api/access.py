@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Awaitable, Callable
+from dataclasses import asdict
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from phemius.api.errors import error_body
+from phemius.config import AccessMode
 from phemius.services import access as access_service
 
 router = APIRouter(prefix="/api/access", tags=["access"])
@@ -23,6 +25,22 @@ AUDIO_FILE_PATH = re.compile(r"/api/audio/(\d+)/file")
 
 class AccessToken(BaseModel):
     token: str
+
+
+class AccessStatus(BaseModel):
+    active_mode: AccessMode
+    is_token_required: bool
+    has_token: bool
+    is_token_from_env: bool
+    # The port this server listens on; None when the server does not report one.
+    port: int | None
+
+
+@router.get("")
+def get_access_status(request: Request) -> AccessStatus:
+    """How the server is reached. The token and its hash are never included."""
+    status = access_service.describe_access(_active_mode(request))
+    return AccessStatus(**asdict(status), port=_listening_port(request))
 
 
 @router.post("/token")
@@ -59,6 +77,16 @@ def _is_protected(request: Request) -> bool:
     # Fail closed: the flag is set at startup, so a missing one means "required".
     is_required: bool = getattr(request.app.state, "is_token_required", True)
     return is_required and is_api and path not in OPEN_PATHS
+
+
+def _active_mode(request: Request) -> AccessMode:
+    mode: AccessMode = request.app.state.access_mode
+    return mode
+
+
+def _listening_port(request: Request) -> int | None:
+    server = request.scope.get("server")
+    return int(server[1]) if server and server[1] is not None else None
 
 
 def _bearer_token(request: Request) -> str | None:

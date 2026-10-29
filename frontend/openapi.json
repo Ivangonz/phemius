@@ -9,6 +9,45 @@
         ],
         "type": "string"
       },
+      "AccessStatus": {
+        "properties": {
+          "active_mode": {
+            "$ref": "#/components/schemas/AccessMode"
+          },
+          "has_token": {
+            "title": "Has Token",
+            "type": "boolean"
+          },
+          "is_token_from_env": {
+            "title": "Is Token From Env",
+            "type": "boolean"
+          },
+          "is_token_required": {
+            "title": "Is Token Required",
+            "type": "boolean"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          }
+        },
+        "required": [
+          "active_mode",
+          "is_token_required",
+          "has_token",
+          "is_token_from_env",
+          "port"
+        ],
+        "title": "AccessStatus",
+        "type": "object"
+      },
       "AccessToken": {
         "properties": {
           "token": {
@@ -1992,6 +2031,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/access": {
+      "get": {
+        "description": "How the server is reached. The token and its hash are never included.",
+        "operationId": "get_access_status_api_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Access Status",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/api/access/token": {
       "post": {
         "description": "Replace the access token and return the new one. It is shown only here.",
