@@ -5,10 +5,13 @@ from pathlib import Path
 import pytest
 from structlog.testing import capture_logs
 
-from phemius.errors import DuplicateSourceError
-from phemius.services import pipeline
+from phemius.errors import DuplicateSourceError, NotFoundError, SettingLockedError
+from phemius.services import pipeline, source_imports
 from phemius.services import sources as source_service
+from phemius.services.import_rules import ImportRules
 from phemius.services.runner import start_runner
+from phemius.services.sources import SourceChange
+from phemius.sources import SourceItem
 from phemius.store import audio as audio_store
 from phemius.store import database, document_list
 from phemius.store import documents as document_store
@@ -310,3 +313,245 @@ def test_one_unreadable_file_does_not_stop_the_sync(watched: Path) -> None:
 
     assert _titles() == ["Guide"]
     assert _get_source(source_id)["error"] is None
+
+
+def _add_folder_with_rules(path: Path, **rules: object) -> int:
+    path.mkdir(exist_ok=True)
+    source = source_service.create_source(
+        "folder", {"path": str(path)}, rules=ImportRules.model_validate(rules)
+    )
+    return source["id"]
+
+
+def _activity(source_id: int | None = None) -> list[tuple[str, str | None, str]]:
+    page = source_store.list_activity(source_id, limit=25, offset=0)
+    return [(entry["action"], entry["item"], entry["detail"]) for entry in page.items]
+
+
+def _item(folder: Path, name: str) -> SourceItem:
+    return SourceItem(str(folder / name), name, folder / name)
+
+
+def test_pausing_stops_imports_until_resumed(watched: Path) -> None:
+    source_id = _add_folder(watched)
+    (watched / "guide.md").write_text("# Guide\n\nInstall it.")
+    paused = source_service.pause_source(source_id)
+
+    source_service.sync_source(source_id)
+    source_imports.import_item(source_id, _item(watched, "guide.md"))
+    titles_while_paused = _titles()
+    source_service.resume_source(source_id)
+    source_service.sync_source(source_id)
+
+    assert paused["status"] == "paused"
+    assert titles_while_paused == []
+    assert _titles() == ["Guide"]
+
+
+def test_auto_generate_off_imports_without_audio(watched: Path) -> None:
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    (watched / "guide.md").write_text("# Guide\n\nInstall it.")
+
+    source_service.sync_source(source_id)
+
+    assert _only_document()["status"] == "no_audio"
+    assert _activity(source_id) == [
+        ("imported", "guide.md", "Auto-generate is off for this source.")
+    ]
+
+
+def test_a_source_can_narrate_documents_the_global_rule_skips(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(suitability="not_recommended"))
+    source_id = _add_folder_with_rules(watched, skip_not_recommended=False)
+    (watched / "codes.md").write_text("# Codes\n\n| Code | Meaning |")
+
+    source_service.sync_source(source_id)
+
+    assert _only_document()["audio_id"] is not None
+    assert _activity(source_id)[0][0] == "imported"
+
+
+def test_a_skipped_not_recommended_document_is_logged_with_its_reason(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    use_script_model(FakeScriptModel(suitability="not_recommended"))
+    source_id = _add_folder(watched)
+    (watched / "codes.md").write_text("# Codes\n\n| Code | Meaning |")
+
+    source_service.sync_source(source_id)
+
+    [(action, item, detail)] = _activity(source_id)
+    assert (action, item) == ("skipped", "codes.md")
+    assert "not recommended" in detail
+
+
+def test_file_types_the_rules_leave_out_are_skipped_once(watched: Path) -> None:
+    source_id = _add_folder_with_rules(watched, file_types=[".md"], auto_audio=False)
+    (watched / "guide.md").write_text("# Guide\n\nInstall it.")
+    (watched / "notes.txt").write_text("Notes.")
+
+    source_service.sync_source(source_id)
+    source_service.sync_source(source_id)
+
+    assert _titles() == ["Guide"]
+    assert sorted(_activity(source_id)) == [
+        ("imported", "guide.md", "Auto-generate is off for this source."),
+        ("skipped", "notes.txt", ".txt files are not imported from this source."),
+    ]
+
+
+def test_regenerate_rule_wins_over_the_global_mark_setting(watched: Path) -> None:
+    source_id = _add_folder_with_rules(watched, regenerate_on_change=True)
+    guide = watched / "guide.md"
+    guide.write_text("# Guide\n\nInstall with pip.")
+    _sync_with_audio(source_id)
+
+    guide.write_text("# Guide\n\nInstall with uv.")
+    new_audio = _sync_with_audio(source_id)
+
+    assert _audio_ids_by_version(_only_document()["id"])[2] == [new_audio["id"]]
+    assert _activity(source_id)[0] == ("updated", "guide.md", "Audio queued.")
+
+
+def test_without_keep_versions_earlier_versions_and_their_audio_go(
+    watched: Path,
+) -> None:
+    source_id = _add_folder_with_rules(watched, keep_versions=False)
+    guide = watched / "guide.md"
+    guide.write_text("# Guide\n\nInstall with pip.")
+    first_audio = _sync_with_audio(source_id)
+
+    guide.write_text("# Guide\n\nInstall with uv.")
+    source_service.sync_source(source_id)
+
+    document = _only_document()
+    assert _audio_ids_by_version(document["id"]) == {2: []}
+    assert first_audio["path"] and not Path(first_audio["path"]).exists()
+    assert audio_store.get_audio(first_audio["id"]) is None
+
+
+def test_a_failed_item_and_a_failed_sync_are_logged_once(
+    library: None, tmp_path: Path
+) -> None:
+    source_id = _add_folder(tmp_path / "docs")
+    (tmp_path / "docs" / "empty.md").write_text("   ")
+    source_service.sync_source(source_id)
+    source_service.sync_source(source_id)
+    (tmp_path / "docs" / "empty.md").unlink()
+    (tmp_path / "docs").rmdir()
+    source_service.sync_source(source_id)
+    source_service.sync_source(source_id)
+
+    failures = _activity(source_id)
+    assert [(action, item) for action, item, _ in failures] == [
+        ("failed", None),
+        ("failed", "empty.md"),
+    ]
+    assert "No text found" in failures[1][2]
+
+
+def test_activity_lists_every_source_newest_first(
+    library: None, tmp_path: Path
+) -> None:
+    first = _add_folder_with_rules(tmp_path / "first", auto_audio=False)
+    second = _add_folder_with_rules(tmp_path / "second", auto_audio=False)
+    (tmp_path / "first" / "deploy.md").write_text("# Deploy\n\nShip it.")
+    (tmp_path / "second" / "notes.md").write_text("# Notes\n\nRecap.")
+    source_service.sync_source(first)
+    source_service.sync_source(second)
+
+    page = source_store.list_activity(None, limit=1, offset=0)
+
+    assert page.total == 2
+    [entry] = page.items
+    assert (entry["source_id"], entry["source_name"], entry["item"]) == (
+        second,
+        "second",
+        "notes.md",
+    )
+    assert entry["document_id"] is not None
+
+
+def test_editing_a_source_renames_it_and_merges_its_rules(
+    library: None, tmp_path: Path
+) -> None:
+    source_id = _add_folder_with_rules(tmp_path / "docs", auto_audio=False)
+    change = SourceChange.model_validate(
+        {"name": "Team docs", "rules": {"file_types": ["md"]}}
+    )
+
+    edited = source_service.update_source(source_id, change)
+
+    assert edited["name"] == "Team docs"
+    assert edited["rules"] == {"auto_audio": False, "file_types": [".md"]}
+
+
+def test_moving_a_source_onto_another_ones_folder_is_refused(
+    library: None, tmp_path: Path
+) -> None:
+    _add_folder(tmp_path / "first")
+    second = _add_folder(tmp_path / "second")
+    change = SourceChange(config={"path": str(tmp_path / "first")})
+
+    with pytest.raises(DuplicateSourceError):
+        source_service.update_source(second, change)
+
+
+def test_the_environment_folder_cannot_be_moved_or_deleted(
+    library: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_WATCH_DIR", str(tmp_path / "env"))
+    source_service.adopt_watch_folder()
+    [source] = source_store.all_sources()
+    move = SourceChange(config={"path": str(tmp_path / "elsewhere")})
+
+    with pytest.raises(SettingLockedError):
+        source_service.update_source(source["id"], move)
+    with pytest.raises(SettingLockedError):
+        source_service.delete_source(source["id"])
+    renamed = source_service.update_source(source["id"], SourceChange(name="Docs"))
+
+    assert renamed["name"] == "Docs"
+
+
+def test_deleting_a_source_keeps_its_documents(watched: Path) -> None:
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    (watched / "guide.md").write_text("# Guide\n\nInstall it.")
+    source_service.sync_source(source_id)
+
+    source_service.delete_source(source_id)
+
+    document = document_store.get_document(_only_document()["id"])
+    assert document is not None and document["source_id"] is None
+    assert source_store.get_source(source_id) is None
+    assert _activity() == []
+
+
+def test_unknown_sources_raise_not_found(library: None) -> None:
+    with pytest.raises(NotFoundError):
+        source_service.pause_source(404)
+    with pytest.raises(NotFoundError):
+        source_service.delete_source(404)
+
+
+def test_watchers_follow_sources_as_they_change(library: None, tmp_path: Path) -> None:
+    source_service.start_sources()
+    try:
+        source_id = _add_folder_with_rules(tmp_path / "docs", auto_audio=False)
+        is_watched_when_added = source_service.is_watching(source_id)
+        source_service.pause_source(source_id)
+        is_watched_when_paused = source_service.is_watching(source_id)
+        source_service.resume_source(source_id)
+        is_watched_when_resumed = source_service.is_watching(source_id)
+        source_service.delete_source(source_id)
+
+        assert (
+            is_watched_when_added,
+            is_watched_when_paused,
+            is_watched_when_resumed,
+        ) == (True, False, True)
+        assert source_service.is_watching(source_id) is False
+    finally:
+        source_service.stop_sources()

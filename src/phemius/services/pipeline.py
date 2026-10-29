@@ -60,15 +60,20 @@ def _store_analyzed(
     return document_store.add_document(document)
 
 
-def build_auto_audio(document_id: int) -> QueuedAudio | None:
+def build_auto_audio(
+    document_id: int, skip_not_recommended: bool | None = None
+) -> QueuedAudio | None:
     """Queue audio for an automatic import, or None if the import rule skips it.
 
-    With `skip_not_recommended` on, a document flagged not_recommended is kept
-    but not narrated; `build_audio` still narrates it on request.
+    With `skip_not_recommended` on (the global setting unless a source's rule
+    says otherwise), a document flagged not_recommended is kept but not
+    narrated; `build_audio` still narrates it on request.
     """
     document = _get_document(document_id)
+    if skip_not_recommended is None:
+        skip_not_recommended = load_config().skip_not_recommended
     is_skipped = document["audio_suitability"] == "not_recommended"
-    if is_skipped and load_config().skip_not_recommended:
+    if is_skipped and skip_not_recommended:
         log.info(
             "auto_audio_skipped",
             document_id=document_id,
