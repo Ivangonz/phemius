@@ -13,8 +13,9 @@ export function EmptyLibrary() {
         Your library is empty
       </h2>
       <p className="max-w-md text-muted">
-        Add a document and Phemius writes a spoken script and narrates it.
-        Markdown, text, reStructuredText, HTML, Word and PDF files work.
+        Choose Upload documents or drop files anywhere on this page. Phemius
+        writes a spoken script for each one and narrates it. Markdown, text,
+        reStructuredText, HTML, Word and PDF files work.
       </p>
       <p className="max-w-md text-muted">
         You can also watch a folder from{" "}
