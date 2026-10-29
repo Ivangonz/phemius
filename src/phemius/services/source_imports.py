@@ -15,7 +15,7 @@ from phemius.services.import_rules import EffectiveRules, ImportRules, effective
 from phemius.sources import SourceItem
 from phemius.store import documents as document_store
 from phemius.store import sources as source_store
-from phemius.store.documents import StoredVersion
+from phemius.store.documents import ExcludedItem, StoredVersion
 from phemius.store.sources import ActivityAction, NewActivity, StoredSource
 
 log = structlog.get_logger(__name__)
@@ -28,10 +28,10 @@ def import_item(source_id: int, item: SourceItem) -> None:
     source = source_store.get_source(source_id)
     if source is None or source["status"] != "active":
         return
+    # Checked before the model is paid to analyze it; `add_document` checks
+    # again for a delete that lands during the analysis.
     if source_store.is_excluded(source_id, item.key):
-        source_store.record_activity(
-            NewActivity(source_id, "skipped", item.name, DELETED_DETAIL)
-        )
+        _record_deleted(source_id, item)
         return
     rules = rules_of(source)
     suffix = item.path.suffix.lower()
@@ -54,8 +54,16 @@ def import_item(source_id: int, item: SourceItem) -> None:
             NewActivity(source_id, "failed", item.name, failure_text(error))
         )
         return
-    if stored.outcome != "unchanged":
+    if isinstance(stored, ExcludedItem):
+        _record_deleted(source_id, item)
+    elif stored.outcome != "unchanged":
         _apply_rules(source_id, item, stored, rules)
+
+
+def _record_deleted(source_id: int, item: SourceItem) -> None:
+    source_store.record_activity(
+        NewActivity(source_id, "skipped", item.name, DELETED_DETAIL)
+    )
 
 
 def rules_of(source: StoredSource) -> EffectiveRules:

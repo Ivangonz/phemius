@@ -7,12 +7,12 @@ import hashlib
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypedDict, cast, overload
 
 from phemius.models.base import AudioSuitability, SuitabilitySource
 from phemius.store.audio import AUDIO_JOB_COLUMNS, AudioSummary, section_titles
 from phemius.store.database import transaction
-from phemius.store.sources import exclude_items
+from phemius.store.sources import exclude_items, is_excluded_on
 
 type SaveOutcome = Literal["created", "new_version", "unchanged"]
 type DeleteOutcome = Literal["deleted", "missing", "job_running"]
@@ -77,7 +77,6 @@ class NewDocument:
     audio_suitability: AudioSuitability
     suitability_reason: str
     suitability_source: SuitabilitySource
-    source_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -87,19 +86,41 @@ class StoredVersion:
     outcome: SaveOutcome
 
 
+@dataclass(frozen=True)
+class ExcludedItem:
+    """A source's item whose document was deleted: nothing was stored."""
+
+    outcome: Literal["excluded"] = "excluded"
+
+
 def hash_text(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def add_document(document: NewDocument) -> StoredVersion:
-    """Store a new document, or a new version when its source's text changed."""
+@overload
+def add_document(document: NewDocument, source_id: None = None) -> StoredVersion: ...
+@overload
+def add_document(
+    document: NewDocument, source_id: int
+) -> StoredVersion | ExcludedItem: ...
+def add_document(
+    document: NewDocument, source_id: int | None = None
+) -> StoredVersion | ExcludedItem:
+    """Store a new document, or a new version when its source's text changed.
+
+    `source_id` is the managed source it came from, if any. Its exclusions are
+    checked under the write lock: the document may have been deleted, and its
+    item excluded, while it was being analyzed.
+    """
     content_hash = hash_text(document.text)
     with transaction(is_immediate=True) as connection:
+        if source_id is not None and is_excluded_on(
+            connection, source_id, document.source
+        ):
+            return ExcludedItem()
         latest = _latest_version_from_source(connection, document.source)
         if latest is None:
-            document_id = _insert_document(
-                connection, document.source, document.source_id
-            )
+            document_id = _insert_document(connection, document.source, source_id)
             return _insert_version(connection, document_id, 1, document, "created")
         if latest["content_hash"] == content_hash:
             return StoredVersion(latest["doc_id"], latest["number"], "unchanged")

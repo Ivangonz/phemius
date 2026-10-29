@@ -563,6 +563,40 @@ def test_a_deleted_document_stays_deleted_after_syncs_and_edits(
     assert [entry[1] for entry in _activity(source_id)].count("guide.md") == 2
 
 
+class DeletingAnalysisModel(FakeScriptModel):
+    """Deletes a document while analyzing, as a user deleting it mid-import."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.document_id: int | None = None
+
+    def analyze(self, title: str, text: str) -> Analysis:
+        if self.document_id is not None:
+            documents.delete_document(self.document_id)
+        return super().analyze(title, text)
+
+
+def test_a_document_deleted_during_its_import_is_not_recreated(
+    watched: Path, use_script_model: UseScriptModel
+) -> None:
+    model = DeletingAnalysisModel()
+    use_script_model(model)
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    guide = watched / "guide.md"
+    guide.write_text("# Guide\n\nInstall with pip.")
+    source_service.sync_source(source_id)
+    model.document_id = _only_document()["id"]
+
+    guide.write_text("# Guide\n\nInstall with uv.")
+    source_imports.import_item(source_id, _item(watched, "guide.md"))
+
+    assert _titles() == []
+    assert _activity(source_id) == [
+        ("skipped", "guide.md", source_imports.DELETED_DETAIL),
+        ("imported", "guide.md", "Auto-generate is off for this source."),
+    ]
+
+
 def test_a_folder_added_again_imports_what_was_deleted_from_it(
     watched: Path,
 ) -> None:

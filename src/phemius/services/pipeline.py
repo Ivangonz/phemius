@@ -6,6 +6,7 @@ narration worker, so synthesis happens one audio at a time.
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import overload
 
 import structlog
 
@@ -16,7 +17,12 @@ from phemius.services.usage import job_usage
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
-from phemius.store.documents import Document, NewDocument, StoredVersion
+from phemius.store.documents import (
+    Document,
+    ExcludedItem,
+    NewDocument,
+    StoredVersion,
+)
 from phemius.store.jobs import AudioFile, AudioFormat, ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
@@ -31,13 +37,22 @@ def never_stops() -> bool:
     return False
 
 
+@overload
+def import_file(
+    path: Path, source: str | None = None, source_id: None = None
+) -> StoredVersion: ...
+@overload
+def import_file(
+    path: Path, source: str, source_id: int
+) -> StoredVersion | ExcludedItem: ...
 def import_file(
     path: Path, source: str | None = None, source_id: int | None = None
-) -> StoredVersion:
+) -> StoredVersion | ExcludedItem:
     """Extract, categorize and store a document, or a new version of it.
 
     `source` identifies the document (the path by default); `source_id` is the
-    managed source it came from, if any.
+    managed source it came from, if any. An item of that source whose document
+    was deleted is not stored.
     """
     text = ingest.extract_text(path)
     if not text.strip():
@@ -47,6 +62,9 @@ def import_file(
     stored = document_store.find_unchanged(source, text) or _store_analyzed(
         path, source, text, source_id
     )
+    if isinstance(stored, ExcludedItem):
+        log.info("document_import_excluded", source_id=source_id)
+        return stored
     log.info(
         "document_imported",
         document_id=stored.document_id,
@@ -58,13 +76,11 @@ def import_file(
 
 def _store_analyzed(
     path: Path, source: str, text: str, source_id: int | None
-) -> StoredVersion:
+) -> StoredVersion | ExcludedItem:
     title = ingest.guess_title(text, path.stem)
     analysis = agent.analyze(title, text)
-    document = NewDocument(
-        title=title, source=source, text=text, source_id=source_id, **analysis
-    )
-    return document_store.add_document(document)
+    document = NewDocument(title=title, source=source, text=text, **analysis)
+    return document_store.add_document(document, source_id)
 
 
 def build_auto_audio(

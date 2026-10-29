@@ -265,10 +265,14 @@ def exclude_items(
 
 def is_excluded(source_id: int, key: str) -> bool:
     with transaction() as connection:
-        row = connection.execute(
-            "SELECT 1 FROM source_exclusions WHERE source_id = ? AND item_key = ?",
-            (source_id, key),
-        ).fetchone()
+        return is_excluded_on(connection, source_id, key)
+
+
+def is_excluded_on(connection: sqlite3.Connection, source_id: int, key: str) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM source_exclusions WHERE source_id = ? AND item_key = ?",
+        (source_id, key),
+    ).fetchone()
     return row is not None
 
 
