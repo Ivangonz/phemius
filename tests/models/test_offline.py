@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from phemius.models.base import SectionContext
 from phemius.models.offline import OfflineModel
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -25,6 +26,14 @@ def test_write_script_removes_markdown_and_code() -> None:
     assert "Section: Setup." in script
     assert "https://" not in script
     assert "```" not in script and "`" not in script
+
+
+def test_a_later_section_does_not_introduce_the_document_again() -> None:
+    section = SectionContext("Usage", 2, 2, "")
+
+    script = OfflineModel().write_script("Guide", "Run it.", "podcast", section)
+
+    assert script.text == "Run it."
 
 
 def test_offline_script_is_local_so_it_costs_nothing() -> None:

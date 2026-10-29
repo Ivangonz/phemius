@@ -6,7 +6,12 @@ from collections.abc import Container
 from typing import Any
 
 from phemius.errors import ModelError
-from phemius.models.base import Analysis, AudioSuitability, SuitabilitySource
+from phemius.models.base import (
+    Analysis,
+    AudioSuitability,
+    SectionContext,
+    SuitabilitySource,
+)
 from phemius.models.suitability import (
     Suitability,
     assess_suitability,
@@ -90,16 +95,35 @@ def script_system(tone: str) -> str:
     return f"{SCRIPT_SYSTEM}\n\nTone: {tone} - {TONES.get(tone, TONES['neutral'])}"
 
 
-def script_prompt(title: str, text: str) -> str:
-    """The script request. Raises `ModelError` rather than trimming a long document."""
+def script_prompt(title: str, text: str, section: SectionContext | None = None) -> str:
+    """The script request. Raises `ModelError` rather than trimming the text."""
     if len(text) > SCRIPT_TEXT_LIMIT:
         raise ModelError(
-            f"This document has {len(text):,} characters; one script covers up to"
-            f" {SCRIPT_TEXT_LIMIT:,}.",
-            hint="Split it into smaller documents for now; narrating long documents"
-            " in chapters is planned.",
+            f"This text has {len(text):,} characters; one script request covers up"
+            f" to {SCRIPT_TEXT_LIMIT:,}.",
+            hint="Long documents are split into sections before this point, so"
+            " please report this as a bug.",
         )
-    return f"Title: {title}\n\nDocument:\n{text}"
+    if section is None:
+        return f"Title: {title}\n\nDocument:\n{text}"
+    return f"Title: {title}\n{_section_brief(section)}\n\nDocument section:\n{text}"
+
+
+def _section_brief(section: SectionContext) -> str:
+    position = f"This is section {section.number} of {section.count}: {section.title}."
+    opening = (
+        "Open with the orientation for the whole document."
+        if section.number == 1
+        else "Carry on from the previous section: do not introduce the document"
+        " again; open by naming this section."
+    )
+    ending = (
+        "This is the last section: close the whole document."
+        if section.number == section.count
+        else "More sections follow, so do not wrap up the document."
+    )
+    so_far = f"\n{section.continuity}" if section.continuity else ""
+    return f"{position}{so_far}\n{opening} {ending} Write this section's script only."
 
 
 def parse_analysis(reply: str, text: str) -> Analysis:

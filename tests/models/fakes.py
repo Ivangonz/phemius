@@ -7,6 +7,7 @@ from phemius.models.base import (
     Script,
     ScriptModel,
     ScriptModelCheck,
+    SectionContext,
     TokenUsage,
 )
 
@@ -39,7 +40,13 @@ class FakeScriptModel:
             suitability_source="model",
         )
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         return Script(self.script, self.usage)
 
     def check(self) -> ScriptModelCheck:
@@ -52,7 +59,13 @@ class FailingScriptModel(FakeScriptModel):
     def analyze(self, title: str, text: str) -> Analysis:
         raise self.error
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         raise self.error
 
 
@@ -62,7 +75,15 @@ class RecordingScriptModel(FakeScriptModel):
     def __init__(self, script: str = "A fake spoken script.") -> None:
         super().__init__(script)
         self.script_texts: list[str] = []
+        self.sections: list[SectionContext | None] = []
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         self.script_texts.append(text)
-        return super().write_script(title, text, tone)
+        self.sections.append(section)
+        return super().write_script(title, text, tone, section)

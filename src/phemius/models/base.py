@@ -38,6 +38,17 @@ class Script:
 
 
 @dataclass(frozen=True)
+class SectionContext:
+    """Where a section sits in a long document, so its script carries on."""
+
+    title: str
+    number: int
+    count: int
+    # A bounded note on the sections before this one; empty for the first.
+    continuity: str
+
+
+@dataclass(frozen=True)
 class ScriptModelCheck:
     """Result of a connection check, safe to show in the UI (never holds secrets)."""
 
@@ -61,7 +72,15 @@ class ScriptModel(Protocol):
 
     def analyze(self, title: str, text: str) -> Analysis: ...
 
-    def write_script(self, title: str, text: str, tone: str) -> Script: ...
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
+        """Write one script, or one section's when `section` is set."""
+        ...
 
     def check(self) -> ScriptModelCheck:
         """Send the provider a short real request; hosted models charge for it."""

@@ -9,7 +9,7 @@ import httpx2
 
 from phemius.config import Config
 from phemius.errors import ModelError
-from phemius.models.base import Script, ScriptModelCheck, TokenUsage
+from phemius.models.base import Script, ScriptModelCheck, SectionContext, TokenUsage
 from phemius.models.chat import ChatReply, ChatScriptModel
 from phemius.models.cleanup import clean_script
 
@@ -33,8 +33,14 @@ class OllamaModel(ChatScriptModel):
         super().__init__(model, script_max_tokens)
         self._client = http_client
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
-        script = super().write_script(title, text, tone)
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
+        script = super().write_script(title, text, tone, section)
         return Script(clean_script(script.text), script.usage)
 
     def list_models(self) -> list[InstalledModel]:
