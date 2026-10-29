@@ -22,11 +22,12 @@ from phemius.errors import (
     PhemiusError,
     SettingLockedError,
 )
-from phemius.services.import_rules import ImportRules, merge_rules
-from phemius.services.source_imports import failure_text, import_item
+from phemius.services.import_rules import EffectiveRules, ImportRules, merge_rules
+from phemius.services.source_imports import failure_text, import_item, rules_of
 from phemius.sources import Source, Watcher
 from phemius.store import sources as source_store
 from phemius.store.sources import (
+    ActivityPage,
     KeptSource,
     NewActivity,
     NewSource,
@@ -40,6 +41,19 @@ log = structlog.get_logger(__name__)
 type SourceName = Annotated[str, Field(min_length=1, max_length=200)]
 
 
+class NewSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(description="A registered source kind; today only folder.")
+    name: SourceName | None = Field(
+        default=None, description="Defaults to the folder's name."
+    )
+    config: dict[str, JsonValue] = Field(
+        description='The kind\'s settings; a folder takes {"path": "/absolute/path"}.'
+    )
+    rules: ImportRules = ImportRules()
+
+
 class SourceChange(BaseModel):
     """An edit: only the fields sent change, and rules merge (see `merge_rules`)."""
 
@@ -48,6 +62,44 @@ class SourceChange(BaseModel):
     name: SourceName | None = None
     config: dict[str, JsonValue] | None = None
     rules: ImportRules | None = None
+
+
+class SourceView(BaseModel):
+    id: int
+    kind: str
+    name: str
+    config: dict[str, JsonValue]
+    status: SourceStatus
+    last_sync: float | None
+    error: str | None = Field(description="Why the last sync failed, if it did.")
+    created: float
+    updated: float
+    rules: ImportRules = Field(
+        description="This source's own rules; a null rule follows the global setting."
+    )
+    effective_rules: EffectiveRules
+    is_locked: bool = Field(
+        description="Set by PHEMIUS_WATCH_DIR: it cannot be moved or deleted."
+    )
+
+
+def describe_source(source: StoredSource) -> SourceView:
+    return SourceView.model_validate(
+        {
+            **source,
+            "effective_rules": rules_of(source),
+            "is_locked": _is_environment_folder(source),
+        }
+    )
+
+
+def list_sources(limit: int, offset: int) -> tuple[list[SourceView], int]:
+    page = source_store.list_sources(limit, offset)
+    return [describe_source(source) for source in page.items], page.total
+
+
+def list_activity(source_id: int | None, limit: int, offset: int) -> ActivityPage:
+    return source_store.list_activity(source_id, limit, offset)
 
 
 class _Watchers:
@@ -188,14 +240,16 @@ def _watch_folder_adapter(path: Path) -> Source:
     return source_kinds.get_source("folder", {"path": str(path.absolute())})
 
 
-def _reject_if_environment_folder(source: StoredSource) -> None:
+def _is_environment_folder(source: StoredSource) -> bool:
     path = load_config().watch_dir
     if env_override("watch_dir") is None or path is None:
-        return
-    if (source["kind"], source["config"]) == (
-        "folder",
-        _watch_folder_adapter(path).config,
-    ):
+        return False
+    adopted = ("folder", _watch_folder_adapter(path).config)
+    return (source["kind"], source["config"]) == adopted
+
+
+def _reject_if_environment_folder(source: StoredSource) -> None:
+    if _is_environment_folder(source):
         raise SettingLockedError(
             "This folder is set by environment variable PHEMIUS_WATCH_DIR.",
             hint="Unset the variable and restart to move or delete it here.",

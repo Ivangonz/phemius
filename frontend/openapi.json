@@ -61,6 +61,76 @@
         "title": "AccessToken",
         "type": "object"
       },
+      "ActivityAction": {
+        "enum": [
+          "imported",
+          "updated",
+          "skipped",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "ActivityEntry": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActivityAction"
+          },
+          "created": {
+            "title": "Created",
+            "type": "number"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "source_name",
+          "action",
+          "item",
+          "document_id",
+          "detail",
+          "created"
+        ],
+        "title": "ActivityEntry",
+        "type": "object"
+      },
       "Audio": {
         "properties": {
           "conversion_note": {
@@ -783,6 +853,43 @@
           }
         ]
       },
+      "EffectiveRules": {
+        "description": "The rules a source applies, with the global settings filled in.",
+        "properties": {
+          "auto_audio": {
+            "title": "Auto Audio",
+            "type": "boolean"
+          },
+          "file_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "File Types",
+            "type": "array"
+          },
+          "keep_versions": {
+            "title": "Keep Versions",
+            "type": "boolean"
+          },
+          "regenerate_on_change": {
+            "title": "Regenerate On Change",
+            "type": "boolean"
+          },
+          "skip_not_recommended": {
+            "title": "Skip Not Recommended",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "auto_audio",
+          "skip_not_recommended",
+          "keep_versions",
+          "regenerate_on_change",
+          "file_types"
+        ],
+        "title": "EffectiveRules",
+        "type": "object"
+      },
       "FfmpegCheckStatus": {
         "enum": [
           "ok",
@@ -836,6 +943,13 @@
         "title": "FfmpegStatus",
         "type": "object"
       },
+      "FileTypes": {
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -847,6 +961,73 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImportRules": {
+        "additionalProperties": false,
+        "description": "A source's own rules. None follows the global setting.",
+        "properties": {
+          "auto_audio": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Generate audio for new documents.",
+            "title": "Auto Audio"
+          },
+          "file_types": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileTypes"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Extensions to import, such as .md."
+          },
+          "keep_versions": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Keep earlier versions and their audio when a document changes.",
+            "title": "Keep Versions"
+          },
+          "regenerate_on_change": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Generate audio for each new version.",
+            "title": "Regenerate On Change"
+          },
+          "skip_not_recommended": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Import documents rated not_recommended without audio.",
+            "title": "Skip Not Recommended"
+          }
+        },
+        "title": "ImportRules",
         "type": "object"
       },
       "InstalledOllamaModel": {
@@ -1102,6 +1283,7 @@
         "const": "audio",
         "type": "string"
       },
+      "JsonValue": {},
       "LibraryConfig": {
         "properties": {
           "default_voice": {
@@ -1202,6 +1384,45 @@
         "title": "LibraryConfig",
         "type": "object"
       },
+      "NewSourceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "The kind's settings; a folder takes {\"path\": \"/absolute/path\"}.",
+            "title": "Config",
+            "type": "object"
+          },
+          "kind": {
+            "description": "A registered source kind; today only folder.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Defaults to the folder's name."
+          },
+          "rules": {
+            "$ref": "#/components/schemas/ImportRules",
+            "default": {}
+          }
+        },
+        "required": [
+          "kind",
+          "config"
+        ],
+        "title": "NewSourceRequest",
+        "type": "object"
+      },
       "OllamaModelList": {
         "properties": {
           "models": {
@@ -1216,6 +1437,37 @@
           "models"
         ],
         "title": "OllamaModelList",
+        "type": "object"
+      },
+      "Page_ActivityEntry_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ActivityEntry]",
         "type": "object"
       },
       "Page_DocumentListItem_": {
@@ -1247,6 +1499,37 @@
           "offset"
         ],
         "title": "Page[DocumentListItem]",
+        "type": "object"
+      },
+      "Page_SourceView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[SourceView]",
         "type": "object"
       },
       "Page_VersionSummary_": {
@@ -1825,6 +2108,145 @@
           "ran_at"
         ],
         "title": "SetupCheckRun",
+        "type": "object"
+      },
+      "SourceChange": {
+        "additionalProperties": false,
+        "description": "An edit: only the fields sent change, and rules merge (see `merge_rules`).",
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "SourceChange",
+        "type": "object"
+      },
+      "SourceName": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+      },
+      "SourceStatus": {
+        "enum": [
+          "active",
+          "paused"
+        ],
+        "type": "string"
+      },
+      "SourceView": {
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Config",
+            "type": "object"
+          },
+          "created": {
+            "title": "Created",
+            "type": "number"
+          },
+          "effective_rules": {
+            "$ref": "#/components/schemas/EffectiveRules"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last sync failed, if it did.",
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_locked": {
+            "description": "Set by PHEMIUS_WATCH_DIR: it cannot be moved or deleted.",
+            "title": "Is Locked",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_sync": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/ImportRules",
+            "description": "This source's own rules; a null rule follows the global setting."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "config",
+          "status",
+          "last_sync",
+          "error",
+          "created",
+          "updated",
+          "rules",
+          "effective_rules",
+          "is_locked"
+        ],
+        "title": "SourceView",
         "type": "object"
       },
       "SuitabilitySource": {
@@ -3174,6 +3596,431 @@
         "summary": "Update Settings",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "description": "Sources in the order they were added.",
+        "operationId": "list_sources_api_sources_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SourceView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sources",
+        "tags": [
+          "sources"
+        ]
+      },
+      "post": {
+        "description": "Add a source, then watch and sync it in the background.",
+        "operationId": "add_source_api_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/sources/activity": {
+      "get": {
+        "description": "Recent activity, newest first, for every source or one.",
+        "operationId": "list_activity_api_sources_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ActivityEntry_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Activity",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/sources/{source_id}": {
+      "delete": {
+        "description": "Delete a source and its activity. Its documents stay in the library.",
+        "operationId": "delete_source_api_sources__source_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Source",
+        "tags": [
+          "sources"
+        ]
+      },
+      "get": {
+        "operationId": "get_source_api_sources__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Source",
+        "tags": [
+          "sources"
+        ]
+      },
+      "patch": {
+        "description": "Partial update. Rules merge: a rule sent as null follows the global\nsetting again. A new config restarts the watcher and syncs.",
+        "operationId": "update_source_api_sources__source_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/sources/{source_id}/pause": {
+      "post": {
+        "operationId": "pause_source_api_sources__source_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/sources/{source_id}/resume": {
+      "post": {
+        "description": "Watch again and sync, which imports what changed while paused.",
+        "operationId": "resume_source_api_sources__source_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/sources/{source_id}/sync": {
+      "post": {
+        "description": "Sync now, in the background. A paused source is not synced.",
+        "operationId": "sync_source_api_sources__source_id__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Source",
+        "tags": [
+          "sources"
         ]
       }
     },

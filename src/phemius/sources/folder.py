@@ -42,9 +42,9 @@ def from_config(config: Mapping[str, object]) -> "FolderSource":
     except ValidationError as error:
         first = error.errors()[0]
         field = ".".join(str(part) for part in ("config", *first["loc"]))
+        message = first["msg"].removeprefix("Value error, ")
         raise InvalidInputError(
-            "The folder source needs an absolute path.",
-            field_errors={field: first["msg"]},
+            "The folder source needs an absolute path.", field_errors={field: message}
         ) from None
 
 

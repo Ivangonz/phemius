@@ -551,7 +551,9 @@ PHEMIUS_WATCH_DIR=~/Documents/listen make run
   so you can generate audio when the edit is finished; `regenerate` generates
   audio for every new version, which spends model credits on each save.
 - On startup the folder becomes a folder *source*, the first of the managed
-  sources (S3). `PHEMIUS_WATCH_DIR` is checked on every start and keeps working
+  sources (S3). Add more folders, pause them and set their import rules
+  (auto-generate audio, skip not recommended, keep earlier versions,
+  regenerate on change, file types) with `/api/sources` (see [API](#api)). `PHEMIUS_WATCH_DIR` is checked on every start and keeps working
   while it is set. A saved `watch_dir` setting is turned into a source once and
   then removed, so restart after saving one. A document imported from a source
   records which source it came from (`source_id` in `GET /api/docs/{id}`).
@@ -658,7 +660,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_OPENAI_SPEECH_VOICES` | `openai_speech_voices` | `alloy,ash,coral,echo,fable,nova,onyx,sage,shimmer` | Comma-separated voice names the server offers; the first is the engine's default. |
 | `ELEVENLABS_API_KEY` | `elevenlabs_api_key` | not set | ElevenLabs API key. Write-only through the API. |
 | `PHEMIUS_ELEVENLABS_VOICES` | `elevenlabs_voices` | `JBFqnCBsd6RMkjVDRZzb,EXAVITQu4vr4xnSDxMaL` | Comma-separated ElevenLabs voice ids; the first is the engine's default. |
-| `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from. See [Watched folder](#watched-folder). |
+| `PHEMIUS_WATCH_DIR` | `watch_dir` | not set (no folder watched) | Folder to import documents from; it becomes a folder source on startup (a saved value once, then the setting is removed). See [Watched folder](#watched-folder). |
 | `PHEMIUS_ACCESS_MODE` | `access_mode` | `local` | Who can reach the server: `local`, `network` or `proxy`. See [Access from other devices](#access-from-other-devices). Applies on the next start. |
 | `PHEMIUS_ACCESS_TOKEN` | environment only | not set (a token is generated) | Access token for `network` and `proxy` modes, at least 16 characters. Write-only: never shown or logged. See [Set your own token](#set-your-own-token-recommended-for-deployments). |
 | `PHEMIUS_WATCH_ON_CHANGE` | `watch_on_change` | `mark` | What a changed watched file does: `mark` (mark the document as changed) or `regenerate` (generate audio for the new version). |
@@ -703,6 +705,11 @@ Every endpoint is listed with its schema in the interactive docs at
 | `POST /api/queue/{job_id}/cancel` | Cancel a queued or running job (a running step finishes, then its result is discarded). `409 invalid_job_state` otherwise |
 | `POST /api/queue/{job_id}/retry` | Queue a failed or cancelled job again; it resumes at narration when its script was already written. `409 invalid_job_state` otherwise |
 | `POST /api/queue/pause`, `POST /api/queue/resume` | Stop or restart picking up jobs; running steps finish. The flag survives restarts |
+| `GET /api/sources` | Sources in the order they were added, each with `status` (`active` or `paused`), `last_sync`, `error`, its own `rules` (null follows the global setting), the `effective_rules` it applies, and `is_locked` (set by `PHEMIUS_WATCH_DIR`). Paginated with `?limit=` and `?offset=` |
+| `POST /api/sources` | Add a source and start watching and syncing it: `{"kind": "folder", "config": {"path": "/home/me/docs"}, "name": "Docs", "rules": {"auto_audio": false}}`; `name` and `rules` are optional. `400` for an unknown kind or a relative path, `409 duplicate_source` for a folder already added |
+| `GET /api/sources/{id}`, `PATCH /api/sources/{id}`, `DELETE /api/sources/{id}` | Read, edit (only the fields sent; rules merge, and a rule sent as `null` follows the global setting again) or delete a source. Deleting keeps its documents. Moving or deleting the `PHEMIUS_WATCH_DIR` folder is `409 setting_locked` |
+| `POST /api/sources/{id}/pause`, `POST /api/sources/{id}/resume`, `POST /api/sources/{id}/sync` | Stop watching and importing; watch again and sync; sync now in the background (`202`) |
+| `GET /api/sources/activity` | Recent activity, newest first: `imported`, `updated`, `skipped` and `failed` entries with the item, document id and a `detail`. Filter with `?source_id=`. Paginated with `?limit=` and `?offset=` |
 | `POST /api/access/token` | Replace the access token and return the new one, `{"token": "phm_..."}`. The old token stops working at once. `409 setting_locked` while `PHEMIUS_ACCESS_TOKEN` is set |
 
 Errors share one shape:
