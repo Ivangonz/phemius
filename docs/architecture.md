@@ -129,7 +129,8 @@ on.
 - **Kinds.** A kind implements the `Source` protocol (`sources/base.py`) and is
   registered in `SOURCE_KINDS` (`sources/__init__.py`): one module with a
   `from_config` factory that validates the config, and one registry line. A
-  source only finds documents: `sync()` hands every item it holds to a handler,
+  source only finds documents: `sync()` hands every item it holds to a handler
+  until its stop event is set,
   and `watch()` hands over new and changed items as they appear (None for a
   kind that cannot be watched). Each item has a stable `key`, stored as
   `docs.source`, so a changed item adds a version. Today the only kind is
@@ -168,8 +169,13 @@ on.
 - **Watchers follow the sources.** Startup adopts the old watched folder, then
   starts a watcher and a sync thread for each active source. Adding or
   resuming a source starts them, a new config restarts them, and pausing or
-  deleting stops them. An item a watcher had already scheduled is dropped if
-  its source was paused or deleted meanwhile.
+  deleting stops them. A sync takes a stop signal and ends between items;
+  pausing or deleting a source signals its running syncs without waiting, and
+  an item already being handed over is dropped because its source is no
+  longer active. Shutdown signals every watcher and sync and then waits for
+  them, so at most the item being imported finishes and nothing touches the
+  library after the app stops. A sync ended early does not update
+  `last_sync`.
 - **The old watched folder.** `PHEMIUS_WATCH_DIR` becomes a folder source on
   every start (nothing happens once that source exists), so the environment
   keeps winning as it does for settings; its source can be renamed, paused and

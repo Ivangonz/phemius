@@ -1,3 +1,4 @@
+import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -6,6 +7,7 @@ import pytest
 from structlog.testing import capture_logs
 
 from phemius.errors import DuplicateSourceError, NotFoundError, SettingLockedError
+from phemius.models.base import Analysis
 from phemius.services import pipeline, source_imports
 from phemius.services import sources as source_service
 from phemius.services.import_rules import ImportRules
@@ -555,3 +557,78 @@ def test_watchers_follow_sources_as_they_change(library: None, tmp_path: Path) -
         assert source_service.is_watching(source_id) is False
     finally:
         source_service.stop_sources()
+
+
+class SlowAnalysisModel(FakeScriptModel):
+    """Holds each analysis open until the test releases it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.is_analyzing = threading.Event()
+        self.release = threading.Event()
+
+    def analyze(self, title: str, text: str) -> Analysis:
+        self.is_analyzing.set()
+        self.release.wait(timeout=5)
+        return super().analyze(title, text)
+
+
+@pytest.fixture
+def thread_errors(monkeypatch: pytest.MonkeyPatch) -> list[threading.ExceptHookArgs]:
+    errors: list[threading.ExceptHookArgs] = []
+    monkeypatch.setattr(threading, "excepthook", errors.append)
+    return errors
+
+
+def _sync_threads() -> list[threading.Thread]:
+    return [
+        thread
+        for thread in threading.enumerate()
+        if thread.name.startswith("source-sync-")
+    ]
+
+
+def _start_a_slow_sync(watched: Path, model: SlowAnalysisModel) -> int:
+    for name in ("a.md", "b.md", "c.md"):
+        (watched / name).write_text(f"# {name}\n\nText.")
+    source_service.start_sources()
+    source_id = _add_folder_with_rules(watched, auto_audio=False)
+    assert model.is_analyzing.wait(timeout=5)
+    return source_id
+
+
+def test_a_sync_running_at_shutdown_is_stopped_and_joined(
+    watched: Path,
+    use_script_model: UseScriptModel,
+    thread_errors: list[threading.ExceptHookArgs],
+) -> None:
+    model = SlowAnalysisModel()
+    use_script_model(model)
+    source_id = _start_a_slow_sync(watched, model)
+    # Released only once shutdown is waiting, so the item in flight finishes
+    # after the stop signal and the walk must end there.
+    threading.Timer(0.2, model.release.set).start()
+
+    source_service.stop_sources()
+
+    assert _sync_threads() == []
+    assert thread_errors == []
+    assert len(_titles()) < 3
+    assert _get_source(source_id)["last_sync"] is None
+
+
+def test_pausing_stops_a_running_sync(
+    watched: Path,
+    use_script_model: UseScriptModel,
+    thread_errors: list[threading.ExceptHookArgs],
+) -> None:
+    model = SlowAnalysisModel()
+    use_script_model(model)
+    source_id = _start_a_slow_sync(watched, model)
+
+    source_service.pause_source(source_id)
+    model.release.set()
+    source_service.stop_sources()
+
+    assert _titles() == ["a.md"]
+    assert thread_errors == []

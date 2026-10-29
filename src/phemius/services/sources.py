@@ -7,6 +7,7 @@ folder source on startup (see `adopt_watch_folder`).
 
 import threading
 from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Annotated
@@ -102,17 +103,26 @@ def list_activity(source_id: int | None, limit: int, offset: int) -> ActivityPag
     return source_store.list_activity(source_id, limit, offset)
 
 
-class _Watchers:
-    """The running watchers. Sources start only once `start_sources` has run,
-    so a CLI command or a test that adds a source watches nothing."""
+@dataclass(frozen=True)
+class _Sync:
+    source_id: int
+    stop: threading.Event
+
+
+class _Background:
+    """Running watchers and background syncs. Nothing starts until
+    `start_sources` has run, so a CLI command or a test that adds a source
+    watches nothing, and `stop_sources` waits for all of it so no import
+    outlives the app."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
-        self.by_source: dict[int, Watcher] = {}
+        self.watchers: dict[int, Watcher] = {}
+        self.syncs: dict[threading.Thread, _Sync] = {}
         self.is_running = False
 
 
-_watchers = _Watchers()
+_background = _Background()
 
 
 def create_source(
@@ -211,7 +221,7 @@ def delete_source(source_id: int) -> None:
 def request_sync(source_id: int) -> StoredSource:
     """Sync a source in the background; a paused source is not synced."""
     source = get_source(source_id)
-    threading.Thread(target=sync_source, args=(source_id,), daemon=True).start()
+    _sync_in_background(source_id)
     return source
 
 
@@ -259,23 +269,34 @@ def _reject_if_environment_folder(source: StoredSource) -> None:
 def start_sources() -> None:
     """Adopt the watched folder, then watch and sync every active source."""
     adopt_watch_folder()
-    _watchers.is_running = True
+    _background.is_running = True
     for source in active_sources():
         _start(source["id"])
 
 
 def stop_sources() -> None:
-    with _watchers.lock:
-        _watchers.is_running = False
-        running = list(_watchers.by_source.values())
-        _watchers.by_source.clear()
-    for watcher in running:
+    """Stop every watcher and sync, then wait for the items being imported.
+
+    A sync stops between items, so shutdown waits at most for one import.
+    """
+    with _background.lock:
+        _background.is_running = False
+        watchers = list(_background.watchers.values())
+        _background.watchers.clear()
+        syncs = dict(_background.syncs)
+    for watcher in watchers:
         watcher.stop()
+    for sync in syncs.values():
+        sync.stop.set()
+    for watcher in watchers:
+        watcher.join()
+    for thread in syncs:
+        thread.join()
 
 
 def is_watching(source_id: int) -> bool:
-    with _watchers.lock:
-        return source_id in _watchers.by_source
+    with _background.lock:
+        return source_id in _background.watchers
 
 
 def active_sources() -> list[StoredSource]:
@@ -288,7 +309,7 @@ def _start(source_id: int) -> None:
     """(Re)start an active source's watcher and sync it in the background."""
     _stop(source_id)
     source = source_store.get_source(source_id)
-    if not _watchers.is_running or source is None or source["status"] != "active":
+    if not _background.is_running or source is None or source["status"] != "active":
         return
     try:
         watcher = _adapter(source).watch(partial(import_item, source_id))
@@ -296,28 +317,63 @@ def _start(source_id: int) -> None:
         _record_failure(source_id, error)
         return
     if watcher is not None:
-        with _watchers.lock:
-            _watchers.by_source[source_id] = watcher
-    threading.Thread(target=sync_source, args=(source_id,), daemon=True).start()
+        with _background.lock:
+            _background.watchers[source_id] = watcher
+    _sync_in_background(source_id)
 
 
 def _stop(source_id: int) -> None:
-    with _watchers.lock:
-        watcher = _watchers.by_source.pop(source_id, None)
+    """Stop a source's watcher and syncs without waiting for an item being
+    imported: this runs in a request, and `import_item` drops work for a
+    paused or deleted source."""
+    with _background.lock:
+        watcher = _background.watchers.pop(source_id, None)
+        syncs = [
+            sync for sync in _background.syncs.values() if sync.source_id == source_id
+        ]
     if watcher is not None:
         watcher.stop()
+    for sync in syncs:
+        sync.stop.set()
 
 
-def sync_source(source_id: int) -> None:
-    """Import every item the source holds now. Paused sources are skipped."""
+def _sync_in_background(source_id: int) -> None:
+    sync = _Sync(source_id, threading.Event())
+    thread = threading.Thread(
+        target=_run_sync, args=(sync,), name=f"source-sync-{source_id}", daemon=True
+    )
+    with _background.lock:
+        if not _background.is_running:
+            return
+        _background.syncs[thread] = sync
+    thread.start()
+
+
+def _run_sync(sync: _Sync) -> None:
+    try:
+        sync_source(sync.source_id, sync.stop)
+    finally:
+        with _background.lock:
+            _background.syncs.pop(threading.current_thread(), None)
+
+
+def sync_source(source_id: int, stop: threading.Event | None = None) -> None:
+    """Import every item the source holds now. Paused sources are skipped.
+
+    A sync ended early by `stop` does not count as a finished sync.
+    """
     source = source_store.get_source(source_id)
     if source is None or source["status"] != "active":
         return
+    stop = stop or threading.Event()
     log.info("source_sync_started", source_id=source_id)
     try:
-        _adapter(source).sync(partial(import_item, source_id))
+        _adapter(source).sync(partial(import_item, source_id), stop)
     except PhemiusError as error:
         _record_failure(source_id, error)
+        return
+    if stop.is_set():
+        log.info("source_sync_stopped", source_id=source_id)
         return
     source_store.finish_sync(source_id, error=None)
     log.info("source_sync_finished", source_id=source_id)
