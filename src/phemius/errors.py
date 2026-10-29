@@ -31,6 +31,12 @@ class InvalidInputError(PhemiusError):
     status_code = 400
 
 
+class InvalidBackupError(InvalidInputError):
+    """An uploaded archive is not a backup this version of Phemius can restore."""
+
+    code = "invalid_backup"
+
+
 class SettingLockedError(PhemiusError):
     """A setting is fixed by an environment variable and cannot be saved."""
 

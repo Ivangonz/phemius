@@ -354,6 +354,83 @@
         "title": "AudioUrl",
         "type": "object"
       },
+      "BackupSummary": {
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "audio": {
+            "title": "Audio",
+            "type": "integer"
+          },
+          "audio_files": {
+            "title": "Audio Files",
+            "type": "integer"
+          },
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "queued_jobs": {
+            "title": "Queued Jobs",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "versions": {
+            "title": "Versions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app_version",
+          "created",
+          "schema_version",
+          "documents",
+          "versions",
+          "audio",
+          "audio_files",
+          "queued_jobs"
+        ],
+        "title": "BackupSummary",
+        "type": "object"
+      },
+      "Body_inspect_backup_api_library_restore_inspect_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_inspect_backup_api_library_restore_inspect_post",
+        "type": "object"
+      },
+      "Body_restore_library_api_library_restore_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_restore_library_api_library_restore_post",
+        "type": "object"
+      },
       "Body_upload_documents_api_docs_post": {
         "properties": {
           "files": {
@@ -1165,6 +1242,60 @@
           "is_paused"
         ],
         "title": "QueueStatus",
+        "type": "object"
+      },
+      "RestoreResult": {
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "audio": {
+            "title": "Audio",
+            "type": "integer"
+          },
+          "audio_files": {
+            "title": "Audio Files",
+            "type": "integer"
+          },
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "is_queue_paused": {
+            "title": "Is Queue Paused",
+            "type": "boolean"
+          },
+          "queued_jobs": {
+            "title": "Queued Jobs",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "versions": {
+            "title": "Versions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app_version",
+          "created",
+          "schema_version",
+          "documents",
+          "versions",
+          "audio",
+          "audio_files",
+          "queued_jobs",
+          "is_queue_paused"
+        ],
+        "title": "RestoreResult",
         "type": "object"
       },
       "SecretStatus": {
@@ -2487,6 +2618,90 @@
           }
         },
         "summary": "Back Up Library",
+        "tags": [
+          "library"
+        ]
+      }
+    },
+    "/api/library/restore": {
+      "post": {
+        "description": "Replace the library with a backup's. This installation's API keys,\naccess token, endpoints, provider, voice engine, access mode and watched\nfolder are kept. The queue is paused so restored jobs wait for Resume.",
+        "operationId": "restore_library_api_library_restore_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_restore_library_api_library_restore_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Library",
+        "tags": [
+          "library"
+        ]
+      }
+    },
+    "/api/library/restore/inspect": {
+      "post": {
+        "description": "Check a backup and report what it holds. Nothing changes.",
+        "operationId": "inspect_backup_api_library_restore_inspect_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_inspect_backup_api_library_restore_inspect_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect Backup",
         "tags": [
           "library"
         ]

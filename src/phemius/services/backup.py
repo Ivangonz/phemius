@@ -29,6 +29,9 @@ FORMAT_VERSION = 1
 MANIFEST_NAME = "manifest.json"
 DATABASE_NAME = "library.db"
 TEMPORARY_PREFIX = ".backup-"
+# Not removed at startup: a restore stopped mid-swap keeps the previous audio
+# folder in one.
+RESTORE_PREFIX = ".restore-"
 
 log = structlog.get_logger(__name__)
 

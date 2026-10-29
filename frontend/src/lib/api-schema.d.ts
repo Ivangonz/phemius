@@ -244,6 +244,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Library
+         * @description Replace the library with a backup's. This installation's API keys,
+         *     access token, endpoints, provider, voice engine, access mode and watched
+         *     folder are kept. The queue is paused so restored jobs wait for Resume.
+         */
+        post: operations["restore_library_api_library_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/restore/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect Backup
+         * @description Check a backup and report what it holds. Nothing changes.
+         */
+        post: operations["inspect_backup_api_library_restore_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queue": {
         parameters: {
             query?: never;
@@ -465,6 +507,38 @@ export interface components {
             expires: number;
             /** Url */
             url: string;
+        };
+        /** BackupSummary */
+        BackupSummary: {
+            /** App Version */
+            app_version: string;
+            /** Audio */
+            audio: number;
+            /** Audio Files */
+            audio_files: number;
+            /**
+             * Created
+             * Format: date-time
+             */
+            created: string;
+            /** Documents */
+            documents: number;
+            /** Queued Jobs */
+            queued_jobs: number;
+            /** Schema Version */
+            schema_version: number;
+            /** Versions */
+            versions: number;
+        };
+        /** Body_inspect_backup_api_library_restore_inspect_post */
+        Body_inspect_backup_api_library_restore_inspect_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_restore_library_api_library_restore_post */
+        Body_restore_library_api_library_restore_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_documents_api_docs_post */
         Body_upload_documents_api_docs_post: {
@@ -688,6 +762,30 @@ export interface components {
         QueueStatus: {
             /** Is Paused */
             is_paused: boolean;
+        };
+        /** RestoreResult */
+        RestoreResult: {
+            /** App Version */
+            app_version: string;
+            /** Audio */
+            audio: number;
+            /** Audio Files */
+            audio_files: number;
+            /**
+             * Created
+             * Format: date-time
+             */
+            created: string;
+            /** Documents */
+            documents: number;
+            /** Is Queue Paused */
+            is_queue_paused: boolean;
+            /** Queued Jobs */
+            queued_jobs: number;
+            /** Schema Version */
+            schema_version: number;
+            /** Versions */
+            versions: number;
         };
         /** SecretStatus */
         SecretStatus: {
@@ -1334,6 +1432,72 @@ export interface operations {
                 };
                 content: {
                     "application/zip": unknown;
+                };
+            };
+        };
+    };
+    restore_library_api_library_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_restore_library_api_library_restore_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_backup_api_library_restore_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_inspect_backup_api_library_restore_inspect_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
