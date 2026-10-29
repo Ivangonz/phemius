@@ -7,7 +7,7 @@ import pytest
 
 from phemius.config import Config
 from phemius.errors import VoiceError
-from phemius.models.base import Script, TokenUsage
+from phemius.models.base import Script, SectionContext, TokenUsage
 from phemius.services import pipeline, queue, runner
 from phemius.services.runner import JobRunner
 from phemius.store import audio as audio_store
@@ -35,9 +35,15 @@ class CountingScriptModel(FakeScriptModel):
         super().__init__()
         self.write_calls = 0
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         self.write_calls += 1
-        return super().write_script(title, text, tone)
+        return super().write_script(title, text, tone, section)
 
 
 class BlockingScriptModel(FakeScriptModel):
@@ -48,10 +54,16 @@ class BlockingScriptModel(FakeScriptModel):
         self.is_writing = threading.Event()
         self.release = threading.Event()
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         self.is_writing.set()
         self.release.wait(timeout=5)
-        return super().write_script(title, text, tone)
+        return super().write_script(title, text, tone, section)
 
 
 class ParallelOnlyScriptModel(FakeScriptModel):
@@ -61,9 +73,15 @@ class ParallelOnlyScriptModel(FakeScriptModel):
         super().__init__()
         self.barrier = threading.Barrier(2, timeout=5)
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         self.barrier.wait()
-        return super().write_script(title, text, tone)
+        return super().write_script(title, text, tone, section)
 
 
 class FailingVoiceEngine(StubEngine):

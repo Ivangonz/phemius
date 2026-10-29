@@ -11,7 +11,7 @@ from structlog.testing import capture_logs
 from phemius.config import load_config
 from phemius.errors import ModelError
 from phemius.models import get_script_model, openai_compatible
-from phemius.models.base import TokenUsage
+from phemius.models.base import SectionContext, TokenUsage
 from phemius.models.openai_compatible import OpenAICompatibleModel
 
 BASE_URL = "http://localhost:1234/v1"
@@ -70,6 +70,22 @@ def test_write_script_posts_to_the_base_url_with_the_key() -> None:
     assert script.text == "A spoken script."
     assert str(requests[0].url) == f"{BASE_URL}/chat/completions"
     assert requests[0].headers["Authorization"] == f"Bearer {SECRET}"
+
+
+def test_write_script_sends_the_section_it_is_writing() -> None:
+    requests: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return _reply(200, _completion("Part two."))(request)
+
+    section = SectionContext("Usage", 2, 3, "Sections covered so far: Setup.")
+
+    _model(handler).write_script("Guide", "Run it.", "neutral", section)
+
+    user_message = json.loads(requests[0].content)["messages"][-1]["content"]
+    assert "section 2 of 3: Usage" in user_message
+    assert "Sections covered so far: Setup." in user_message
 
 
 def test_server_without_a_key_never_receives_openai_api_key(

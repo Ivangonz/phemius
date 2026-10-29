@@ -7,7 +7,13 @@ no network and no keys.
 import re
 
 from phemius.config import Config
-from phemius.models.base import Analysis, Script, ScriptModelCheck, TokenUsage
+from phemius.models.base import (
+    Analysis,
+    Script,
+    ScriptModelCheck,
+    SectionContext,
+    TokenUsage,
+)
 from phemius.models.prompts import TONE_BY_CATEGORY
 from phemius.models.spoken_text import CODE_EXAMPLE
 from phemius.models.suitability import assess_suitability, rule_tone_rationale
@@ -42,8 +48,16 @@ class OfflineModel:
             suitability_source="heuristic",
         )
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         """Strip markdown and make code and lists speakable."""
+        if section is not None and section.number > 1:
+            return Script(_strip_markdown(text), TokenUsage(is_local=True))
         intro = {
             "conversational": f"Alright, let's walk through {title}.",
             "podcast": f"Welcome back! Today we're digging into {title}.",

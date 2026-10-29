@@ -10,7 +10,13 @@ from dataclasses import dataclass, field
 
 from phemius.errors import ModelError
 from phemius.models import prompts
-from phemius.models.base import Analysis, Script, ScriptModelCheck, TokenUsage
+from phemius.models.base import (
+    Analysis,
+    Script,
+    ScriptModelCheck,
+    SectionContext,
+    TokenUsage,
+)
 
 CHECK_MAX_TOKENS = 16
 
@@ -41,10 +47,16 @@ class ChatScriptModel(ABC):
         )
         return prompts.parse_analysis(reply.content, text)
 
-    def write_script(self, title: str, text: str, tone: str) -> Script:
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
         reply = self._complete(
             prompts.script_system(tone),
-            prompts.script_prompt(title, text),
+            prompts.script_prompt(title, text, section),
             self.script_max_tokens,
         )
         return Script(reply.content.strip(), reply.usage)

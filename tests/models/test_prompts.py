@@ -3,6 +3,7 @@ import json
 import pytest
 
 from phemius.errors import ModelError
+from phemius.models.base import SectionContext
 from phemius.models.prompts import (
     SCRIPT_TEXT_LIMIT,
     analysis_prompt,
@@ -99,6 +100,30 @@ def test_script_prompt_rejects_a_document_over_the_limit() -> None:
         script_prompt("Long", "x" * (SCRIPT_TEXT_LIMIT + 1))
 
     assert raised.value.hint
+
+
+def test_script_prompt_for_one_section_is_the_whole_document_prompt() -> None:
+    assert script_prompt("Guide", "Install it.") == (
+        "Title: Guide\n\nDocument:\nInstall it."
+    )
+
+
+def test_script_prompt_for_a_later_section_carries_on_from_the_last() -> None:
+    section = SectionContext("Usage", 2, 3, "Sections covered so far: Setup.")
+
+    prompt = script_prompt("Guide", "Run it.", section)
+
+    assert "section 2 of 3: Usage" in prompt
+    assert "Sections covered so far: Setup." in prompt
+    assert "do not introduce the document again" in prompt
+    assert "do not wrap up" in prompt
+    assert prompt.endswith("Run it.")
+
+
+def test_script_prompt_for_the_last_section_closes_the_document() -> None:
+    prompt = script_prompt("Guide", "Done.", SectionContext("End", 3, 3, ""))
+
+    assert "close the whole document" in prompt
 
 
 def test_script_prompt_keeps_the_whole_document() -> None:
