@@ -50,9 +50,11 @@ CASE_IDS = [case.name for case in CASES]
 
 
 def write_script(case: EvalCase) -> str:
-    return agent.make_script(
+    script = agent.make_script(
         guess_title(case.source, case.name), case.source, "neutral"
-    ).text
+    )
+    assert script is not None
+    return script.text
 
 
 def assert_speakable(script: str, case: EvalCase) -> None:

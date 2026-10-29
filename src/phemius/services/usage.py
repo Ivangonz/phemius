@@ -3,6 +3,7 @@
 A cost that cannot be known stays None; it is never guessed.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from phemius.config import Config
@@ -39,6 +40,23 @@ def script_cost(usage: TokenUsage, prices: TokenPrices | None) -> float | None:
         + usage.output_tokens * prices.output_per_million
     )
     return spent / TOKENS_PER_PRICE_UNIT
+
+
+def total_usage(usages: Sequence[TokenUsage]) -> TokenUsage:
+    """The usage of several requests. A figure any of them left out stays None."""
+    return TokenUsage(
+        input_tokens=_total([usage.input_tokens for usage in usages]),
+        output_tokens=_total([usage.output_tokens for usage in usages]),
+        provider_cost_usd=_total([usage.provider_cost_usd for usage in usages]),
+        is_local=all(usage.is_local for usage in usages),
+    )
+
+
+def _total[Number: (int, float)](values: list[Number | None]) -> Number | None:
+    known = [value for value in values if value is not None]
+    if not known or len(known) < len(values):
+        return None
+    return sum(known[1:], start=known[0])
 
 
 def job_usage(usage: TokenUsage, config: Config) -> JobUsage:

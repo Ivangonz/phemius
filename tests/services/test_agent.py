@@ -1,7 +1,11 @@
 import pytest
 
+from phemius.config import load_config
 from phemius.errors import ModelError
+from phemius.models.sections import section_limit
+from phemius.models.spoken_text import to_spoken_text
 from phemius.services import agent
+from phemius.services.agent import WrittenScript
 from tests.models.fakes import (
     FailingScriptModel,
     RecordingScriptModel,
@@ -17,8 +21,14 @@ def failing_model(
     monkeypatch.setattr(agent, "last_error", None)
 
 
+def _make_script(title: str, text: str, tone: str) -> WrittenScript:
+    script = agent.make_script(title, text, tone)
+    assert script is not None
+    return script
+
+
 def test_no_model_configured_writes_offline_script() -> None:
-    script = agent.make_script("Setup", "# Setup\n\nInstall it.", "executive").text
+    script = _make_script("Setup", "# Setup\n\nInstall it.", "executive").text
 
     assert script.startswith("Here's the brief on Setup.")
 
@@ -37,8 +47,25 @@ def test_model_receives_text_with_code_and_urls_made_speakable(
     assert sent.startswith("Read the guide.\n\n[Code example in sh, 1 line.")
 
 
+def test_a_thirty_page_document_reaches_the_model_whole_in_sections(
+    use_script_model: UseScriptModel,
+) -> None:
+    model = RecordingScriptModel()
+    use_script_model(model)
+    page = " ".join(["Each service deploys behind a feature flag."] * 70)
+    text = "\n\n".join(f"## Chapter {number}\n\n{page}" for number in range(30))
+
+    script = _make_script("Handbook", text, "neutral")
+
+    limit = section_limit(load_config().script_max_tokens)
+    assert len(model.script_texts) > 1
+    assert all(len(sent) <= limit for sent in model.script_texts)
+    assert " ".join(model.script_texts).split() == to_spoken_text(text).split()
+    assert len(script.sections) == len(model.script_texts)
+
+
 def test_offline_script_says_a_code_example_instead_of_reading_it() -> None:
-    script = agent.make_script("Setup", "Run:\n\n    make run\n", "neutral").text
+    script = _make_script("Setup", "Run:\n\n    make run\n", "neutral").text
 
     assert "make run" not in script
     assert "code example" in script

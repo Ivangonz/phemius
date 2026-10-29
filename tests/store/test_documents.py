@@ -2,10 +2,12 @@ from pathlib import Path
 
 import pytest
 
+from phemius.store import audio as audio_store
 from phemius.store import database
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
 from phemius.store.documents import NewDocument
+from phemius.store.jobs import JobUsage, ScriptSection
 
 
 @pytest.fixture(autouse=True)
@@ -102,3 +104,22 @@ def test_list_versions_pages_newest_first_with_their_audio() -> None:
 
 def test_list_versions_of_missing_document_is_none() -> None:
     assert document_store.list_versions(999, limit=25, offset=0) is None
+
+
+def test_pruning_a_version_removes_its_audio_sections() -> None:
+    first = document_store.add_document(_document("Install it."))
+    document = document_store.get_document(first.document_id)
+    assert document is not None
+    queued = job_store.enqueue_audio(1, document["version_id"], "teacher", "stub:a")
+    job = job_store.claim_next("writing_script")
+    assert job is not None
+    sections = [ScriptSection("Install", "Install it.")]
+    job_store.finish_script(job, "Install it.", sections, JobUsage(None, None, None))
+    document_store.add_document(_document("Install it with uv."))
+
+    document_store.prune_earlier_versions(first.document_id)
+
+    assert audio_store.get_audio(queued.audio_id) is None
+    with database.transaction() as connection:
+        count = connection.execute("SELECT COUNT(*) FROM audio_sections").fetchone()
+    assert count[0] == 0

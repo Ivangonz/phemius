@@ -4,6 +4,7 @@ The job runner (`services/runner.py`) calls the stages; it runs a single
 narration worker, so synthesis happens one audio at a time.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import structlog
@@ -22,6 +23,12 @@ from phemius.voices import get_engine
 from phemius.voices.wav import wav_duration_seconds
 
 log = structlog.get_logger(__name__)
+
+type StopCheck = Callable[[], bool]
+
+
+def never_stops() -> bool:
+    return False
 
 
 def import_file(
@@ -108,25 +115,40 @@ def _get_document(document_id: int) -> Document:
     return document
 
 
-def write_script(job: ClaimedJob) -> bool:
-    """The `writing_script` stage. False if the job was cancelled meanwhile."""
+def write_script(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
+    """The `writing_script` stage. False if the job was cancelled meanwhile.
+
+    Between sections it stops early, recording nothing, when the job is
+    cancelled or `is_stopping` turns true.
+    """
     source = audio_store.get_script_input(job.audio_id)
     if source is None:
         raise NotFoundError("The document version for this audio no longer exists.")
-    script = agent.make_script(source.title, source.text, source.tone)
+    script = agent.make_script(
+        source.title,
+        source.text,
+        source.tone,
+        source.summary,
+        should_continue=lambda: not is_stopping() and job_store.is_current(job),
+    )
+    if script is None:
+        return False
     usage = job_usage(script.usage, load_config())
     log.info(
         "script_usage",
         job_id=job.id,
+        sections=len(script.sections),
         input_tokens=usage.input_tokens,
         output_tokens=usage.output_tokens,
         cost_usd=usage.cost_usd,
     )
-    return job_store.finish_script(job, script.text, usage)
+    return job_store.finish_script(job, script.text, script.sections, usage)
 
 
-def narrate(job: ClaimedJob) -> bool:
+def narrate(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
     """The `narrating` stage. False if the job was cancelled meanwhile.
+
+    One synthesis call, so there is no point at which to check `is_stopping`.
 
     The job is done with the WAV, or queued for `converting` when another
     output format is set.
@@ -144,7 +166,7 @@ def narrate(job: ClaimedJob) -> bool:
     return False
 
 
-def convert(job: ClaimedJob) -> bool:
+def convert(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
     """The `converting` stage. False if the job was cancelled meanwhile.
 
     A conversion that cannot run keeps the WAV and records why on the audio;
