@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Access Status
+         * @description How the server is reached. The token and its hash are never included.
+         */
+        get: operations["get_access_status_api_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/access/token": {
         parameters: {
             query?: never;
@@ -420,6 +440,18 @@ export interface components {
     schemas: {
         /** @enum {string} */
         AccessMode: "local" | "network" | "proxy";
+        /** AccessStatus */
+        AccessStatus: {
+            active_mode: components["schemas"]["AccessMode"];
+            /** Has Token */
+            has_token: boolean;
+            /** Is Token From Env */
+            is_token_from_env: boolean;
+            /** Is Token Required */
+            is_token_required: boolean;
+            /** Port */
+            port: number | null;
+        };
         /** AccessToken */
         AccessToken: {
             /** Token */
@@ -1029,6 +1061,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_access_status_api_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStatus"];
+                };
+            };
+        };
+    };
     regenerate_token_api_access_token_post: {
         parameters: {
             query?: never;

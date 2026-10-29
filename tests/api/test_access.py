@@ -8,6 +8,7 @@ from structlog.testing import capture_logs
 from phemius.app import create_app
 from phemius.errors import PhemiusError
 from phemius.services import access
+from phemius.store import access as access_store
 from tests.api.test_docs import _upload_sample, _wait_for_audio
 
 
@@ -281,3 +282,63 @@ def test_regenerate_is_refused_while_the_env_token_is_set(
     assert "PHEMIUS_ACCESS_TOKEN" in response.json()["hint"]
     assert ENV_TOKEN not in response.text
     assert still_valid.status_code == 200
+
+
+def test_access_status_reports_local_mode_without_a_token(client: TestClient) -> None:
+    response = client.get("/api/access")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "active_mode": "local",
+        "is_token_required": False,
+        "has_token": False,
+        "is_token_from_env": False,
+        "port": 8000,
+    }
+
+
+def test_access_status_requires_the_token_in_network_mode(
+    anonymous_client: TestClient,
+) -> None:
+    assert anonymous_client.get("/api/access").status_code == 401
+
+
+def test_access_status_never_returns_the_token_or_its_hash(
+    anonymous_client: TestClient, token: str
+) -> None:
+    stored_hash = access_store.read_token_hash()
+
+    response = anonymous_client.get("/api/access", headers=_bearer(token))
+
+    assert response.status_code == 200
+    assert response.json()["active_mode"] == "network"
+    assert response.json()["is_token_required"] is True
+    assert response.json()["has_token"] is True
+    assert response.json()["is_token_from_env"] is False
+    assert token not in response.text
+    assert stored_hash is not None
+    assert stored_hash not in response.text
+
+
+def test_access_status_reports_a_token_from_the_environment(
+    network_mode: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_ACCESS_TOKEN", ENV_TOKEN)
+
+    with TestClient(create_app(), headers=_bearer(ENV_TOKEN)) as test_client:
+        response = test_client.get("/api/access")
+
+    assert response.json()["is_token_from_env"] is True
+    assert response.json()["has_token"] is True
+    assert ENV_TOKEN not in response.text
+
+
+def test_access_status_keeps_the_running_mode_until_restart(
+    client: TestClient,
+) -> None:
+    client.patch("/api/settings", json={"access_mode": "network"})
+
+    response = client.get("/api/access")
+
+    assert response.json()["active_mode"] == "local"
+    assert response.json()["is_token_required"] is False

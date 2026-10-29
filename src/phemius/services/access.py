@@ -34,6 +34,15 @@ class AudioUrlSignature:
 
 
 @dataclass(frozen=True)
+class AccessStatus:
+    # The mode the server started with; a saved change applies on the next start.
+    active_mode: AccessMode
+    is_token_required: bool
+    has_token: bool
+    is_token_from_env: bool
+
+
+@dataclass(frozen=True)
 class BindOptions:
     host: str
     is_proxy_trusted: bool
@@ -78,6 +87,16 @@ def is_loopback_host(host: str) -> bool:
 
 def is_token_required(mode: AccessMode) -> bool:
     return mode != "local"
+
+
+def describe_access(active_mode: AccessMode) -> AccessStatus:
+    """What the Settings screen may know about access. Never the token or hash."""
+    return AccessStatus(
+        active_mode=active_mode,
+        is_token_required=is_token_required(active_mode),
+        has_token=access_store.read_token_hash() is not None,
+        is_token_from_env=read_env(ENV_TOKEN_NAME) is not None,
+    )
 
 
 def prepare_access_token(mode: AccessMode) -> str | None:
