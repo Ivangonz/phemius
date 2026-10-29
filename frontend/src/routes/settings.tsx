@@ -1,17 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Outlet } from "@tanstack/react-router"
 import { PageHeader } from "@/components/PageHeader"
 import { RouteError } from "@/components/RouteError"
+import { SettingsTabs } from "@/components/settings/SettingsTabs"
 
 export const Route = createFileRoute("/settings")({
-  component: SettingsPage,
+  component: SettingsLayout,
   errorComponent: RouteError,
 })
 
-function SettingsPage() {
+function SettingsLayout() {
   return (
-    <PageHeader
-      title="Settings"
-      description="Script model, voice and access settings will appear here."
-    />
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Settings"
+        description="Bring your own model and voice, and run Phemius on your own machine or server."
+      />
+      <SettingsTabs />
+      <Outlet />
+    </div>
   )
 }

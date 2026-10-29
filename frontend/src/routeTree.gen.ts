@@ -14,6 +14,8 @@ import { Route as QueueRouteImport } from './routes/queue'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as DocsDocumentIdRouteImport } from './routes/docs.$documentId'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
+import { Route as SettingsServerRouteImport } from './routes/settings.server'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,42 +42,77 @@ const DocsDocumentIdRoute = DocsDocumentIdRouteImport.update({
   path: '/docs/$documentId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsServerRoute = SettingsServerRouteImport.update({
+  id: '/server',
+  path: '/server',
+  getParentRoute: () => SettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/queue': typeof QueueRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sources': typeof SourcesRoute
   '/docs/$documentId': typeof DocsDocumentIdRoute
+  '/settings/server': typeof SettingsServerRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/queue': typeof QueueRoute
-  '/settings': typeof SettingsRoute
   '/sources': typeof SourcesRoute
   '/docs/$documentId': typeof DocsDocumentIdRoute
+  '/settings/server': typeof SettingsServerRoute
+  '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/queue': typeof QueueRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sources': typeof SourcesRoute
   '/docs/$documentId': typeof DocsDocumentIdRoute
+  '/settings/server': typeof SettingsServerRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/queue' | '/settings' | '/sources' | '/docs/$documentId'
+  fullPaths:
+    | '/'
+    | '/queue'
+    | '/settings'
+    | '/sources'
+    | '/docs/$documentId'
+    | '/settings/server'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/queue' | '/settings' | '/sources' | '/docs/$documentId'
+  to:
+    | '/'
+    | '/queue'
+    | '/sources'
+    | '/docs/$documentId'
+    | '/settings/server'
+    | '/settings'
   id:
-    '__root__' | '/' | '/queue' | '/settings' | '/sources' | '/docs/$documentId'
+    | '__root__'
+    | '/'
+    | '/queue'
+    | '/settings'
+    | '/sources'
+    | '/docs/$documentId'
+    | '/settings/server'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   QueueRoute: typeof QueueRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SourcesRoute: typeof SourcesRoute
   DocsDocumentIdRoute: typeof DocsDocumentIdRoute
 }
@@ -117,13 +154,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsDocumentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/server': {
+      id: '/settings/server'
+      path: '/server'
+      fullPath: '/settings/server'
+      preLoaderRoute: typeof SettingsServerRouteImport
+      parentRoute: typeof SettingsRoute
+    }
   }
 }
+
+interface SettingsRouteChildren {
+  SettingsServerRoute: typeof SettingsServerRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsServerRoute: SettingsServerRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   QueueRoute: QueueRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SourcesRoute: SourcesRoute,
   DocsDocumentIdRoute: DocsDocumentIdRoute,
 }
