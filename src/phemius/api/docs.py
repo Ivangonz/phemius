@@ -1,12 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, File, Path, Query, Response, UploadFile, status
 from pydantic import BaseModel
 
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
 from phemius.errors import InvalidInputError, NotFoundError
 from phemius.models.prompts import TONES
-from phemius.services import pipeline
+from phemius.services import documents, pipeline
 from phemius.services.uploads import UploadResult, import_upload
 from phemius.store import document_list
 from phemius.store import documents as document_store
@@ -19,6 +19,11 @@ from phemius.store.document_list import (
 from phemius.store.documents import Document, VersionSummary
 
 router = APIRouter(prefix="/api/docs", tags=["docs"])
+
+# SQLite's largest integer; a larger id would overflow in the store, not 404.
+MAX_ID = 2**63 - 1
+
+type DocumentId = Annotated[int, Path(ge=1, le=MAX_ID)]
 
 
 class AudioRequest(BaseModel):
@@ -57,16 +62,23 @@ def upload_documents(
 
 
 @router.get("/{document_id}")
-def get_document(document_id: int) -> Document:
+def get_document(document_id: DocumentId) -> Document:
     document = document_store.get_document(document_id)
     if document is None:
         raise NotFoundError(f"Document {document_id} not found")
     return document
 
 
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(document_id: DocumentId) -> Response:
+    """Delete a document with its versions, audio files and waiting jobs."""
+    documents.delete_document(document_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/{document_id}/versions")
 def list_versions(
-    document_id: int, limit: Limit = DEFAULT_PAGE_SIZE, offset: Offset = 0
+    document_id: DocumentId, limit: Limit = DEFAULT_PAGE_SIZE, offset: Offset = 0
 ) -> Page[VersionSummary]:
     page = document_store.list_versions(document_id, limit, offset)
     if page is None:
@@ -75,7 +87,7 @@ def list_versions(
 
 
 @router.post("/{document_id}/audio")
-def create_audio(document_id: int, request: AudioRequest) -> AudioCreated:
+def create_audio(document_id: DocumentId, request: AudioRequest) -> AudioCreated:
     if request.tone and request.tone not in TONES:
         raise InvalidInputError(
             f"Unknown tone; choose from {list(TONES)}", field="tone"

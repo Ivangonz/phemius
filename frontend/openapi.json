@@ -3002,6 +3002,42 @@
       }
     },
     "/api/docs/{document_id}": {
+      "delete": {
+        "description": "Delete a document with its versions, audio files and waiting jobs.",
+        "operationId": "delete_document_api_docs__document_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Document",
+        "tags": [
+          "docs"
+        ]
+      },
       "get": {
         "operationId": "get_document_api_docs__document_id__get",
         "parameters": [
@@ -3010,6 +3046,8 @@
             "name": "document_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Document Id",
               "type": "integer"
             }
@@ -3052,6 +3090,8 @@
             "name": "document_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Document Id",
               "type": "integer"
             }
@@ -3104,6 +3144,8 @@
             "name": "document_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Document Id",
               "type": "integer"
             }
