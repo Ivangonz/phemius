@@ -371,3 +371,21 @@ def test_existing_documents_have_no_source_and_sources_start_empty(
     assert document is not None
     assert (document["title"], document["source_id"]) == ("Guide", None)
     assert source_store.all_sources() == []
+
+
+def test_existing_audio_has_no_sections_and_keeps_its_script(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS[5:11]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=11")
+    connection.close()
+
+    database.init_database(db_path)
+
+    audio = audio_store.get_audio(1)
+    assert audio is not None
+    assert (audio["script"], audio["section_titles"]) == ("Script.", [])

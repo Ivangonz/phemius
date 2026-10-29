@@ -45,6 +45,7 @@ def test_upload_then_generate_audio_with_stub_engine(client: TestClient) -> None
     assert audio["status"] == "done", audio["error"]
     assert audio["voice"] == "stub:silent"
     assert audio["script"]
+    assert audio["section_titles"] == ["Deploying the Billing Service"]
     assert audio_file.status_code == 200
     assert audio_file.headers["content-type"] == "audio/wav"
     assert (audio["format"], audio["conversion_note"]) == ("wav", None)
@@ -281,6 +282,7 @@ def test_versions_include_their_audio(client: TestClient) -> None:
 
     [version] = page["items"]
     assert [item["id"] for item in version["audio"]] == [audio["id"]]
+    assert version["audio"][0]["section_titles"] == audio["section_titles"]
     assert page["limit"] == 25
 
 

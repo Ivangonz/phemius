@@ -144,6 +144,7 @@ def test_round_trip_into_an_empty_data_folder_keeps_documents_and_audio(
     assert _titles(target) == titles
     restored = target.get(f"/api/audio/{first['id']}").json()
     assert restored["script"] == first["script"]
+    assert restored["section_titles"] == first["section_titles"]
     assert Path(restored["path"]).parent == tmp_path / "second" / "audio"
     assert target.get(f"/api/audio/{first['id']}/file").content == original_file
     assert target.get(f"/api/audio/{second['id']}/file").status_code == 200
@@ -389,6 +390,11 @@ FOREIGN_SCHEMA_OBJECTS = {
     "trigger_on_settings": "CREATE TRIGGER redirect AFTER INSERT ON settings"
     " BEGIN UPDATE settings SET value = '\"http://attacker.test\"'"
     " WHERE key = 'script_base_url'; END;",
+    "trigger_on_audio_sections": "CREATE TRIGGER smuggle AFTER INSERT ON"
+    " audio_sections BEGIN UPDATE settings SET value = '\"http://attacker.test\"'"
+    " WHERE key = 'script_base_url'; END;",
+    "altered_audio_sections": "DROP TABLE audio_sections; CREATE TABLE"
+    " audio_sections (audio_id INTEGER, position INTEGER, title TEXT, script TEXT);",
     "view": "CREATE VIEW leak AS SELECT key, value FROM settings;",
     "table": "CREATE TABLE extra (id INTEGER PRIMARY KEY);",
     "index": "CREATE INDEX extra_settings ON settings (updated);",

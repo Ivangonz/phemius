@@ -14,6 +14,7 @@ import structlog
 from phemius.config import load_config
 from phemius.errors import PhemiusError
 from phemius.services import maintenance, pipeline, queue
+from phemius.services.pipeline import StopCheck, never_stops
 from phemius.store import jobs as job_store
 from phemius.store.jobs import ClaimedJob, JobStage
 
@@ -23,7 +24,8 @@ log = structlog.get_logger(__name__)
 POLL_SECONDS = 1.0
 STOP_TIMEOUT_SECONDS = 5.0
 
-type StageHandler = Callable[[ClaimedJob], bool]
+# A handler that loops checks the stop check between items.
+type StageHandler = Callable[[ClaimedJob, StopCheck], bool]
 
 STAGE_HANDLERS: dict[JobStage, StageHandler] = {
     "writing_script": pipeline.write_script,
@@ -59,7 +61,7 @@ class JobRunner:
         while not self._is_stopping.is_set():
             seen_count = queue.work_signal.count
             try:
-                has_run = run_next(stage)
+                has_run = run_next(stage, self._is_stopping.is_set)
             except Exception as error:  # a busy or broken library must not kill it
                 log.error(
                     "job_runner_error", stage=stage, error_type=type(error).__name__
@@ -81,7 +83,7 @@ def start_runner() -> JobRunner:
     return runner
 
 
-def run_next(stage: JobStage) -> bool:
+def run_next(stage: JobStage, is_stopping: StopCheck = never_stops) -> bool:
     """Run the oldest job waiting for `stage`. False when there was none.
 
     Nothing is claimed while a library operation (backup, restore, delete all
@@ -91,14 +93,14 @@ def run_next(stage: JobStage) -> bool:
         job = job_store.claim_next(stage) if is_allowed else None
         if job is None:
             return False
-        run_stage(job)
+        run_stage(job, is_stopping)
         return True
 
 
-def run_stage(job: ClaimedJob) -> None:
+def run_stage(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> None:
     log.info("job_started", job_id=job.id, stage=job.stage, attempt=job.attempt)
     try:
-        is_current = STAGE_HANDLERS[job.stage](job)
+        is_current = STAGE_HANDLERS[job.stage](job, is_stopping)
     except Exception as error:  # stored on the job and shown in the queue
         message, hint = _error_parts(error)
         job_store.fail_job(job, message, hint)

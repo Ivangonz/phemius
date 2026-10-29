@@ -39,7 +39,7 @@ def _write_script(cost_usd: float | None) -> None:
     job_store.enqueue_audio(1, document["version_id"], "teacher", "stub:silent")
     job = job_store.claim_next("writing_script")
     assert job is not None
-    job_store.finish_script(job, "Script.", JobUsage(100, 50, cost_usd))
+    job_store.finish_script(job, "Script.", [], JobUsage(100, 50, cost_usd))
 
 
 def _narrate(duration_seconds: float) -> None:

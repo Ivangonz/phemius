@@ -319,6 +319,24 @@ def _add_sources(connection: sqlite3.Connection) -> None:
         connection.execute(statement)
 
 
+def _add_audio_sections(connection: sqlite3.Connection) -> None:
+    """The sections a script was written in, in order; they go with their audio.
+
+    `audio.script` stays the joined text, so narration and older readers work.
+    """
+    connection.execute(
+        """
+        CREATE TABLE audio_sections (
+            audio_id INTEGER NOT NULL REFERENCES audio (id) ON DELETE CASCADE,
+            position INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            script TEXT NOT NULL,
+            PRIMARY KEY (audio_id, position)
+        )
+        """
+    )
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -331,6 +349,7 @@ MIGRATIONS: list[Migration] = [
     _add_audio_suitability,
     _add_script_usage_and_audio_duration,
     _add_sources,
+    _add_audio_sections,
 ]
 
 

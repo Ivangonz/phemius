@@ -667,6 +667,8 @@ export interface components {
             path: string | null;
             /** Script */
             script: string | null;
+            /** Section Titles */
+            section_titles: string[];
             /** Size Bytes */
             size_bytes: number | null;
             stage: components["schemas"]["JobStage"];
@@ -711,6 +713,8 @@ export interface components {
             id: number;
             /** Job Id */
             job_id: number;
+            /** Section Titles */
+            section_titles: string[];
             stage: components["schemas"]["JobStage"];
             status: components["schemas"]["JobState"];
             /** Tone */

@@ -13,6 +13,7 @@ was cancelled mid-call and finishes late cannot overwrite the new attempt.
 
 import sqlite3
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from typing import Literal, TypedDict, cast
 
@@ -84,6 +85,12 @@ class JobUsage:
     input_tokens: int | None
     output_tokens: int | None
     cost_usd: float | None
+
+
+@dataclass(frozen=True)
+class ScriptSection:
+    title: str
+    script: str
 
 
 @dataclass(frozen=True)
@@ -168,9 +175,22 @@ def claim_next(stage: JobStage) -> ClaimedJob | None:
     return ClaimedJob(row["id"], row["audio_id"], row["stage"], row["attempts"])
 
 
-def finish_script(job: ClaimedJob, script: str, usage: JobUsage) -> bool:
-    """Save the script and its usage, and queue the job for narration.
+def is_current(job: ClaimedJob) -> bool:
+    """False once the job was cancelled, or retried as a newer attempt."""
+    with transaction() as connection:
+        row = connection.execute(
+            "SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND attempts = ?",
+            (job.id, job.attempt),
+        ).fetchone()
+    return row is not None
 
+
+def finish_script(
+    job: ClaimedJob, script: str, sections: Sequence[ScriptSection], usage: JobUsage
+) -> bool:
+    """Save the script, its sections and usage, and queue the job for narration.
+
+    Replaces any sections the audio had, so a rerun never duplicates them.
     False if superseded.
     """
     with transaction() as connection:
@@ -185,6 +205,17 @@ def finish_script(job: ClaimedJob, script: str, usage: JobUsage) -> bool:
             return False
         connection.execute(
             "UPDATE audio SET script = ? WHERE id = ?", (script, job.audio_id)
+        )
+        connection.execute(
+            "DELETE FROM audio_sections WHERE audio_id = ?", (job.audio_id,)
+        )
+        connection.executemany(
+            "INSERT INTO audio_sections (audio_id, position, title, script)"
+            " VALUES (?, ?, ?, ?)",
+            [
+                (job.audio_id, position, section.title, section.script)
+                for position, section in enumerate(sections)
+            ],
         )
     return True
 

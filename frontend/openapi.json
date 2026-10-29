@@ -225,6 +225,13 @@
             ],
             "title": "Script"
           },
+          "section_titles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Section Titles",
+            "type": "array"
+          },
           "size_bytes": {
             "anyOf": [
               {
@@ -286,7 +293,8 @@
           "status",
           "stage",
           "error",
-          "hint"
+          "hint",
+          "section_titles"
         ],
         "title": "Audio",
         "type": "object"
@@ -398,6 +406,13 @@
             "title": "Job Id",
             "type": "integer"
           },
+          "section_titles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Section Titles",
+            "type": "array"
+          },
           "stage": {
             "$ref": "#/components/schemas/JobStage"
           },
@@ -440,7 +455,8 @@
           "status",
           "stage",
           "error",
-          "hint"
+          "hint",
+          "section_titles"
         ],
         "title": "AudioSummary",
         "type": "object"
