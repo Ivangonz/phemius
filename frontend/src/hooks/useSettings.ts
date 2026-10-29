@@ -7,6 +7,8 @@ export type SettingsOverview = components["schemas"]["SettingsOverview"]
 export type SettingsUpdate = components["schemas"]["Settings"]
 
 export const settingsQueryKey = ["settings"] as const
+// Anything read from the configured providers changes with the settings.
+export const modelsQueryKey = ["models"] as const
 
 export function useSettings() {
   return useQuery({
@@ -21,10 +23,13 @@ export function useUpdateSettings() {
   return useMutation({
     mutationFn: (update: SettingsUpdate) =>
       api.patch<SettingsOverview>("/settings", update),
+    onSuccess: (overview) =>
+      queryClient.setQueryData(settingsQueryKey, overview),
     onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: settingsQueryKey }),
-        queryClient.invalidateQueries({ queryKey: libraryConfigQueryKey }),
-      ]),
+      Promise.all(
+        [settingsQueryKey, libraryConfigQueryKey, modelsQueryKey].map(
+          (queryKey) => queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
   })
 }
