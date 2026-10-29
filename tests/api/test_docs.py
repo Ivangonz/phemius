@@ -5,10 +5,12 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from phemius.services.maintenance import JOB_RUNNING_HINT
 from phemius.store import documents as document_store
 from phemius.store.documents import NewDocument
 from phemius.voices import ENGINES
 from tests.models.fakes import FailingScriptModel, FakeScriptModel, UseScriptModel
+from tests.services.test_runner import BlockingScriptModel
 
 SAMPLES = Path(__file__).parents[2] / "samples"
 
@@ -389,3 +391,101 @@ def test_unknown_document_order_returns_standard_validation_error(
     assert response.status_code == 422
     assert body["code"] == "validation_error"
     assert [error["field"] for error in body["errors"]] == ["order_by"]
+
+
+def _narrated_upload(client: TestClient, name: str, text: str) -> dict[str, Any]:
+    uploaded = _upload_text(client, name, text)
+    created = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    audio = _wait_for_audio(client, created.json()["audio_id"])
+    assert audio["status"] == "done", audio["error"]
+    return audio
+
+
+def test_deleting_a_document_removes_its_versions_audio_and_files(
+    client: TestClient,
+) -> None:
+    first = _narrated_upload(client, "guide.md", "# Guide\n\nInstall with pip.")
+    second = _narrated_upload(client, "guide.md", "# Guide\n\nInstall with uv.")
+    kept = _upload_text(client, "notes.md", "# Notes\n\nStandup.")
+
+    response = client.delete(f"/api/docs/{first['doc_id']}")
+
+    assert response.status_code == 204
+    listed = client.get("/api/docs").json()["items"]
+    assert [item["id"] for item in listed] == [kept["doc_id"]]
+    assert client.get(f"/api/docs/{first['doc_id']}").status_code == 404
+    for audio in (first, second):
+        assert client.get(f"/api/audio/{audio['id']}").status_code == 404
+        assert not Path(audio["path"]).exists()
+    assert client.get("/api/queue").json()["total"] == 0
+
+
+def test_a_missing_audio_file_does_not_fail_the_delete(client: TestClient) -> None:
+    audio = _narrated_upload(client, "guide.md", "# Guide\n\nInstall it.")
+    Path(audio["path"]).unlink()
+
+    response = client.delete(f"/api/docs/{audio['doc_id']}")
+
+    assert response.status_code == 204
+    assert client.get("/api/docs").json()["total"] == 0
+
+
+def test_waiting_jobs_go_with_the_document(client: TestClient) -> None:
+    client.post("/api/queue/pause")
+    uploaded = _upload_text(client, "guide.md", "# Guide\n\nInstall it.")
+    queued = client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={}).json()
+
+    response = client.delete(f"/api/docs/{uploaded['doc_id']}")
+
+    assert response.status_code == 204
+    assert client.get("/api/queue").json()["total"] == 0
+    assert client.get(f"/api/audio/{queued['audio_id']}").status_code == 404
+
+
+def test_a_document_with_a_running_job_is_not_deleted(
+    client: TestClient, blocking_model: BlockingScriptModel
+) -> None:
+    uploaded = _upload_text(client, "guide.md", "# Guide\n\nInstall it.")
+    client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    assert blocking_model.is_writing.wait(timeout=5)
+
+    response = client.delete(f"/api/docs/{uploaded['doc_id']}")
+
+    assert response.status_code == 409
+    body = response.json()
+    assert (body["code"], body["hint"]) == ("document_busy", JOB_RUNNING_HINT)
+    assert client.get(f"/api/docs/{uploaded['doc_id']}").status_code == 200
+
+
+def test_deleting_an_unknown_document_is_not_found(client: TestClient) -> None:
+    response = client.delete("/api/docs/999")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Document 999 not found", "code": "not_found"}
+
+
+@pytest.mark.parametrize("document_id", ["abc", "0", "-1", "1.5", str(2**63), "9" * 40])
+def test_malformed_document_ids_are_rejected(
+    client: TestClient, document_id: str
+) -> None:
+    for response in (
+        client.delete(f"/api/docs/{document_id}"),
+        client.get(f"/api/docs/{document_id}"),
+    ):
+        assert response.status_code == 422
+        assert response.json()["code"] == "validation_error"
+
+
+def test_deleting_needs_the_token_in_network_mode(network_client: TestClient) -> None:
+    assert network_client.delete("/api/docs/1").status_code == 401
+
+
+def test_a_cross_site_request_cannot_delete_a_document(client: TestClient) -> None:
+    uploaded = _upload_text(client, "guide.md", "# Guide\n\nInstall it.")
+
+    response = client.delete(
+        f"/api/docs/{uploaded['doc_id']}", headers={"Sec-Fetch-Site": "cross-site"}
+    )
+
+    assert response.status_code == 403
+    assert client.get("/api/docs").json()["total"] == 1

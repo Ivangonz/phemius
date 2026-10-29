@@ -58,6 +58,13 @@ class JobStateError(PhemiusError):
     status_code = 409
 
 
+class DocumentBusyError(PhemiusError):
+    """A document cannot change while one of its jobs is running."""
+
+    code = "document_busy"
+    status_code = 409
+
+
 class LibraryBusyError(PhemiusError):
     """A whole-library operation cannot run while jobs or another one are running."""
 

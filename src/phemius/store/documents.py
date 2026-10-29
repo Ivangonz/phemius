@@ -6,7 +6,7 @@ A document's fields (title, text, category...) are those of its latest version.
 import hashlib
 import sqlite3
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, TypedDict, cast
 
 from phemius.models.base import AudioSuitability, SuitabilitySource
@@ -14,6 +14,7 @@ from phemius.store.audio import AUDIO_JOB_COLUMNS, AudioSummary, section_titles
 from phemius.store.database import transaction
 
 type SaveOutcome = Literal["created", "new_version", "unchanged"]
+type DeleteOutcome = Literal["deleted", "missing", "job_running"]
 
 # None for versions analyzed before suitability existed: unknown, not judged.
 _SUITABILITY_COLUMNS = (
@@ -212,6 +213,56 @@ WHERE v.doc_id = :doc
         WHERE a.version_id = v.id AND j.state = 'running'
     )
 """
+
+
+@dataclass(frozen=True)
+class DeletedDocument:
+    outcome: DeleteOutcome
+    # Files to remove once the delete has committed.
+    audio_paths: list[str] = field(default_factory=list)
+
+
+_DOCUMENT_AUDIO = (
+    "SELECT id FROM audio WHERE doc_id = :doc"
+    " OR version_id IN (SELECT id FROM doc_versions WHERE doc_id = :doc)"
+)
+_DOCUMENT_JOBS = (
+    f"FROM jobs WHERE (audio_id IN ({_DOCUMENT_AUDIO})"
+    " OR version_id IN (SELECT id FROM doc_versions WHERE doc_id = :doc))"
+)
+_RUNNING_DOCUMENT_JOB = f"SELECT 1 {_DOCUMENT_JOBS} AND state = 'running' LIMIT 1"
+_DELETE_DOCUMENT_STATEMENTS = [
+    f"DELETE {_DOCUMENT_JOBS}",
+    f"DELETE FROM audio WHERE id IN ({_DOCUMENT_AUDIO})",
+    "DELETE FROM doc_versions WHERE doc_id = :doc",
+    "DELETE FROM docs WHERE id = :doc",
+]
+
+
+def delete_document(document_id: int) -> DeletedDocument:
+    """Delete a document with its versions, audio and jobs, unless one of its
+    jobs is running.
+
+    The running check shares the write lock with the delete, so no worker can
+    claim a job in between.
+    """
+    with transaction(is_immediate=True) as connection:
+        document = connection.execute(
+            "SELECT 1 FROM docs WHERE id = ?", (document_id,)
+        ).fetchone()
+        if document is None:
+            return DeletedDocument("missing")
+        parameters = {"doc": document_id}
+        if connection.execute(_RUNNING_DOCUMENT_JOB, parameters).fetchone():
+            return DeletedDocument("job_running")
+        paths = connection.execute(
+            f"SELECT path FROM audio WHERE id IN ({_DOCUMENT_AUDIO})"
+            " AND path IS NOT NULL",
+            parameters,
+        ).fetchall()
+        for statement in _DELETE_DOCUMENT_STATEMENTS:
+            connection.execute(statement, parameters)
+    return DeletedDocument("deleted", [row["path"] for row in paths])
 
 
 def _audio_summaries(
