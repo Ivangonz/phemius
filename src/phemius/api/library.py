@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from phemius.services import backup, library, restore
-from phemius.services.restore import BackupSummary
+from phemius.services.restore import BackupSummary, RestoreResult
 
 router = APIRouter(prefix="/api/library", tags=["library"])
 
@@ -47,7 +47,8 @@ def inspect_backup(file: Annotated[UploadFile, File()]) -> BackupSummary:
 
 
 @router.post("/restore")
-def restore_library(file: Annotated[UploadFile, File()]) -> BackupSummary:
+def restore_library(file: Annotated[UploadFile, File()]) -> RestoreResult:
     """Replace the library with a backup's. This installation's API keys,
-    access token and access mode are kept."""
+    access token, endpoints, provider, voice engine, access mode and watched
+    folder are kept. The queue is paused so restored jobs wait for Resume."""
     return restore.restore_backup(file.file)

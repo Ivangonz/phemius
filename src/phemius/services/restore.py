@@ -54,9 +54,19 @@ DISK_HEADROOM_BYTES = 100 * 1024**2
 AUDIO_MEMBER = re.compile(
     rf"{SNAPSHOT_AUDIO_DIR}/([A-Za-z0-9_-][A-Za-z0-9._-]{{0,254}})"
 )
-# Kept from this installation, like the secrets: restoring someone's library
-# must not open this server to the network on the next start.
-INSTALLATION_SETTINGS = ["access_mode"]
+# Kept from this installation, like the secrets. The endpoints and the
+# provider and engine choose where this installation's keys are sent, so an
+# archive must not redirect them; the access mode must not open this server to
+# the network on the next start; a watched folder is a path on this machine.
+INSTALLATION_SETTINGS = [
+    "access_mode",
+    "script_provider",
+    "script_base_url",
+    "ollama_url",
+    "voice_engine",
+    "openai_speech_base_url",
+    "watch_dir",
+]
 
 DAMAGED_HINT = "Download a new backup from Settings and try again."
 
@@ -71,6 +81,12 @@ class BackupSummary(BaseModel):
     versions: int
     audio: int
     audio_files: int
+    queued_jobs: int
+
+
+class RestoreResult(BackupSummary):
+    # Always true: a restore pauses the queue so restored jobs wait for Resume.
+    is_queue_paused: bool
 
 
 @dataclass(frozen=True)
@@ -86,9 +102,10 @@ def inspect_backup(archive: BinaryIO) -> BackupSummary:
         return staged.summary
 
 
-def restore_backup(archive: BinaryIO) -> BackupSummary:
+def restore_backup(archive: BinaryIO) -> RestoreResult:
     """Replace the library with an archive's, keeping this installation's
-    secrets, access token and access mode."""
+    secrets, access token and `INSTALLATION_SETTINGS`. The restored queue is
+    paused."""
     config = load_config()
     with maintenance.gate.exclusive():
         with _staged(archive, config.data_dir) as (staged, work):
@@ -101,7 +118,7 @@ def restore_backup(archive: BinaryIO) -> BackupSummary:
             )
             _swap_in(staged, config, work)
     log.info("library_restored", documents=staged.summary.documents)
-    return staged.summary
+    return RestoreResult(**staged.summary.model_dump(), is_queue_paused=True)
 
 
 @contextmanager
@@ -137,6 +154,7 @@ def _unpack(archive: BinaryIO, work: Path) -> StagedLibrary:
         versions=counts.versions,
         audio=counts.audio,
         audio_files=len(members) - 2,
+        queued_jobs=counts.queued_jobs,
     )
     return StagedLibrary(db_path, staged_audio, summary)
 
@@ -214,6 +232,11 @@ def _check_database(db_path: Path) -> int:
         raise _made_by_newer_version()
     if schema_version < 1:
         raise _not_a_backup("Its database holds no library.")
+    foreign = backup_store.foreign_schema_objects(db_path, schema_version)
+    if foreign:
+        raise _not_a_backup(
+            f"Its database holds objects Phemius did not create: {', '.join(foreign)}."
+        )
     return schema_version
 
 

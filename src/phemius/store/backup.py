@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from phemius.store.jobs import INTERRUPTED_HINT, INTERRUPTED_MESSAGE
-from phemius.store.migrations import run_migrations
+from phemius.store.migrations import MIGRATIONS, run_migrations
 
 # In a snapshot, audio paths are relative to the library folder, so an archive
 # neither reveals nor depends on where the library it came from lived.
@@ -28,12 +28,19 @@ class LibraryCounts:
     documents: int
     versions: int
     audio: int
+    queued_jobs: int
+
+
+type SchemaObject = tuple[str, str, str]
 
 
 @contextmanager
 def _open(path: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(path)
     connection.row_factory = sqlite3.Row
+    # A snapshot may come from an uploaded archive: its triggers and views must
+    # not run functions with side effects.
+    connection.execute("PRAGMA trusted_schema=OFF")
     try:
         yield connection
     finally:
@@ -85,6 +92,9 @@ def count_library(path: Path) -> LibraryCounts:
             documents=_count(connection, "docs"),
             versions=_count(connection, "doc_versions"),
             audio=_count(connection, "audio"),
+            queued_jobs=connection.execute(
+                "SELECT COUNT(*) FROM jobs WHERE state = 'queued'"
+            ).fetchone()[0],
         )
 
 
@@ -113,6 +123,31 @@ def read_schema_version(path: Path) -> int:
     return version
 
 
+def foreign_schema_objects(path: Path, schema_version: int) -> list[str]:
+    """Names of schema objects a library migrated to `schema_version` lacks.
+
+    A restored database replaces the live one wholesale, so a crafted archive
+    could otherwise bring a trigger or view that rewrites settings on a later
+    write. Objects are compared by type, name and SQL with whitespace collapsed.
+    """
+    with _open(path) as connection:
+        archived = _schema_objects(connection)
+    reference = sqlite3.connect(":memory:")
+    try:
+        for migration in MIGRATIONS[:schema_version]:
+            with reference:
+                migration(reference)
+        expected = _schema_objects(reference)
+    finally:
+        reference.close()
+    return sorted({name for _type, name, _sql in archived - expected})
+
+
+def _schema_objects(connection: sqlite3.Connection) -> set[SchemaObject]:
+    rows = connection.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+    return {(row[0], row[1], " ".join((row[2] or "").split())) for row in rows}
+
+
 def prepare_restore(
     path: Path,
     staged_audio_dir: Path,
@@ -134,6 +169,9 @@ def prepare_restore(
         with connection:
             _relocate_audio(connection, audio_dir)
             _fail_running_jobs(connection)
+            # Queued work waits for the user, who may not want a restored
+            # library to spend model credits on this machine straight away.
+            connection.execute("UPDATE queue SET is_paused = 1")
             _apply_installation(connection, installation)
         # A WAL-mode database can only be replaced by one of the same page size.
         connection.execute(f"PRAGMA page_size={int(page_size)}")

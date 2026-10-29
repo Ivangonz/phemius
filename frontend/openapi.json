@@ -377,6 +377,10 @@
             "title": "Documents",
             "type": "integer"
           },
+          "queued_jobs": {
+            "title": "Queued Jobs",
+            "type": "integer"
+          },
           "schema_version": {
             "title": "Schema Version",
             "type": "integer"
@@ -393,7 +397,8 @@
           "documents",
           "versions",
           "audio",
-          "audio_files"
+          "audio_files",
+          "queued_jobs"
         ],
         "title": "BackupSummary",
         "type": "object"
@@ -1237,6 +1242,60 @@
           "is_paused"
         ],
         "title": "QueueStatus",
+        "type": "object"
+      },
+      "RestoreResult": {
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "audio": {
+            "title": "Audio",
+            "type": "integer"
+          },
+          "audio_files": {
+            "title": "Audio Files",
+            "type": "integer"
+          },
+          "created": {
+            "format": "date-time",
+            "title": "Created",
+            "type": "string"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "is_queue_paused": {
+            "title": "Is Queue Paused",
+            "type": "boolean"
+          },
+          "queued_jobs": {
+            "title": "Queued Jobs",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "versions": {
+            "title": "Versions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app_version",
+          "created",
+          "schema_version",
+          "documents",
+          "versions",
+          "audio",
+          "audio_files",
+          "queued_jobs",
+          "is_queue_paused"
+        ],
+        "title": "RestoreResult",
         "type": "object"
       },
       "SecretStatus": {
@@ -2566,7 +2625,7 @@
     },
     "/api/library/restore": {
       "post": {
-        "description": "Replace the library with a backup's. This installation's API keys,\naccess token and access mode are kept.",
+        "description": "Replace the library with a backup's. This installation's API keys,\naccess token, endpoints, provider, voice engine, access mode and watched\nfolder are kept. The queue is paused so restored jobs wait for Resume.",
         "operationId": "restore_library_api_library_restore_post",
         "requestBody": {
           "content": {
@@ -2583,7 +2642,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BackupSummary"
+                  "$ref": "#/components/schemas/RestoreResult"
                 }
               }
             },

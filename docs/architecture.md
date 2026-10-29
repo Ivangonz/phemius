@@ -156,25 +156,36 @@ S7 backs up, restores and deletes all audio through `/api/library`
   absolute or hidden names, no repeats), at most 100,000 members and 50 GB
   unpacked, enough free disk space, a manifest with the `phemius-backup` format
   and a known `format_version`, an intact database with a schema no newer than
-  this version's. Anything else is a 400 `invalid_backup` with a hint. It
+  this version's, and no schema object (table, index, trigger or view) that a
+  new library migrated to the same schema version would not have. That last
+  check compares type, name and SQL with whitespace collapsed against a
+  reference built in memory from `MIGRATIONS`. Without it, a crafted archive
+  could bring a trigger that rewrites settings on a later write. Every
+  connection to an unpacked database runs with `PRAGMA trusted_schema=OFF`.
+  Anything else is a 400 `invalid_backup` with a hint. It
   unpacks into an owner-only `.restore-*` folder in the library folder (files
   `0600`, `audio/` `0700`, so restored files have the library's permissions),
-  runs migrations there, fails any `running` job as interrupted, and points
-  audio paths at the live `audio/`. Then it swaps: the live `audio/` is renamed
+  runs migrations there, fails any `running` job as interrupted, pauses the
+  queue, and points audio paths at the live `audio/`. Then it swaps: the live `audio/` is renamed
   aside, the restored one renamed in, and the database replaced with SQLite's
   backup API, which copies it in one write transaction. If that fails, the
   audio folders are renamed back, so the previous library is untouched until
   the swap succeeds. A server stopped mid-swap leaves the previous audio in the
   `.restore-*` folder, so startup does not delete those.
-- **What a restore keeps.** API keys, the access token hash and the access
-  mode belong to the installation, not the library: an archive never carries
-  them, and a restore keeps the current ones, so a server in `network` mode
-  keeps accepting the same token.
+- **What a restore keeps.** These belong to the installation, not the library:
+  API keys, the access token hash, `access_mode`, `script_provider`,
+  `script_base_url`, `ollama_url`, `voice_engine`, `openai_speech_base_url` and
+  `watch_dir`. An archive's values for them are ignored, and a restore keeps
+  the current ones. So a server in `network` mode keeps accepting the same
+  token, a restored endpoint cannot receive this installation's keys, and a
+  folder path from another machine is not watched here.
+- **The queue is paused after a restore.** The restore response reports
+  `is_queue_paused` (always true) and `queued_jobs`, so the UI can offer
+  Resume, and restored jobs never spend model credits unasked.
 - **Running app during a restore.** Store connections are opened per
   transaction, so there is no pool to reset: the first transaction after the
   swap reads the restored library. Workers claim nothing while the gate is
-  closed and resume, with the restored queue (including its queued jobs and
-  pause flag), when it opens. A document imported by an upload or the watched
+  closed. When it opens they find the restored queue paused. A document imported by an upload or the watched
   folder during a restore lands in whichever library is live at that moment.
 - **Delete all audio** (`DELETE /api/library/audio`) removes every audio file
   but keeps documents, versions and scripts. The script lives on the audio row,

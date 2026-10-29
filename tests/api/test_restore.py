@@ -2,6 +2,7 @@ import io
 import json
 import sqlite3
 import stat
+import tempfile
 import zipfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -17,6 +18,7 @@ from phemius.store import database
 from phemius.store import settings as settings_store
 from phemius.store.migrations import MIGRATIONS
 from tests.api.test_access import _bearer
+from tests.api.test_docs import _upload_sample
 from tests.api.test_library import (
     SECRET,
     _download_backup,
@@ -363,3 +365,101 @@ def test_restore_requires_the_token_in_network_mode(
     response = _restore(network_client, b"anything", path)
 
     assert response.status_code == 401
+
+
+def _with_database_change(sql: str) -> ChangeMembers:
+    def change(members: dict[str, bytes]) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            db_path = Path(work) / "library.db"
+            db_path.write_bytes(members["library.db"])
+            connection = sqlite3.connect(db_path)
+            with connection:
+                connection.executescript(sql)
+            connection.close()
+            members["library.db"] = db_path.read_bytes()
+
+    return change
+
+
+FOREIGN_SCHEMA_OBJECTS = {
+    "trigger_on_settings": "CREATE TRIGGER redirect AFTER INSERT ON settings"
+    " BEGIN UPDATE settings SET value = '\"http://attacker.test\"'"
+    " WHERE key = 'script_base_url'; END;",
+    "view": "CREATE VIEW leak AS SELECT key, value FROM settings;",
+    "table": "CREATE TABLE extra (id INTEGER PRIMARY KEY);",
+    "index": "CREATE INDEX extra_settings ON settings (updated);",
+}
+
+
+@pytest.mark.parametrize(
+    "sql", FOREIGN_SCHEMA_OBJECTS.values(), ids=FOREIGN_SCHEMA_OBJECTS
+)
+def test_archive_with_foreign_schema_objects_is_rejected(
+    client: TestClient, backup_bytes: bytes, sql: str
+) -> None:
+    client.patch("/api/settings", json={"script_base_url": "http://mine.test/v1"})
+    titles = _titles(client)
+
+    response = _restore(client, _rebuilt(backup_bytes, _with_database_change(sql)))
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_backup"
+    assert _titles(client) == titles
+    with database.transaction() as connection:
+        foreign = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type IN ('trigger', 'view')"
+        ).fetchall()
+    assert foreign == []
+    assert settings_store.read_settings()["script_base_url"] == "http://mine.test/v1"
+
+
+ARCHIVE_ENDPOINTS = {
+    "script_base_url": "http://archive.test/v1",
+    "openai_speech_base_url": "http://archive.test/speech",
+    "ollama_url": "http://archive.test:11434",
+    "script_provider": "ollama",
+}
+
+
+def test_restore_keeps_this_installations_endpoints_and_folders(
+    client: TestClient, tmp_path: Path
+) -> None:
+    archive_watch_dir = tmp_path / "their-docs"
+    archive_watch_dir.mkdir()
+    archive_settings = {**ARCHIVE_ENDPOINTS, "watch_dir": str(archive_watch_dir)}
+    assert client.patch("/api/settings", json=archive_settings).status_code == 200
+    archive = _download_backup(client)
+    mine = {
+        "script_base_url": "http://mine.test/v1",
+        "openai_speech_base_url": "http://mine.test/speech",
+        "ollama_url": "http://mine.test:11434",
+        "script_provider": "offline",
+        "watch_dir": None,
+    }
+    assert client.patch("/api/settings", json=mine).status_code == 200
+
+    response = _restore(client, archive)
+
+    assert response.status_code == 200
+    restored = settings_store.read_settings()
+    assert {key: restored.get(key) for key in mine} == mine
+
+
+def test_restore_pauses_the_queue_so_queued_jobs_wait(client: TestClient) -> None:
+    _generate_audio(client, "deploy-guide.md")
+    client.post("/api/queue/pause")
+    uploaded = _upload_sample(client, "standup-notes.md")
+    client.post(f"/api/docs/{uploaded['doc_id']}/audio", json={})
+    archive = _rebuilt(
+        _download_backup(client),
+        _with_database_change("UPDATE queue SET is_paused = 0;"),
+    )
+
+    response = _restore(client, archive)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["is_queue_paused"], body["queued_jobs"]) == (True, 1)
+    queue = client.get("/api/queue").json()
+    assert queue["is_paused"] is True
+    assert [job["state"] for job in queue["items"]] == ["queued", "done"]

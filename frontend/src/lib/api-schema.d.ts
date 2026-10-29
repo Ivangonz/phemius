@@ -256,7 +256,8 @@ export interface paths {
         /**
          * Restore Library
          * @description Replace the library with a backup's. This installation's API keys,
-         *     access token and access mode are kept.
+         *     access token, endpoints, provider, voice engine, access mode and watched
+         *     folder are kept. The queue is paused so restored jobs wait for Resume.
          */
         post: operations["restore_library_api_library_restore_post"];
         delete?: never;
@@ -522,6 +523,8 @@ export interface components {
             created: string;
             /** Documents */
             documents: number;
+            /** Queued Jobs */
+            queued_jobs: number;
             /** Schema Version */
             schema_version: number;
             /** Versions */
@@ -759,6 +762,30 @@ export interface components {
         QueueStatus: {
             /** Is Paused */
             is_paused: boolean;
+        };
+        /** RestoreResult */
+        RestoreResult: {
+            /** App Version */
+            app_version: string;
+            /** Audio */
+            audio: number;
+            /** Audio Files */
+            audio_files: number;
+            /**
+             * Created
+             * Format: date-time
+             */
+            created: string;
+            /** Documents */
+            documents: number;
+            /** Is Queue Paused */
+            is_queue_paused: boolean;
+            /** Queued Jobs */
+            queued_jobs: number;
+            /** Schema Version */
+            schema_version: number;
+            /** Versions */
+            versions: number;
         };
         /** SecretStatus */
         SecretStatus: {
@@ -1428,7 +1455,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BackupSummary"];
+                    "application/json": components["schemas"]["RestoreResult"];
                 };
             };
             /** @description Validation Error */
