@@ -20,11 +20,18 @@ from phemius.store.sources import ActivityAction, NewActivity, StoredSource
 
 log = structlog.get_logger(__name__)
 
+DELETED_DETAIL = "Deleted from the library, so it is not imported again."
+
 
 def import_item(source_id: int, item: SourceItem) -> None:
     """Import one item, unless its source was paused or deleted meanwhile."""
     source = source_store.get_source(source_id)
     if source is None or source["status"] != "active":
+        return
+    if source_store.is_excluded(source_id, item.key):
+        source_store.record_activity(
+            NewActivity(source_id, "skipped", item.name, DELETED_DETAIL)
+        )
         return
     rules = rules_of(source)
     suffix = item.path.suffix.lower()

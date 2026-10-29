@@ -167,7 +167,8 @@ export interface paths {
         post?: never;
         /**
          * Delete Document
-         * @description Delete a document with its versions, audio files and waiting jobs.
+         * @description Delete a document with its versions, audio files and waiting jobs. One
+         *     from a source is not imported from it again.
          */
         delete: operations["delete_document_api_docs__document_id__delete"];
         options?: never;

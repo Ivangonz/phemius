@@ -71,7 +71,8 @@ def get_document(document_id: DocumentId) -> Document:
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: DocumentId) -> Response:
-    """Delete a document with its versions, audio files and waiting jobs."""
+    """Delete a document with its versions, audio files and waiting jobs. One
+    from a source is not imported from it again."""
     documents.delete_document(document_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

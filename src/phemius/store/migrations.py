@@ -337,6 +337,22 @@ def _add_audio_sections(connection: sqlite3.Connection) -> None:
     )
 
 
+def _add_source_exclusions(connection: sqlite3.Connection) -> None:
+    # Items whose document was deleted, so a sync does not import them again.
+    # Keyed by item key (`docs.source`), not content: an edit does not lift it.
+    connection.execute(
+        """
+        CREATE TABLE source_exclusions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL REFERENCES sources (id) ON DELETE CASCADE,
+            item_key TEXT NOT NULL,
+            created REAL NOT NULL,
+            UNIQUE (source_id, item_key)
+        )
+        """
+    )
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -350,6 +366,7 @@ MIGRATIONS: list[Migration] = [
     _add_script_usage_and_audio_duration,
     _add_sources,
     _add_audio_sections,
+    _add_source_exclusions,
 ]
 
 

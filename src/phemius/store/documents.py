@@ -12,6 +12,7 @@ from typing import Literal, TypedDict, cast
 from phemius.models.base import AudioSuitability, SuitabilitySource
 from phemius.store.audio import AUDIO_JOB_COLUMNS, AudioSummary, section_titles
 from phemius.store.database import transaction
+from phemius.store.sources import exclude_items
 
 type SaveOutcome = Literal["created", "new_version", "unchanged"]
 type DeleteOutcome = Literal["deleted", "missing", "job_running"]
@@ -244,11 +245,12 @@ def delete_document(document_id: int) -> DeletedDocument:
     jobs is running.
 
     The running check shares the write lock with the delete, so no worker can
-    claim a job in between.
+    claim a job in between. A document from a managed source is excluded from
+    it in the same transaction, so the next sync does not import it again.
     """
     with transaction(is_immediate=True) as connection:
         document = connection.execute(
-            "SELECT 1 FROM docs WHERE id = ?", (document_id,)
+            "SELECT source, source_id FROM docs WHERE id = ?", (document_id,)
         ).fetchone()
         if document is None:
             return DeletedDocument("missing")
@@ -262,6 +264,8 @@ def delete_document(document_id: int) -> DeletedDocument:
         ).fetchall()
         for statement in _DELETE_DOCUMENT_STATEMENTS:
             connection.execute(statement, parameters)
+        if document["source_id"] is not None:
+            exclude_items(connection, document["source_id"], [document["source"]])
     return DeletedDocument("deleted", [row["path"] for row in paths])
 
 

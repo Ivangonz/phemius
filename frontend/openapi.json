@@ -3003,7 +3003,7 @@
     },
     "/api/docs/{document_id}": {
       "delete": {
-        "description": "Delete a document with its versions, audio files and waiting jobs.",
+        "description": "Delete a document with its versions, audio files and waiting jobs. One\nfrom a source is not imported from it again.",
         "operationId": "delete_document_api_docs__document_id__delete",
         "parameters": [
           {
