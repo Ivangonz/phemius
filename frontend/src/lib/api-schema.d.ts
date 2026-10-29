@@ -644,6 +644,8 @@ export interface components {
             id: number;
             /** Source */
             source: string;
+            /** Source Id */
+            source_id: number | null;
             /** Suggested Tone */
             suggested_tone: string;
             /** Suitability Reason */

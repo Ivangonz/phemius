@@ -7,6 +7,7 @@ from phemius.store import audio as audio_store
 from phemius.store import database, migrations
 from phemius.store import documents as document_store
 from phemius.store import jobs as job_store
+from phemius.store import sources as source_store
 from phemius.store.migrations import MIGRATIONS
 
 
@@ -351,3 +352,22 @@ def test_existing_jobs_and_audio_get_unknown_usage_and_duration(
         None,
     )
     assert audio["duration_seconds"] is None
+
+
+def test_existing_documents_have_no_source_and_sources_start_empty(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS[5:10]:
+            migration(connection)
+        connection.execute("PRAGMA user_version=10")
+    connection.close()
+
+    database.init_database(db_path)
+
+    document = document_store.get_document(1)
+    assert document is not None
+    assert (document["title"], document["source_id"]) == ("Guide", None)
+    assert source_store.all_sources() == []

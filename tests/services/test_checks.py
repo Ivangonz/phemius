@@ -8,8 +8,9 @@ from types import SimpleNamespace
 import pytest
 
 from phemius.models.base import ScriptModelCheck
-from phemius.services import checks
+from phemius.services import checks, sources
 from phemius.services.checks import SetupCheck
+from phemius.store import database
 from tests.models.fakes import FakeScriptModel, UseScriptModel
 from tests.services.fakes import FakeFfmpeg, UseFfmpeg
 
@@ -49,7 +50,7 @@ def ready_environment(
     isolated_env: Path, use_ffmpeg: UseFfmpeg, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every check passes unless a test changes one condition."""
-    isolated_env.mkdir(parents=True)
+    database.init_database(isolated_env / "library.db")
     use_ffmpeg(FakeFfmpeg(stdout=FFMPEG_VERSION))
     monkeypatch.setattr(checks, "running_python", lambda: (3, 12))
     monkeypatch.setattr(checks, "_last_run", None)
@@ -190,26 +191,23 @@ def test_unwritable_library_needs_attention(
     assert check.hint is not None
 
 
-def test_unconfigured_watch_folder_is_optional() -> None:
+def test_no_folder_source_is_optional() -> None:
     assert run_check("watch_folder").status == "optional"
 
 
-def test_readable_watch_folder_is_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("PHEMIUS_WATCH_DIR", str(tmp_path))
+def test_readable_folder_sources_are_ok(tmp_path: Path) -> None:
+    sources.create_source("folder", {"path": str(tmp_path)})
 
     assert run_check("watch_folder").status == "ok"
 
 
-def test_missing_watch_folder_needs_attention(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("PHEMIUS_WATCH_DIR", str(tmp_path / "missing"))
+def test_missing_folder_source_needs_attention(tmp_path: Path) -> None:
+    sources.create_source("folder", {"path": str(tmp_path / "missing")})
 
     check = run_check("watch_folder")
 
     assert check.status == "needs_attention"
+    assert "missing" in check.detail
     assert check.hint is not None
 
 

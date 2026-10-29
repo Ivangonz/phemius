@@ -13,9 +13,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from phemius.app import create_app
-from phemius.services import access
+from phemius.services import access, queue
+from phemius.services import sources as source_service
 from phemius.store import database
+from phemius.store import documents as document_store
 from phemius.store import settings as settings_store
+from phemius.store import sources as source_store
 from phemius.store.migrations import MIGRATIONS
 from tests.api.test_access import _bearer
 from tests.api.test_docs import _upload_sample
@@ -444,6 +447,49 @@ def test_restore_keeps_this_installations_endpoints_and_folders(
     assert response.status_code == 200
     restored = settings_store.read_settings()
     assert {key: restored.get(key) for key in mine} == mine
+
+
+def _folder_with_guide(folder: Path) -> int:
+    # Paused, so no running job blocks the backup or the restore.
+    queue.pause_queue()
+    folder.mkdir()
+    (folder / "guide.md").write_text("# Guide\n\nInstall it.")
+    source_id: int = source_service.create_source("folder", {"path": str(folder)})["id"]
+    source_service.sync_source(source_id)
+    return source_id
+
+
+def _source_ids_of_documents() -> list[int | None]:
+    with database.transaction() as connection:
+        rows = connection.execute("SELECT id FROM docs ORDER BY id").fetchall()
+    documents = [document_store.get_document(row["id"]) for row in rows]
+    return [document["source_id"] for document in documents if document]
+
+
+def test_restore_keeps_this_installations_sources(
+    open_library: OpenLibrary, tmp_path: Path
+) -> None:
+    first = open_library(tmp_path / "first")
+    _folder_with_guide(tmp_path / "their-docs")
+    archive = _download_backup(first)
+    target = open_library(tmp_path / "second")
+    mine = _folder_with_guide(tmp_path / "my-docs")
+
+    assert _restore(target, archive).status_code == 200
+
+    assert [source["id"] for source in source_store.all_sources()] == [mine]
+    assert _source_ids_of_documents() == [None]
+
+
+def test_restore_relinks_documents_to_the_sources_they_live_in(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source_id = _folder_with_guide(tmp_path / "docs")
+    archive = _download_backup(client)
+
+    assert _restore(client, archive).status_code == 200
+
+    assert _source_ids_of_documents() == [source_id]
 
 
 def test_restore_pauses_the_queue_so_queued_jobs_wait(client: TestClient) -> None:

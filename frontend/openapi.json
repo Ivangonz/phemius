@@ -564,6 +564,17 @@
             "title": "Source",
             "type": "string"
           },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
           "suggested_tone": {
             "title": "Suggested Tone",
             "type": "string"
@@ -627,6 +638,7 @@
           "version",
           "title",
           "source",
+          "source_id",
           "content_hash",
           "text",
           "category",

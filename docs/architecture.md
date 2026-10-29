@@ -11,7 +11,7 @@ It describes the code on `main`. Planned parts are marked as planned.
 ```mermaid
 flowchart LR
     upload["Upload<br/>POST /api/docs"] --> ingest
-    watch["Watched folder<br/>PHEMIUS_WATCH_DIR"] --> ingest
+    watch["Sources<br/>watched folders"] --> ingest
     ingest["Ingest<br/>extract text, guess title"] --> analysis
     analysis["Analysis<br/>category, summary, tone, audio suitability"] --> store[("Library<br/>SQLite + audio folder")]
     store --> script["Script<br/>queued job; script model writes a spoken version in a tone"]
@@ -21,7 +21,8 @@ flowchart LR
     store --> player["Listen<br/>GET /api/docs, GET /api/audio/id/file"]
 ```
 
-1. **Ingest.** A file arrives through an upload or the watched folder.
+1. **Ingest.** A file arrives through an upload or a source (see
+   [Sources](#sources)).
    `services/ingest.py` extracts plain text from Markdown, text, reStructuredText,
    HTML, DOCX or PDF, and guesses a title from the first heading or line.
 2. **Analysis.** `services/agent.py` asks the configured script model
@@ -115,13 +116,42 @@ come only from the environment, because the database that holds saved settings
 lives in the data folder. A setting fixed by an environment variable is locked
 against changes through `PATCH /api/settings`.
 
+### Sources
+
+A source is a place Phemius imports documents from. Each is a row in the
+`sources` table (`store/sources.py`): `kind`, `name`, `config` (JSON, the
+source's identity, so the same folder cannot be added twice), `status`
+(`active` or `paused`), `last_sync` and `error` (why the last sync failed;
+cleared by the next good one). Each document records the source it came from
+in `docs.source_id` (null for uploads), which per-source exclusions will key
+on.
+
+- **Kinds.** A kind implements the `Source` protocol (`sources/base.py`) and is
+  registered in `SOURCE_KINDS` (`sources/__init__.py`): one module with a
+  `from_config` factory that validates the config, and one registry line. A
+  source only finds documents: `sync()` hands every item it holds to a handler,
+  and `watch()` hands over new and changed items as they appear (None for a
+  kind that cannot be watched). Each item has a stable `key`, stored as
+  `docs.source`, so a changed item adds a version. Today the only kind is
+  `folder` (`sources/folder.py`, watchdog), whose keys are file paths.
+- **Importing** lives in `services/sources.py`, the same for every kind: it
+  checks the source is still active, imports the item through
+  `services/pipeline.py`, and queues audio. One bad item is logged and skipped.
+  A source that cannot be read at all records its `error`.
+- **Startup** adopts the old watched folder, then starts a watcher and a sync
+  thread for each active source. `PHEMIUS_WATCH_DIR` becomes a folder source on
+  every start (nothing happens once that source exists), so the environment
+  keeps winning as it does for settings. A saved `watch_dir` becomes a source
+  once and the setting is deleted in the same transaction. Documents already
+  imported from inside the folder are linked to the new source.
+
 ### Setup checks
 
 `POST /api/checks` (`services/checks.py`) runs the setup checks for S7 and
 the C3 summary: Python version against Kokoro's range, script model
 reachability (the adapter's `check()`, with latency), voice engine readiness,
-library folder writable with at least 1 GB free, watched folder readable, and
-ffmpeg. Each returns `status` `ok`, `optional` or `needs_attention`, with a
+library folder writable with at least 1 GB free, every active source
+readable (`watch_folder`; optional when there is none), and ffmpeg. Each returns `status` `ok`, `optional` or `needs_attention`, with a
 `detail` and a `hint`. Each check runs in its own daemon thread. One that has
 not answered within 3 seconds is reported as `needs_attention`, and the response
 does not wait for it. The last run and a count per status are kept in memory and
@@ -174,11 +204,14 @@ S7 backs up, restores and deletes all audio through `/api/library`
   `.restore-*` folder, so startup does not delete those.
 - **What a restore keeps.** These belong to the installation, not the library:
   API keys, the access token hash, `access_mode`, `script_provider`,
-  `script_base_url`, `ollama_url`, `voice_engine`, `openai_speech_base_url` and
-  `watch_dir`. An archive's values for them are ignored, and a restore keeps
-  the current ones. So a server in `network` mode keeps accepting the same
-  token, a restored endpoint cannot receive this installation's keys, and a
-  folder path from another machine is not watched here.
+  `script_base_url`, `ollama_url`, `voice_engine`, `openai_speech_base_url`,
+  `watch_dir`, and the sources. An archive's values for them are ignored, and a
+  restore keeps the current ones. So a server in `network` mode keeps accepting
+  the same token, a restored endpoint cannot receive this installation's keys,
+  and a folder path from another machine is not watched here. The archive's
+  source activity goes with its sources, and restored documents are relinked
+  to this installation's sources by key prefix (a document under a kept
+  folder joins it; others have no source).
 - **The queue is paused after a restore.** The restore response reports
   `is_queue_paused` (always true) and `queued_jobs`, so the UI can offer
   Resume, and restored jobs never spend model credits unasked.
@@ -205,11 +238,11 @@ S7 backs up, restores and deletes all audio through `/api/library`
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `LibraryBusyError`, `InvalidBackupError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
 | `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `library` (backup, restore and delete all audio), `stats` (today's totals), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), `request_guard` (the Host and Origin checks below), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
-| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `backup` (backup archives), `restore` (archive checks and the swap), `library` (delete all audio), `maintenance` (the gate that keeps workers and library operations apart), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
+| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `sources` (adding sources, adopting the watched folder, watchers, syncs and imports), `backup` (backup archives), `restore` (archive checks and the swap), `library` (delete all audio), `maintenance` (the gate that keeps workers and library operations apart), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network), `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets) and `ollama.py`. `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, `spoken_text.py` prepares document text for any model, and `suitability.py` rates how well a document suits listening when no model does |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra), `piper.py` (local, optional GPL extra, see ADR-003), `openai_speech.py`, `elevenlabs.py` and `stub.py` (silent audio), plus shared text chunking |
-| `src/phemius/sources/` | Source connectors. Today: `folder.py`, a watchdog-based folder watcher |
-| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio, jobs (with script usage and cost), daily totals and saved settings, and `backup.py` for SQL on a library snapshot outside the live database. `permissions.py` keeps the library folder and database owner-only |
+| `src/phemius/sources/` | Source kinds behind the `Source` protocol (`base.py`), registered in `SOURCE_KINDS`. Today: `folder.py`, a folder synced by walking it and watched with watchdog |
+| `src/phemius/store/` | The only package that runs SQL: connections in WAL mode with a busy timeout, migrations tracked with `PRAGMA user_version`, documents, audio, jobs (with script usage and cost), daily totals, saved settings and sources, and `backup.py` for SQL on a library snapshot outside the live database. `permissions.py` keeps the library folder and database owner-only |
 | `frontend/` | React, Vite and TypeScript UI with TanStack Router and Query and Tailwind CSS. `make build` writes it to `src/phemius/static` (not committed); in development, Vite serves it on port 5173 and proxies `/api`. API types in `src/lib/api-schema.d.ts` are generated from `frontend/openapi.json`. Node is needed only to develop or build it |
 
 The library is one folder (`PHEMIUS_DATA_DIR`, default `~/.phemius`) holding
