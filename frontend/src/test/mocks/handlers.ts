@@ -1,8 +1,9 @@
 import { http, HttpResponse } from "msw"
 import type { LibraryConfig } from "@/hooks/useLibraryConfig"
+import { documentsHandler } from "./documents"
 
 export const libraryConfig: LibraryConfig = {
-  tones: { teacher: "Patient and structured." },
+  tones: { teacher: "Patient and structured.", executive: "Concise." },
   voices: { "kokoro:af_heart": "Heart" },
   default_voice: "af_heart",
   tts_status: { is_ready: true, message: "Kokoro is ready." },
@@ -29,4 +30,5 @@ export const handlers = [
       expires: 1_900_000_000,
     }),
   ),
+  documentsHandler(() => []),
 ]
