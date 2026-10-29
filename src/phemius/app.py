@@ -27,6 +27,7 @@ from phemius.api import (
     library_config,
     queue,
     request_guard,
+    script_models,
     settings,
     stats,
 )
@@ -153,6 +154,7 @@ def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
         health,
         library_config,
         settings,
+        script_models,
         docs,
         audio,
         queue,

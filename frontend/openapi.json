@@ -837,6 +837,24 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "InstalledOllamaModel": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size_bytes"
+        ],
+        "title": "InstalledOllamaModel",
+        "type": "object"
+      },
       "Job": {
         "properties": {
           "attempts": {
@@ -1172,6 +1190,22 @@
         "title": "LibraryConfig",
         "type": "object"
       },
+      "OllamaModelList": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/InstalledOllamaModel"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "OllamaModelList",
+        "type": "object"
+      },
       "Page_DocumentListItem_": {
         "properties": {
           "items": {
@@ -1335,6 +1369,63 @@
           "is_queue_paused"
         ],
         "title": "RestoreResult",
+        "type": "object"
+      },
+      "ScriptModelConnection": {
+        "description": "The result of testing the saved script model; never holds secrets.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "is_reachable": {
+            "title": "Is Reachable",
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "is_reachable",
+          "provider",
+          "model"
+        ],
+        "title": "ScriptModelConnection",
         "type": "object"
       },
       "SecretStatus": {
@@ -2765,6 +2856,50 @@
         "summary": "Inspect Backup",
         "tags": [
           "library"
+        ]
+      }
+    },
+    "/api/models/check": {
+      "post": {
+        "description": "Test the saved script model: latency when it answers, else error and hint.",
+        "operationId": "check_script_model_api_models_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptModelConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Check Script Model",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/ollama": {
+      "get": {
+        "description": "Models installed in the saved Ollama server, sorted by name.",
+        "operationId": "list_ollama_models_api_models_ollama_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OllamaModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Ollama Models",
+        "tags": [
+          "models"
         ]
       }
     },
