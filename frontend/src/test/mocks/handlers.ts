@@ -2,8 +2,8 @@ import { http, HttpResponse } from "msw"
 import type { AccessStatus } from "@/hooks/useAccess"
 import type { LibraryConfig } from "@/hooks/useLibraryConfig"
 import { healthyChecks, makeCheckRun, serveChecks } from "./checks"
-import type { SettingsOverview } from "@/hooks/useSettings"
 import { documentsHandler } from "./documents"
+import { settingsHandler } from "./settings"
 
 export const libraryConfig: LibraryConfig = {
   tones: { teacher: "Patient and structured.", executive: "Concise." },
@@ -33,16 +33,8 @@ export const accessStatus: AccessStatus = {
   port: 8000,
 }
 
-export const settingsOverview: SettingsOverview = {
-  values: {
-    access_mode: { value: "local", source: "default", is_locked: false },
-  },
-  secrets: {},
-}
-
 export const handlers = [
   http.get("/api/access", () => HttpResponse.json(accessStatus)),
-  http.get("/api/settings", () => HttpResponse.json(settingsOverview)),
   http.get("/api/config", () => HttpResponse.json(libraryConfig)),
   http.get("/api/audio/:audioId/url", ({ params }) =>
     HttpResponse.json({
@@ -55,4 +47,5 @@ export const handlers = [
     lastRun: makeCheckRun(healthyChecks),
     runs: [makeCheckRun(healthyChecks)],
   }).handlers,
+  settingsHandler(),
 ]
