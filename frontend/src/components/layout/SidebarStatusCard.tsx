@@ -1,4 +1,5 @@
 import { useLibraryConfig, type LibraryConfig } from "@/hooks/useLibraryConfig"
+import { SidebarCheckWarning } from "./SidebarCheckWarning"
 
 function describe(config: LibraryConfig | undefined, isError: boolean) {
   if (config) {
@@ -16,21 +17,24 @@ export function SidebarStatusCard() {
   const { scriptModel, voice } = describe(data, isError)
 
   return (
-    <dl className="hidden flex-col gap-2.5 rounded-control bg-sidebar-card px-3 py-3.5 md:flex">
-      <div>
-        <dt className="text-label text-sidebar-label uppercase">
-          Script model
-        </dt>
-        <dd className="mt-0.5 font-mono text-small wrap-anywhere text-sidebar-value">
-          {scriptModel}
-        </dd>
-      </div>
-      <div>
-        <dt className="text-label text-sidebar-label uppercase">Voice</dt>
-        <dd className="mt-0.5 font-mono text-small text-sidebar-value">
-          {voice}
-        </dd>
-      </div>
-    </dl>
+    <div className="hidden flex-col gap-2.5 rounded-control bg-sidebar-card px-3 py-3.5 md:flex">
+      <dl className="flex flex-col gap-2.5">
+        <div>
+          <dt className="text-label text-sidebar-label uppercase">
+            Script model
+          </dt>
+          <dd className="mt-0.5 font-mono text-small wrap-anywhere text-sidebar-value">
+            {scriptModel}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-label text-sidebar-label uppercase">Voice</dt>
+          <dd className="mt-0.5 font-mono text-small text-sidebar-value">
+            {voice}
+          </dd>
+        </div>
+      </dl>
+      <SidebarCheckWarning />
+    </div>
   )
 }

@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw"
 import type { LibraryConfig } from "@/hooks/useLibraryConfig"
+import { healthyChecks, makeCheckRun, serveCheckRuns } from "./checks"
 import { documentsHandler } from "./documents"
 
 export const libraryConfig: LibraryConfig = {
@@ -31,4 +32,5 @@ export const handlers = [
     }),
   ),
   documentsHandler(() => []),
+  serveCheckRuns(makeCheckRun(healthyChecks)).handler,
 ]
