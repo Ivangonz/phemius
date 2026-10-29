@@ -27,6 +27,7 @@ from phemius.api import (
     queue,
     request_guard,
     settings,
+    stats,
 )
 from phemius.api.errors import register_exception_handlers
 from phemius.config import Config, load_config
@@ -152,6 +153,7 @@ def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
         audio,
         queue,
         checks,
+        stats,
         access,
     ):
         app.include_router(module.router)

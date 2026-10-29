@@ -382,6 +382,12 @@ length in `duration_seconds`.
 - Ollama and the offline rules cost nothing. A self-hosted OpenAI-compatible
   server reports a cost only if you set its prices, which can be `0`.
 
+`GET /api/stats/today` returns the scripts written, audio files finished,
+narration minutes and estimated cost for today. Today is the calendar day at
+`utc_offset_minutes` (minutes east of UTC, default `0`, so UTC); the UI sends
+the browser's offset. `estimated_cost_usd` adds up the scripts with a known
+cost, and `unpriced_scripts` counts the rest.
+
 ## API keys
 
 For a deployment, pass API keys as environment variables, or keep them in a
