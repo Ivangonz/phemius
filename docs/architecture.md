@@ -134,16 +134,49 @@ on.
   kind that cannot be watched). Each item has a stable `key`, stored as
   `docs.source`, so a changed item adds a version. Today the only kind is
   `folder` (`sources/folder.py`, watchdog), whose keys are file paths.
-- **Importing** lives in `services/sources.py`, the same for every kind: it
-  checks the source is still active, imports the item through
-  `services/pipeline.py`, and queues audio. One bad item is logged and skipped.
-  A source that cannot be read at all records its `error`.
-- **Startup** adopts the old watched folder, then starts a watcher and a sync
-  thread for each active source. `PHEMIUS_WATCH_DIR` becomes a folder source on
+- **Importing** lives in `services/source_imports.py`, the same for every
+  kind: it checks the source is still active, applies its import rules,
+  imports the item through `services/pipeline.py`, and records an activity
+  entry. One bad item is recorded and skipped. A source that cannot be read at
+  all records its `error` and a `failed` entry.
+- **Import rules** (`services/import_rules.py`) are saved per source in
+  `sources.rules` as overrides only; a rule left unset follows the global
+  setting, so changing that setting still reaches every source that never
+  chose otherwise.
+
+  | Rule | Without an override |
+  | --- | --- |
+  | `auto_audio`: queue audio for a new document | on |
+  | `skip_not_recommended`: no automatic audio for a `not_recommended` document | `PHEMIUS_SKIP_NOT_RECOMMENDED` |
+  | `keep_versions`: keep earlier versions and their audio when a document changes | on |
+  | `regenerate_on_change`: queue audio for a new version | `PHEMIUS_WATCH_ON_CHANGE` is `regenerate` |
+  | `file_types`: extensions to import | every supported type |
+
+  Without `keep_versions`, a new version deletes the earlier ones with their
+  audio rows, jobs and files (files after the commit). A version whose job is
+  running is kept until a later change, and so is everything while a library
+  operation holds the maintenance gate.
+- **Activity** (`source_activity`) is the log behind S3 Recent activity:
+  `imported`, `updated`, `skipped` (a left-out file type, or a
+  `not_recommended` document imported without audio) and `failed` (an item
+  that could not be imported, audio that could not be queued, or the whole
+  source), each with the item's name, the document id when there is one, and
+  a `detail` in plain words. A skip or failure that repeats the item's latest
+  entry is not recorded again, so a broken file does not fill the log on every
+  sync. Entries never hold document text. Deleting a source deletes its
+  activity; its documents stay, with no source.
+- **Watchers follow the sources.** Startup adopts the old watched folder, then
+  starts a watcher and a sync thread for each active source. Adding or
+  resuming a source starts them, a new config restarts them, and pausing or
+  deleting stops them. An item a watcher had already scheduled is dropped if
+  its source was paused or deleted meanwhile.
+- **The old watched folder.** `PHEMIUS_WATCH_DIR` becomes a folder source on
   every start (nothing happens once that source exists), so the environment
-  keeps winning as it does for settings. A saved `watch_dir` becomes a source
-  once and the setting is deleted in the same transaction. Documents already
-  imported from inside the folder are linked to the new source.
+  keeps winning as it does for settings; its source can be renamed, paused and
+  given rules, but moving or deleting it returns `409 setting_locked` while the
+  variable is set. A saved `watch_dir` becomes a source once and the setting
+  is deleted in the same transaction, so deleting that source sticks. Documents
+  already imported from inside the folder are linked to the new source.
 
 ### Setup checks
 
@@ -151,8 +184,9 @@ on.
 the C3 summary: Python version against Kokoro's range, script model
 reachability (the adapter's `check()`, with latency), voice engine readiness,
 library folder writable with at least 1 GB free, every active source
-readable (`watch_folder`; optional when there is none), and ffmpeg. Each returns `status` `ok`, `optional` or `needs_attention`, with a
-`detail` and a `hint`. Each check runs in its own daemon thread. One that has
+readable (`watch_folder`; optional when there is none), and ffmpeg. Each
+returns `status` `ok`, `optional` or `needs_attention`, with a `detail` and a
+`hint`. Each check runs in its own daemon thread. One that has
 not answered within 3 seconds is reported as `needs_attention`, and the response
 does not wait for it. The last run and a count per status are kept in memory and
 returned by `GET /api/checks` (null before the first run). They describe
@@ -238,7 +272,7 @@ S7 backs up, restores and deletes all audio through `/api/library`
 | `src/phemius/errors.py` | `PhemiusError` and its subclasses (`NotFoundError`, `InvalidInputError`, `SettingLockedError`, `JobStateError`, `LibraryBusyError`, `InvalidBackupError`, `ServiceUnavailableError`, `ModelError`, `VoiceError`), each with a message, optional hint, field errors and status code |
 | `src/phemius/openapi.py` | Exports the OpenAPI schema that `make api-types` turns into the UI's API types |
 | `src/phemius/api/` | Thin routers: `health`, `library_config` (`/api/config`), `settings`, `docs` (paginated, filtered list and uploads), `audio`, `queue` (jobs, cancel, retry, pause and resume), `checks` (setup checks), `library` (backup, restore and delete all audio), `stats` (today's totals), `access` (token regeneration and the middleware that requires the token on `/api/*` except `/api/health` in `network` and `proxy` modes, or a signed URL on an audio file), `request_guard` (the Host and Origin checks below), plus `pagination.py` (shared `limit`/`offset` page shape) and `errors.py`, which maps every error to `{detail, code, hint, errors}` |
-| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `sources` (adding sources, adopting the watched folder, watchers, syncs and imports), `backup` (backup archives), `restore` (archive checks and the swap), `library` (delete all audio), `maintenance` (the gate that keeps workers and library operations apart), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
+| `src/phemius/services/` | Business logic: `ingest` (text extraction), `agent` (analysis and scripts through the script model), `script_models` (the active provider and model, or why it cannot be built), `pipeline` (import, queuing audio and the script, narration and conversion stages), `ffmpeg` (optional conversion to M4A or MP3, and the ffmpeg check), `queue` (list, cancel, retry, pause and resume), `runner` (the worker threads and restart recovery), `voices` (voice listing, engine check, voice id resolution), `settings` (settings overview and updates, secrets write-only), `access` (bind address and host guard, token from `PHEMIUS_ACCESS_TOKEN` or generated, regeneration and constant-time check; only a SHA-256 hash is stored; signing and checking short-lived audio file URLs, see ADR-004), `checks` (setup checks in parallel with a timeout, last run kept in memory), `sources` (adding, editing, pausing and deleting sources, adopting the watched folder, watchers and syncs), `source_imports` (one item under its source's rules, and its activity entry), `import_rules` (per-source rules over the global settings), `backup` (backup archives), `restore` (archive checks and the swap), `library` (delete all audio), `maintenance` (the gate that keeps workers and library operations apart), `usage` (script cost from the provider's price or configured prices), `stats` (today's scripts, audio, narration minutes and cost, at the caller's UTC offset), `uploads`, `health` |
 | `src/phemius/models/` | Script model adapters behind the `ScriptModel` protocol (`base.py`), registered in `SCRIPT_MODELS`: `offline.py` (rules, no network), `openai_compatible.py` (any OpenAI chat API server, with `openai` and `openrouter` presets) and `ollama.py`. `chat.py` is the shared base for chat-completion providers, `prompts.py` holds the tones, categories and prompts every model uses, `spoken_text.py` prepares document text for any model, and `suitability.py` rates how well a document suits listening when no model does |
 | `src/phemius/voices/` | Voice engine adapters behind the `VoiceEngine` protocol (`base.py`), registered in `ENGINES`: `kokoro.py` (local, optional extra), `piper.py` (local, optional GPL extra, see ADR-003), `openai_speech.py`, `elevenlabs.py` and `stub.py` (silent audio), plus shared text chunking |
 | `src/phemius/sources/` | Source kinds behind the `Source` protocol (`base.py`), registered in `SOURCE_KINDS`. Today: `folder.py`, a folder synced by walking it and watched with watchdog |

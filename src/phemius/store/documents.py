@@ -172,6 +172,48 @@ def _insert_version(
     return StoredVersion(document_id, number, outcome)
 
 
+def prune_earlier_versions(document_id: int) -> list[str]:
+    """Delete every version but the latest, with its audio and jobs.
+
+    A version with a running job is kept until a later prune: its worker is
+    still writing to it. Returns the audio files to remove after this commits.
+    """
+    with transaction(is_immediate=True) as connection:
+        rows = connection.execute(_PRUNABLE_VERSIONS, {"doc": document_id})
+        version_ids = [row["id"] for row in rows]
+        if not version_ids:
+            return []
+        marks = ", ".join("?" * len(version_ids))
+        paths = connection.execute(
+            f"SELECT path FROM audio WHERE version_id IN ({marks})"
+            " AND path IS NOT NULL",
+            version_ids,
+        ).fetchall()
+        connection.execute(
+            f"DELETE FROM jobs WHERE version_id IN ({marks}) OR audio_id IN"
+            f" (SELECT id FROM audio WHERE version_id IN ({marks}))",
+            [*version_ids, *version_ids],
+        )
+        connection.execute(
+            f"DELETE FROM audio WHERE version_id IN ({marks})", version_ids
+        )
+        connection.execute(
+            f"DELETE FROM doc_versions WHERE id IN ({marks})", version_ids
+        )
+    return [row["path"] for row in paths]
+
+
+_PRUNABLE_VERSIONS = """
+SELECT v.id FROM doc_versions v
+WHERE v.doc_id = :doc
+    AND v.number < (SELECT MAX(number) FROM doc_versions WHERE doc_id = :doc)
+    AND NOT EXISTS (
+        SELECT 1 FROM audio a JOIN jobs j ON j.audio_id = a.id
+        WHERE a.version_id = v.id AND j.state = 'running'
+    )
+"""
+
+
 def _audio_summaries(
     connection: sqlite3.Connection, document_id: int
 ) -> list[AudioSummary]:
