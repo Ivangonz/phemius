@@ -76,3 +76,24 @@ def copy_to(target: Path) -> None:
             source.backup(destination)
     finally:
         destination.close()
+
+
+def replace_with(source: Path) -> None:
+    """Replace the live library with the database at `source` in one step.
+
+    SQLite's backup API copies it inside one write transaction, so a failure
+    leaves the library as it was. Every transaction opens its own connection,
+    so the next one after this sees the restored library.
+    """
+    origin = sqlite3.connect(source)
+    try:
+        with transaction() as destination:
+            origin.backup(destination)
+    finally:
+        origin.close()
+
+
+def page_size() -> int:
+    with transaction() as connection:
+        size: int = connection.execute("PRAGMA page_size").fetchone()[0]
+    return size

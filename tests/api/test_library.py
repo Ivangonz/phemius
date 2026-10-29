@@ -2,7 +2,6 @@ import io
 import json
 import sqlite3
 import zipfile
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +13,6 @@ from phemius.services import access
 from tests.api.test_access import _bearer
 from tests.api.test_docs import _upload_sample, _wait_for_audio
 from tests.api.test_queue import _wait_for_job
-from tests.models.fakes import UseScriptModel
 from tests.services.test_runner import BlockingScriptModel
 
 SECRET = "el-very-secret-key"
@@ -40,21 +38,6 @@ def _backup_database(archive_bytes: bytes, tmp_path: Path) -> sqlite3.Connection
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
         db_path.write_bytes(archive.read("library.db"))
     return sqlite3.connect(db_path)
-
-
-@pytest.fixture
-def network_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv("PHEMIUS_ACCESS_MODE", "network")
-    with TestClient(create_app()) as test_client:
-        yield test_client
-
-
-@pytest.fixture
-def blocking_model(use_script_model: UseScriptModel) -> Iterator[BlockingScriptModel]:
-    model = BlockingScriptModel()
-    use_script_model(model)
-    yield model
-    model.release.set()
 
 
 def _start_blocked_job(client: TestClient, model: BlockingScriptModel) -> None:
