@@ -68,6 +68,30 @@ This is the target layout. Some adapters, routers and connectors are added by la
 - Use `structlog` for logging. Log at service boundaries (API entry, external calls, job start and end). Never log secrets, document text or file contents; log IDs.
 - Blocking work (TTS, file conversion, network calls to slow providers) never runs on the event loop. Use `async def` for I/O routes and push CPU-bound work to the job runner.
 
+### Security Model
+
+Phemius has no user accounts, so be explicit about who might send each input.
+
+- **Trust boundary per access mode.** `local`: only this computer, no token, but other websites open in the user's browser can still send requests (DNS rebinding, cross-site forms); `api/request_guard.py` blocks them. `network` and `proxy`: the access token is required on every `/api` route except `/api/health`; a token holder is the owner, but still must not reach beyond the library (arbitrary folders, other hosts with the saved keys).
+- **Untrusted input:** request parameters and bodies, uploaded documents, backup archives, user-set paths and URLs, file contents in watched folders, and anything a provider or remote server returns. Treat a backup as hostile even if the user made it.
+- **Bad input gets a 4xx in the error shape, never a 500.** Parse defensively (digits, lengths, encodings) before converting or comparing.
+- **Paths stay inside a known root**, resolved after symlinks. Never build a filesystem path from a request without that check.
+- **Imported data never brings what belongs to this installation**: API keys, the token, access mode, provider and base URLs, or database schema objects (triggers, views).
+- **A saved key is only sent to the host it was entered for.**
+- Every PR that handles untrusted input has a test with a hostile case (traversal, oversized, malformed, cross-site, tampered).
+
+### Cost and Side Effects
+
+- Calls to a hosted model or voice provider can cost the user money. `ScriptModel.check()` and hosted voice checks send real requests.
+- Never call a provider on page load, on a poll, or on a focus refetch. Provider calls run because the user asked (a button, a save, a queued job), or at most once per server start.
+- A request that changes state uses `POST`/`PATCH`/`DELETE`, never `GET`.
+
+### Background Work
+
+- Every thread, watcher or timer is owned by a service that starts it, gives it a stop signal, and stops and joins it on shutdown (from the app lifespan). Pausing or deleting the thing it serves signals it to stop.
+- Long loops check the stop signal between items; a stopped run does not record success.
+- Tests must not leak threads: pytest turns an exception in a background thread into an error. Wait on a condition (with a deadline) rather than sleeping, and never assert on state a background thread may still be changing.
+
 ### API Error Response Format
 
 Every error uses one shape so the frontend handles it uniformly:
@@ -124,7 +148,9 @@ Register an explicit exception handler so custom errors (`ModelError`, `VoiceErr
 
 ### Task Scoping and PR Size
 
-Each task does one thing completely. A PR should be reviewable in one sitting (aim for under about 300 lines changed) and must not break anything if the follow-up is delayed. If a PR grows, split it (backend first, UI next). Never bundle unrelated changes; note them and open a separate issue.
+Each task does one thing completely. A PR should be reviewable in one sitting (aim for under about 300 lines changed, not counting generated files) and must not break anything if the follow-up is delayed. If a PR grows, split it (backend first, UI next). Never bundle unrelated changes; note them and open a separate issue.
+
+Size issues before starting, not after: if an issue will clearly exceed about 300 lines (new tables plus API plus UI, or a whole screen), split it into issues first. Each issue lists the design elements of its screen that are in scope and those deferred, so nothing is dropped silently.
 
 ### Test-Driven Development
 
@@ -179,6 +205,9 @@ testpaths = ["tests"]
 - [ ] Secrets are write-only and absent from logs and API responses
 - [ ] List endpoints paginated with an explicit order
 - [ ] Jobs are idempotent and retry-safe
+- [ ] Untrusted inputs listed in the PR; each has a hostile-case test and fails with a 4xx, not a 500
+- [ ] No provider call on load, poll or refetch; paid calls only on a user action or a job
+- [ ] Background threads take a stop signal and are joined on shutdown; no thread warnings in tests
 
 **Frontend**
 
@@ -188,6 +217,7 @@ testpaths = ["tests"]
 - [ ] Generated API types are up to date
 - [ ] Matches the named screen at desktop and phone widths
 - [ ] Keyboard accessible, status not conveyed by color alone
+- [ ] No query triggers a provider call on page load or refetch
 
 ### Manual Testing Summary
 
@@ -208,3 +238,5 @@ Use the repository PR template. After every completed task generate a ready-to-o
 - Do not add a second database backend unless an ADR approves it.
 - Do not return or log secrets.
 - Do not silently truncate model output; raise an error with a hint.
+- Do not call a paid provider on page load or polling.
+- Do not trust a backup, upload or user-set path or URL; see Security Model.

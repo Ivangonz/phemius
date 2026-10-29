@@ -43,7 +43,9 @@ class VoiceEngine(Protocol):
         """Write narrated audio for `script` using the namespaced `voice` id."""
         ...
 
-    def check(self) -> VoiceCheck: ...
+    def check(self) -> VoiceCheck:
+        """Whether the engine can synthesize; hosted engines send a real request."""
+        ...
 
 
 def namespace_voice(engine_name: str, voice: str) -> str:

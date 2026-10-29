@@ -124,6 +124,10 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# A background thread that outlives its test (or raises) fails the run.
+filterwarnings = [
+    "error::pytest.PytestUnhandledThreadExceptionWarning",
+]
 markers = [
     "live_model: calls a real script model; skipped unless PHEMIUS_EVAL_LIVE=1",
     "ffmpeg: runs the real ffmpeg binary; skipped when it is not installed",
