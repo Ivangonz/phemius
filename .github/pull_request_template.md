@@ -24,6 +24,12 @@
 2.
 3. Expected result:
 
+## Untrusted inputs and side effects
+
+<!-- Inputs that could be hostile and the test for each; provider calls this adds and when they run. "None" if there are none. -->
+
+-
+
 ## Notes
 
 <!-- Decisions, tradeoffs, follow-up issues, things to look at closely. Omit if nothing to flag. -->
