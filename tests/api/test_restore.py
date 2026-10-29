@@ -25,6 +25,7 @@ from tests.api.test_library import (
     _generate_audio,
     _start_blocked_job,
 )
+from tests.conftest import LOCAL_URL
 from tests.services.test_runner import BlockingScriptModel
 
 type OpenLibrary = Callable[[Path], TestClient]
@@ -42,7 +43,7 @@ def open_library(monkeypatch: pytest.MonkeyPatch) -> Iterator[OpenLibrary]:
         clients.clear()
         monkeypatch.setenv("PHEMIUS_DATA_DIR", str(data_dir))
         monkeypatch.setattr(database, "_db_path", None)
-        clients.append(TestClient(create_app()).__enter__())
+        clients.append(TestClient(create_app(), base_url=LOCAL_URL).__enter__())
         return clients[-1]
 
     yield open_at
