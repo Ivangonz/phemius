@@ -306,6 +306,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/models/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Script Model
+         * @description Test the saved script model: latency when it answers, else error and hint.
+         */
+        post: operations["check_script_model_api_models_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/ollama": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ollama Models
+         * @description Models installed in the saved Ollama server, sorted by name.
+         */
+        get: operations["list_ollama_models_api_models_ollama_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queue": {
         parameters: {
             query?: never;
@@ -676,6 +716,13 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** InstalledOllamaModel */
+        InstalledOllamaModel: {
+            /** Name */
+            name: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
         /** Job */
         Job: {
             /** Attempts */
@@ -755,6 +802,11 @@ export interface components {
             /** Watch Dir */
             watch_dir: string | null;
         };
+        /** OllamaModelList */
+        OllamaModelList: {
+            /** Models */
+            models: components["schemas"]["InstalledOllamaModel"][];
+        };
         /** Page[DocumentListItem] */
         Page_DocumentListItem_: {
             /** Items */
@@ -818,6 +870,24 @@ export interface components {
             schema_version: number;
             /** Versions */
             versions: number;
+        };
+        /**
+         * ScriptModelConnection
+         * @description The result of testing the saved script model; never holds secrets.
+         */
+        ScriptModelConnection: {
+            /** Error */
+            error?: string | null;
+            /** Hint */
+            hint?: string | null;
+            /** Is Reachable */
+            is_reachable: boolean;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
         };
         /** SecretStatus */
         SecretStatus: {
@@ -1550,6 +1620,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_script_model_api_models_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScriptModelConnection"];
+                };
+            };
+        };
+    };
+    list_ollama_models_api_models_ollama_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OllamaModelList"];
                 };
             };
         };
