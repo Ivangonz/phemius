@@ -28,7 +28,7 @@ from pydantic import BaseModel, ValidationError
 
 from phemius.config import Config, load_config, secret_setting_keys
 from phemius.errors import InvalidBackupError
-from phemius.services import maintenance
+from phemius.services import maintenance, sources
 from phemius.services.backup import (
     DATABASE_NAME,
     FORMAT,
@@ -57,7 +57,8 @@ AUDIO_MEMBER = re.compile(
 # Kept from this installation, like the secrets. The endpoints and the
 # provider and engine choose where this installation's keys are sent, so an
 # archive must not redirect them; the access mode must not open this server to
-# the network on the next start; a watched folder is a path on this machine.
+# the network on the next start; a watched folder is a path on this machine,
+# and so are folder sources, which `InstallationState.sources` keeps.
 INSTALLATION_SETTINGS = [
     "access_mode",
     "script_provider",
@@ -247,6 +248,7 @@ def _installation_state() -> InstallationState:
         settings={key: saved[key] for key in keys if key in saved},
         setting_keys=keys,
         token_hash=access_store.read_token_hash(),
+        sources=sources.kept_sources(),
     )
 
 

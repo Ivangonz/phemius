@@ -27,6 +27,8 @@ class Document(TypedDict):
     version: int
     title: str
     source: str
+    # The managed source it came from; None for uploads and older imports.
+    source_id: int | None
     content_hash: str
     text: str
     category: str
@@ -73,6 +75,7 @@ class NewDocument:
     audio_suitability: AudioSuitability
     suitability_reason: str
     suitability_source: SuitabilitySource
+    source_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -92,7 +95,9 @@ def add_document(document: NewDocument) -> StoredVersion:
     with transaction(is_immediate=True) as connection:
         latest = _latest_version_from_source(connection, document.source)
         if latest is None:
-            document_id = _insert_document(connection, document.source)
+            document_id = _insert_document(
+                connection, document.source, document.source_id
+            )
             return _insert_version(connection, document_id, 1, document, "created")
         if latest["content_hash"] == content_hash:
             return StoredVersion(latest["doc_id"], latest["number"], "unchanged")
@@ -126,9 +131,12 @@ def _latest_version_from_source(
     return row
 
 
-def _insert_document(connection: sqlite3.Connection, source: str) -> int:
+def _insert_document(
+    connection: sqlite3.Connection, source: str, source_id: int | None
+) -> int:
     cursor = connection.execute(
-        "INSERT INTO docs (source, created) VALUES (?, ?)", (source, time.time())
+        "INSERT INTO docs (source, source_id, created) VALUES (?, ?, ?)",
+        (source, source_id, time.time()),
     )
     return cast(int, cursor.lastrowid)
 
@@ -164,6 +172,48 @@ def _insert_version(
     return StoredVersion(document_id, number, outcome)
 
 
+def prune_earlier_versions(document_id: int) -> list[str]:
+    """Delete every version but the latest, with its audio and jobs.
+
+    A version with a running job is kept until a later prune: its worker is
+    still writing to it. Returns the audio files to remove after this commits.
+    """
+    with transaction(is_immediate=True) as connection:
+        rows = connection.execute(_PRUNABLE_VERSIONS, {"doc": document_id})
+        version_ids = [row["id"] for row in rows]
+        if not version_ids:
+            return []
+        marks = ", ".join("?" * len(version_ids))
+        paths = connection.execute(
+            f"SELECT path FROM audio WHERE version_id IN ({marks})"
+            " AND path IS NOT NULL",
+            version_ids,
+        ).fetchall()
+        connection.execute(
+            f"DELETE FROM jobs WHERE version_id IN ({marks}) OR audio_id IN"
+            f" (SELECT id FROM audio WHERE version_id IN ({marks}))",
+            [*version_ids, *version_ids],
+        )
+        connection.execute(
+            f"DELETE FROM audio WHERE version_id IN ({marks})", version_ids
+        )
+        connection.execute(
+            f"DELETE FROM doc_versions WHERE id IN ({marks})", version_ids
+        )
+    return [row["path"] for row in paths]
+
+
+_PRUNABLE_VERSIONS = """
+SELECT v.id FROM doc_versions v
+WHERE v.doc_id = :doc
+    AND v.number < (SELECT MAX(number) FROM doc_versions WHERE doc_id = :doc)
+    AND NOT EXISTS (
+        SELECT 1 FROM audio a JOIN jobs j ON j.audio_id = a.id
+        WHERE a.version_id = v.id AND j.state = 'running'
+    )
+"""
+
+
 def _audio_summaries(
     connection: sqlite3.Connection, document_id: int
 ) -> list[AudioSummary]:
@@ -181,7 +231,7 @@ def get_document(document_id: int) -> Document | None:
     with transaction() as connection:
         row = connection.execute(
             "SELECT d.id, v.id AS version_id, v.number AS version, v.title,"
-            " d.source, v.content_hash, v.text, v.category, v.summary,"
+            " d.source, d.source_id, v.content_hash, v.text, v.category, v.summary,"
             f" v.suggested_tone, {_SUITABILITY_COLUMNS}, d.created"
             " FROM docs d JOIN doc_versions v ON v.doc_id = d.id"
             " WHERE d.id = ? ORDER BY v.number DESC LIMIT 1",

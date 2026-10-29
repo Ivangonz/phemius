@@ -24,15 +24,21 @@ from phemius.voices.wav import wav_duration_seconds
 log = structlog.get_logger(__name__)
 
 
-def import_file(path: Path, source: str | None = None) -> StoredVersion:
-    """Extract, categorize and store a document, or a new version of it."""
+def import_file(
+    path: Path, source: str | None = None, source_id: int | None = None
+) -> StoredVersion:
+    """Extract, categorize and store a document, or a new version of it.
+
+    `source` identifies the document (the path by default); `source_id` is the
+    managed source it came from, if any.
+    """
     text = ingest.extract_text(path)
     if not text.strip():
         raise ValueError(f"No text found in {path.name}")
     source = source or str(path)
     # Skips the model call on an unchanged save; editors save often.
     stored = document_store.find_unchanged(source, text) or _store_analyzed(
-        path, source, text
+        path, source, text, source_id
     )
     log.info(
         "document_imported",
@@ -43,22 +49,31 @@ def import_file(path: Path, source: str | None = None) -> StoredVersion:
     return stored
 
 
-def _store_analyzed(path: Path, source: str, text: str) -> StoredVersion:
+def _store_analyzed(
+    path: Path, source: str, text: str, source_id: int | None
+) -> StoredVersion:
     title = ingest.guess_title(text, path.stem)
     analysis = agent.analyze(title, text)
-    document = NewDocument(title=title, source=source, text=text, **analysis)
+    document = NewDocument(
+        title=title, source=source, text=text, source_id=source_id, **analysis
+    )
     return document_store.add_document(document)
 
 
-def build_auto_audio(document_id: int) -> QueuedAudio | None:
+def build_auto_audio(
+    document_id: int, skip_not_recommended: bool | None = None
+) -> QueuedAudio | None:
     """Queue audio for an automatic import, or None if the import rule skips it.
 
-    With `skip_not_recommended` on, a document flagged not_recommended is kept
-    but not narrated; `build_audio` still narrates it on request.
+    With `skip_not_recommended` on (the global setting unless a source's rule
+    says otherwise), a document flagged not_recommended is kept but not
+    narrated; `build_audio` still narrates it on request.
     """
     document = _get_document(document_id)
+    if skip_not_recommended is None:
+        skip_not_recommended = load_config().skip_not_recommended
     is_skipped = document["audio_suitability"] == "not_recommended"
-    if is_skipped and load_config().skip_not_recommended:
+    if is_skipped and skip_not_recommended:
         log.info(
             "auto_audio_skipped",
             document_id=document_id,

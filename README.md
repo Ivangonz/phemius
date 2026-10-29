@@ -536,13 +536,13 @@ PHEMIUS_WATCH_DIR=~/Documents/listen make run
 ```
 
 - The folder is created if it does not exist, and subfolders are included.
+  Hidden files and folders (such as `.git`) and unsupported types are skipped.
 - On startup, every supported file already in the folder is imported.
 - While the server runs, new and changed files are imported about a second after
   they are written. New files get their audio generated automatically, unless
   they are rated `not_recommended` for audio and `PHEMIUS_SKIP_NOT_RECOMMENDED`
   is on (the default). A skipped document is still imported, and you can
   generate its audio yourself.
-- Hidden files (names starting with `.`) and unsupported types are skipped.
 - A document is identified by its path. Editing a file adds a new version of the
   same document; earlier versions and their audio stay in the library. Saving a
   file without changing its text adds nothing.
@@ -550,8 +550,11 @@ PHEMIUS_WATCH_DIR=~/Documents/listen make run
   (default) only marks the document as changed (`is_changed` in `GET /api/docs`)
   so you can generate audio when the edit is finished; `regenerate` generates
   audio for every new version, which spends model credits on each save.
-- The folder is read at startup, so restart after changing it, including when
-  you change a saved `watch_dir` setting.
+- On startup the folder becomes a folder *source*, the first of the managed
+  sources (S3). `PHEMIUS_WATCH_DIR` is checked on every start and keeps working
+  while it is set. A saved `watch_dir` setting is turned into a source once and
+  then removed, so restart after saving one. A document imported from a source
+  records which source it came from (`source_id` in `GET /api/docs/{id}`).
 
 ## Access from other devices
 

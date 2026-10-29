@@ -1,150 +1,77 @@
-import time
-from collections.abc import Iterator
+import os
 from pathlib import Path
 
 import pytest
-from structlog.testing import capture_logs
 
-from phemius.services.runner import start_runner
-from phemius.sources.folder import import_existing_files, import_watched_file
-from phemius.store import audio as audio_store
-from phemius.store import database, document_list
-from phemius.store import documents as document_store
-from phemius.store.audio import Audio
-from phemius.store.document_list import DocumentListItem
-from tests.models.fakes import FakeScriptModel, UseScriptModel
+from phemius.errors import InvalidInputError, SourceError
+from phemius.sources import folder
+from phemius.sources.base import SourceItem
 
 
-@pytest.fixture
-def watched(isolated_env: Path, tmp_path: Path) -> Iterator[Path]:
-    database.init_database(isolated_env / "library.db")
-    folder = tmp_path / "watched"
-    folder.mkdir()
-    runner = start_runner()
-    yield folder
-    runner.stop()
+def _synced(source: folder.FolderSource) -> list[SourceItem]:
+    items: list[SourceItem] = []
+    source.sync(items.append)
+    return sorted(items, key=lambda item: item.key)
 
 
-def _wait_until_finished(audio_id: int) -> Audio:
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        audio = audio_store.get_audio(audio_id)
-        if audio and audio["status"] in {"done", "failed", "cancelled"}:
-            return audio
-        time.sleep(0.05)
-    raise AssertionError(f"audio {audio_id} did not finish")
+def test_sync_finds_supported_files_in_subfolders(tmp_path: Path) -> None:
+    (tmp_path / "guides").mkdir()
+    (tmp_path / "guides" / "install.md").write_text("# Install")
+    (tmp_path / "notes.txt").write_text("Notes")
+    (tmp_path / "image.png").write_bytes(b"\x89PNG")
+    (tmp_path / ".hidden.md").write_text("# Hidden")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "description.md").write_text("# Not a document")
+
+    items = _synced(folder.from_config({"path": str(tmp_path)}))
+
+    assert [(item.key, item.name) for item in items] == [
+        (str(tmp_path / "guides" / "install.md"), "guides/install.md"),
+        (str(tmp_path / "notes.txt"), "notes.txt"),
+    ]
+    assert all(item.path.is_file() for item in items)
 
 
-def _only_document() -> DocumentListItem:
-    [document] = document_list.list_documents().items
-    return document
+def test_sync_of_a_missing_folder_raises_a_source_error(tmp_path: Path) -> None:
+    source = folder.from_config({"path": str(tmp_path / "missing")})
+
+    with pytest.raises(SourceError) as raised:
+        source.sync(lambda item: None)
+
+    assert raised.value.hint is not None
 
 
-def _audio_ids_by_version(document_id: int) -> dict[int, list[int]]:
-    page = document_store.list_versions(document_id, limit=25, offset=0)
-    assert page is not None
-    return {
-        version["number"]: [audio["id"] for audio in version["audio"]]
-        for version in page.items
-    }
-
-
-def _import_with_audio(path: Path) -> Audio:
-    import_watched_file(path, is_auto_audio=True)
-    audio_id = _only_document()["audio_id"]
-    assert audio_id is not None
-    return _wait_until_finished(audio_id)
-
-
-def test_existing_supported_files_are_imported(watched: Path) -> None:
-    (watched / "guide.md").write_text("# Guide\n\nHow to install the tool.")
-    (watched / ".hidden.md").write_text("# Hidden")
-    (watched / "image.png").write_bytes(b"\x89PNG")
-
-    import_existing_files(watched, is_auto_audio=False)
-
-    titles = [document["title"] for document in document_list.list_documents().items]
-    assert titles == ["Guide"]
-
-
-def test_editing_a_watched_file_adds_a_version_and_keeps_old_audio(
-    watched: Path,
+def test_an_event_path_through_a_symlink_keeps_the_configured_key(
+    tmp_path: Path,
 ) -> None:
-    guide = watched / "guide.md"
-    guide.write_text("# Guide\n\nInstall with pip.")
-    first_audio = _import_with_audio(guide)
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    os.symlink(real, linked)
+    source = folder.from_config({"path": str(linked)})
 
-    guide.write_text("# Guide\n\nInstall with uv.")
-    import_watched_file(guide, is_auto_audio=True)
+    item = source.item_at(real / "guide.md")
 
-    document = _only_document()
-    assert (document["version"], document["status"]) == (2, "no_audio")
-    assert document["is_changed"] is True
-    assert _audio_ids_by_version(document["id"]) == {2: [], 1: [first_audio["id"]]}
-    assert first_audio["path"] and Path(first_audio["path"]).exists()
+    assert item is not None
+    assert item.key == str(linked / "guide.md")
 
 
-def test_regenerate_setting_builds_audio_for_the_new_version(
-    watched: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("PHEMIUS_WATCH_ON_CHANGE", "regenerate")
-    guide = watched / "guide.md"
-    guide.write_text("# Guide\n\nInstall with pip.")
-    _import_with_audio(guide)
+def test_keys_start_with_the_key_prefix(tmp_path: Path) -> None:
+    (tmp_path / "guide.md").write_text("# Guide")
+    source = folder.from_config({"path": str(tmp_path)})
 
-    guide.write_text("# Guide\n\nInstall with uv.")
-    new_audio = _import_with_audio(guide)
+    [item] = _synced(source)
 
-    document = _only_document()
-    assert document["audio_id"] == new_audio["id"]
-    assert len(_audio_ids_by_version(document["id"])[1]) == 1
-    assert new_audio["status"] == "done", new_audio["error"]
-    assert document["is_changed"] is False
+    assert item.key.startswith(source.key_prefix)
 
 
-def test_saving_identical_content_adds_no_version_or_audio(watched: Path) -> None:
-    guide = watched / "guide.md"
-    guide.write_text("# Guide\n\nInstall with pip.")
-    _import_with_audio(guide)
-
-    import_watched_file(guide, is_auto_audio=True)
-
-    document = _only_document()
-    assert document["version"] == 1
-    assert len(_audio_ids_by_version(document["id"])[1]) == 1
+@pytest.mark.parametrize("config", [{}, {"path": "relative/docs"}, {"path": 3}])
+def test_invalid_config_is_rejected(config: dict[str, object]) -> None:
+    with pytest.raises(InvalidInputError):
+        folder.from_config(config)
 
 
-def test_only_changed_content_is_sent_to_the_model(
-    watched: Path, use_script_model: UseScriptModel
-) -> None:
-    model = FakeScriptModel()
-    use_script_model(model)
-    guide = watched / "guide.md"
-    guide.write_text("# Guide\n\nInstall with pip.")
-    import_watched_file(guide, is_auto_audio=False)
+def test_home_folder_is_expanded() -> None:
+    source = folder.from_config({"path": "~/docs"})
 
-    import_watched_file(guide, is_auto_audio=False)
-    calls_after_unchanged_save = model.analyze_calls
-    guide.write_text("# Guide\n\nInstall with uv.")
-    import_watched_file(guide, is_auto_audio=False)
-
-    assert calls_after_unchanged_save == 1
-    assert model.analyze_calls == 2
-
-
-def test_watched_document_not_recommended_is_imported_but_not_narrated(
-    watched: Path, use_script_model: UseScriptModel
-) -> None:
-    use_script_model(FakeScriptModel(suitability="not_recommended"))
-    reference = watched / "codes.md"
-    reference.write_text("# Codes\n\n| Code | Meaning |\n| --- | --- |\n| 1 | One |")
-
-    with capture_logs() as logs:
-        import_watched_file(reference, is_auto_audio=True)
-
-    [document] = document_list.list_documents().items
-    assert document["status"] == "no_audio"
-    assert document["audio_suitability"] == "not_recommended"
-    [skipped] = [entry for entry in logs if entry["event"] == "auto_audio_skipped"]
-    assert skipped["document_id"] == document["id"]
-    assert "codes.md" not in str(skipped)
+    assert source.config == {"path": str(Path.home() / "docs")}
