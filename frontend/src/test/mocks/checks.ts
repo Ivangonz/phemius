@@ -42,13 +42,27 @@ export function makeCheckRun(
   }
 }
 
-// Answers each POST with the next run, repeating the last one, and counts runs.
-export function serveCheckRuns(...runs: SetupCheckRun[]) {
-  const calls = { count: 0 }
-  const handler = http.post("/api/checks", () => {
-    const run = runs[Math.min(calls.count, runs.length - 1)]
-    calls.count += 1
-    return HttpResponse.json(run)
-  })
-  return { handler, calls }
+type ServeChecksOptions = {
+  lastRun: SetupCheckRun | null
+  runs: SetupCheckRun[]
+}
+
+// GET answers with the server's last run; each POST answers with the next of
+// `runs` (repeating the last one) and becomes the new last run.
+export function serveChecks({ lastRun, runs }: ServeChecksOptions) {
+  const calls = { gets: 0, posts: 0 }
+  let current = lastRun
+  const handlers = [
+    http.get("/api/checks", () => {
+      calls.gets += 1
+      return HttpResponse.json(current)
+    }),
+    http.post("/api/checks", () => {
+      const run = runs[Math.min(calls.posts, runs.length - 1)]
+      calls.posts += 1
+      current = run ?? current
+      return HttpResponse.json(run)
+    }),
+  ]
+  return { handlers, calls }
 }

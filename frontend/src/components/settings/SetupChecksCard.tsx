@@ -1,6 +1,10 @@
 import { useId } from "react"
 import { Button } from "@/components/ui/Button"
-import { useSetupChecks, type SetupCheckRun } from "@/hooks/useSetupChecks"
+import {
+  useRunSetupChecks,
+  useSetupChecks,
+  type SetupCheckRun,
+} from "@/hooks/useSetupChecks"
 import { formatRunTime } from "@/lib/setupChecks"
 import { ChecksError } from "./ChecksError"
 import { SetupCheckRow } from "./SetupCheckRow"
@@ -13,10 +17,13 @@ function describeRun(run: SetupCheckRun | undefined, isRunning: boolean) {
 
 export function SetupChecksCard() {
   const headingId = useId()
-  const { data, error, isFetching, refetch } = useSetupChecks()
+  const { data, error, isFetching } = useSetupChecks()
+  const run = useRunSetupChecks()
+  const isRunning = isFetching || run.isPending
+  const shownError = run.error ?? error
 
   const handleRunChecks = () => {
-    void refetch()
+    run.mutate()
   }
 
   return (
@@ -30,14 +37,14 @@ export function SetupChecksCard() {
             Setup checks
           </h2>
           <p aria-live="polite" className="mt-1 text-secondary text-muted">
-            {describeRun(data, isFetching)}
+            {describeRun(data, isRunning)}
           </p>
         </div>
-        <Button onClick={handleRunChecks} disabled={isFetching}>
+        <Button onClick={handleRunChecks} disabled={isRunning}>
           Run checks
         </Button>
       </div>
-      {error && <ChecksError error={error} />}
+      {shownError && <ChecksError error={shownError} />}
       {data && (
         <ul className="flex flex-col">
           {data.checks.map((check) => (

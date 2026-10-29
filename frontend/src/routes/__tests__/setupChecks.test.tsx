@@ -5,15 +5,12 @@ import { describe, expect, it } from "vitest"
 import { libraryConfigQueryKey } from "@/hooks/useLibraryConfig"
 import type { components } from "@/lib/api-schema"
 import { formatRunTime } from "@/lib/setupChecks"
-import {
-  healthyChecks,
-  makeCheckRun,
-  serveCheckRuns,
-} from "@/test/mocks/checks"
+import { healthyChecks, makeCheckRun, serveChecks } from "@/test/mocks/checks"
 import { server } from "@/test/mocks/server"
 import { renderAppAt } from "@/test/renderApp"
 
 type SetupCheck = components["schemas"]["SetupCheck"]
+type SetupCheckRun = components["schemas"]["SetupCheckRun"]
 
 const missingFfmpeg: SetupCheck = {
   id: "ffmpeg",
@@ -50,19 +47,26 @@ function sidebar() {
   return screen.getByRole("navigation", { name: "Main" })
 }
 
-async function openServerTab(...checks: SetupCheck[]) {
-  const runs = serveCheckRuns(makeCheckRun(checks))
-  server.use(runs.handler)
+async function openServerTab(
+  lastRun: SetupCheckRun | null,
+  runs: SetupCheckRun[] = [],
+) {
+  const served = serveChecks({ lastRun, runs })
+  server.use(...served.handlers)
   const rendered = renderAppAt("/settings/server")
   await within(
     await screen.findByRole("region", { name: "Setup checks" }),
   ).findAllByRole("listitem")
-  return { ...rendered, calls: runs.calls }
+  return { ...rendered, calls: served.calls }
+}
+
+function openWithLastRun(...checks: SetupCheck[]) {
+  return openServerTab(makeCheckRun(checks))
 }
 
 describe("setup checks card", () => {
-  it("runs the checks on first load and labels each status in text", async () => {
-    const { calls } = await openServerTab(
+  it("shows the server's last run without running the checks", async () => {
+    const { calls } = await openWithLastRun(
       healthyChecks[0],
       missingFfmpeg,
       unwritableLibrary,
@@ -78,7 +82,14 @@ describe("setup checks card", () => {
         unwritableLibrary.hint ?? "",
       ),
     ).toBeVisible()
-    expect(calls.count).toBe(1)
+    expect(calls).toEqual({ gets: 1, posts: 0 })
+  })
+
+  it("runs the checks once when the server has no last run", async () => {
+    const { calls } = await openServerTab(null, [makeCheckRun([missingFfmpeg])])
+
+    expect(within(checkRow("ffmpeg")).getByText("Optional")).toBeVisible()
+    expect(calls).toEqual({ gets: 1, posts: 1 })
   })
 
   it("runs the checks again and shows the new results and time", async () => {
@@ -93,13 +104,10 @@ describe("setup checks card", () => {
       ],
       "2026-10-28T11:45:00Z",
     )
-    const runs = serveCheckRuns(first, second)
-    server.use(runs.handler)
     const user = userEvent.setup()
-    renderAppAt("/settings/server")
-    const card = await screen.findByRole("region", { name: "Setup checks" })
+    const { calls } = await openServerTab(first, [second])
     expect(
-      await within(card).findByText(
+      within(checksCard()).getByText(
         `Last run at ${formatRunTime(first.ran_at)}.`,
       ),
     ).toBeVisible()
@@ -117,12 +125,12 @@ describe("setup checks card", () => {
     expect(
       within(checkRow("ffmpeg")).getByText("ffmpeg 7.1 converts audio."),
     ).toBeVisible()
-    expect(runs.calls.count).toBe(2)
+    expect(calls).toEqual({ gets: 1, posts: 1 })
   })
 
   it("links a script model problem to Models and voices", async () => {
     const user = userEvent.setup()
-    const { router } = await openServerTab(unreachableModel)
+    const { router } = await openWithLastRun(unreachableModel)
 
     await user.click(
       within(checkRow("Script model")).getByRole("link", {
@@ -135,6 +143,7 @@ describe("setup checks card", () => {
 
   it("explains when the checks cannot run", async () => {
     server.use(
+      http.get("/api/checks", () => HttpResponse.json(null)),
       http.post("/api/checks", () =>
         HttpResponse.json(
           { detail: "The server is busy.", code: "busy", hint: "Try later." },
@@ -152,17 +161,26 @@ describe("setup checks card", () => {
   })
 
   it("runs the checks again when settings change", async () => {
-    const { queryClient, calls } = await openServerTab(...healthyChecks)
+    const changed = makeCheckRun([unreachableModel], "2026-10-28T10:00:00Z")
+    const { queryClient, calls } = await openServerTab(
+      makeCheckRun(healthyChecks),
+      [changed],
+    )
 
     await queryClient.invalidateQueries({ queryKey: libraryConfigQueryKey })
 
-    await waitFor(() => expect(calls.count).toBe(2))
+    await waitFor(() =>
+      expect(
+        within(checkRow("Script model")).getByText("Needs attention"),
+      ).toBeVisible(),
+    )
+    expect(calls).toEqual({ gets: 1, posts: 1 })
   })
 })
 
 describe("sidebar status", () => {
   it("shows no warning when nothing needs attention", async () => {
-    await openServerTab(...healthyChecks, missingFfmpeg)
+    await openWithLastRun(...healthyChecks, missingFfmpeg)
 
     expect(
       within(sidebar()).queryByText(/needs? attention/),
@@ -170,7 +188,7 @@ describe("sidebar status", () => {
   })
 
   it("warns in text and links server problems to the Server tab", async () => {
-    await openServerTab(unreachableModel, unwritableLibrary)
+    await openWithLastRun(unreachableModel, unwritableLibrary)
 
     const warning = await within(sidebar()).findByRole("link", {
       name: /2 checks need attention/,
@@ -179,7 +197,7 @@ describe("sidebar status", () => {
   })
 
   it("links a script model problem to Models and voices", async () => {
-    await openServerTab(unreachableModel)
+    await openWithLastRun(unreachableModel)
 
     const warning = await within(sidebar()).findByRole("link", {
       name: /1 check needs attention/,
