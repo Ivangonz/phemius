@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { RouteError } from "@/components/RouteError"
+import { AccessCard } from "@/components/settings/AccessCard"
 import { SettingsColumns } from "@/components/settings/SettingsColumns"
 import { SetupChecksCard } from "@/components/settings/SetupChecksCard"
 
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/settings/server")({
 function ServerPage() {
   return (
     <SettingsColumns
-      left={<p className="text-muted">The access card will appear here.</p>}
+      left={<AccessCard />}
       right={
         <>
           <SetupChecksCard />

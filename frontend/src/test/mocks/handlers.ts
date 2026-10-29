@@ -1,6 +1,8 @@
 import { http, HttpResponse } from "msw"
+import type { AccessStatus } from "@/hooks/useAccess"
 import type { LibraryConfig } from "@/hooks/useLibraryConfig"
 import { healthyChecks, makeCheckRun, serveChecks } from "./checks"
+import type { SettingsOverview } from "@/hooks/useSettings"
 import { documentsHandler } from "./documents"
 
 export const libraryConfig: LibraryConfig = {
@@ -23,7 +25,24 @@ export const libraryConfig: LibraryConfig = {
   },
 }
 
+export const accessStatus: AccessStatus = {
+  active_mode: "local",
+  is_token_required: false,
+  has_token: false,
+  is_token_from_env: false,
+  port: 8000,
+}
+
+export const settingsOverview: SettingsOverview = {
+  values: {
+    access_mode: { value: "local", source: "default", is_locked: false },
+  },
+  secrets: {},
+}
+
 export const handlers = [
+  http.get("/api/access", () => HttpResponse.json(accessStatus)),
+  http.get("/api/settings", () => HttpResponse.json(settingsOverview)),
   http.get("/api/config", () => HttpResponse.json(libraryConfig)),
   http.get("/api/audio/:audioId/url", ({ params }) =>
     HttpResponse.json({
