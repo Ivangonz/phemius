@@ -223,6 +223,18 @@ def test_a_new_base_url_for_the_engine_makes_a_new_sample(
     assert len(engine.calls) == 2
 
 
+def test_adding_a_voice_to_the_engine_list_keeps_existing_samples(
+    client: TestClient, use_counter: UseCounter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = use_counter("openai_speech")
+    _preview(client)
+    monkeypatch.setenv("PHEMIUS_OPENAI_SPEECH_VOICES", "alloy,nova,shimmer")
+
+    _preview(client)
+
+    assert len(engine.calls) == 1
+
+
 def test_engine_error_is_a_voice_error_and_leaves_no_cached_sample(
     client: TestClient, use_counter: UseCounter, isolated_env: Path
 ) -> None:

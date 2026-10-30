@@ -8,7 +8,7 @@ from phemius.errors import ModelError, VoiceError
 from phemius.models.base import Script, SectionContext, TokenUsage
 from phemius.services import documents as document_service
 from phemius.services import library as library_service
-from phemius.services import narration_parts, pipeline, queue, runner
+from phemius.services import narration_parts, pipeline, queue, runner, synthesis
 from phemius.store import audio as audio_store
 from phemius.store import database
 from phemius.store import documents as document_store
@@ -318,6 +318,24 @@ def test_sections_are_narrated_into_one_file_with_chapters(
     ]
     assert audio["duration_seconds"] == 6.0
     assert _audio_files(isolated_env) == [f"{audio['id']}.wav"]
+
+
+@pytest.mark.parametrize("text", ["Deploys roll out in waves.", LONG_TEXT])
+def test_narration_holds_the_synthesis_lock_for_every_call(
+    use_script_model: UseScriptModel, monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    held_at_each_call: list[bool] = []
+    engine = CountingEngine(
+        lambda calls: held_at_each_call.append(synthesis.lock.locked())
+    )
+    _use_engine(monkeypatch, engine)
+    job_id = _scripted_audio(use_script_model, text)
+
+    assert runner.run_next("narrating")
+
+    assert _job(job_id)["state"] != "failed", _job(job_id)["error"]
+    assert held_at_each_call
+    assert all(held_at_each_call)
 
 
 def test_a_one_section_audio_is_one_chapter_at_the_start(

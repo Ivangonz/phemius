@@ -45,6 +45,8 @@ class SynthesisCounter:
         return VoiceCheck(True, "Ready.")
 
     def synthesize(self, script: str, out_path: Path, voice: str) -> None:
+        # Kokoro's soundfile picks the format from the suffix, as real engines may.
+        assert out_path.suffix == f".{self.extension}", out_path
         self.calls.append(script)
         if self.error is not None:
             out_path.write_bytes(b"partial")

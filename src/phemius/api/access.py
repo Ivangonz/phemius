@@ -100,7 +100,9 @@ def _bearer_token(request: Request) -> str | None:
 def _has_valid_file_signature(request: Request) -> bool:
     if request.method not in {"GET", "HEAD"}:
         return False
-    path = request.url.path
+    # The decoded path, as the router and the signer see it; `url.path`
+    # re-encodes characters such as `?` and `#`.
+    path: str = request.scope["path"]
     expires = request.query_params.get("expires")
     signature = request.query_params.get("sig")
     if audio := AUDIO_FILE_PATH.fullmatch(path):

@@ -154,6 +154,15 @@ def test_audio_signature_that_does_not_match_is_rejected(signature: str) -> None
     assert not access.is_valid_audio_signature(3, str(signed.expires), signature)
 
 
+def test_preview_signature_does_not_open_audio_with_the_same_id() -> None:
+    access.regenerate_token()
+    signed = access.sign_preview_url("1")
+    expires = str(signed.expires)
+
+    assert access.is_valid_preview_signature("1", expires, signed.signature)
+    assert not access.is_valid_audio_signature(1, expires, signed.signature)
+
+
 def test_audio_url_is_unsigned_without_a_token() -> None:
     signed = access.sign_audio_url(3)
 

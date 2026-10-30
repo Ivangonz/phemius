@@ -6,8 +6,6 @@ for it and is kept under `previews/{engine}/` in the data folder.
 
 import hashlib
 import json
-import os
-import tempfile
 from pathlib import Path
 
 import structlog
@@ -19,16 +17,15 @@ from phemius.store.permissions import create_private_dir
 from phemius.voices import Voice, VoiceEngine, get_engine, namespace_voice
 
 PREVIEWS_DIR = "previews"
+# Settings such as `openai_speech_voices` list the voices, not how they sound.
+VOICE_LIST_SUFFIX = "_voices"
 
 log = structlog.get_logger(__name__)
 
 
 def create_preview(requested: str) -> str:
     """The catalog id of `requested`, with its sample cached. Calls the engine once."""
-    config = load_config()
-    engine = get_engine(config)
-    voice = _catalog_voice(config, engine, requested)
-    path = _cache_path(config, engine, voice.id)
+    engine, voice, path = _locate(requested)
     if not path.is_file():
         _synthesize_once(engine, voice, path)
     return voice.id
@@ -36,13 +33,17 @@ def create_preview(requested: str) -> str:
 
 def cached_preview(requested: str) -> Path:
     """The cached sample of `requested`. Never synthesizes."""
-    config = load_config()
-    engine = get_engine(config)
-    voice = _catalog_voice(config, engine, requested)
-    path = _cache_path(config, engine, voice.id)
+    _, _, path = _locate(requested)
     if not path.is_file():
         raise NotFoundError("No preview yet", hint="Choose Preview to make one.")
     return path
+
+
+def _locate(requested: str) -> tuple[VoiceEngine, Voice, Path]:
+    config = load_config()
+    engine = get_engine(config)
+    voice = _catalog_voice(config, engine, requested)
+    return engine, voice, _cache_path(config, engine, voice)
 
 
 def _catalog_voice(config: Config, engine: VoiceEngine, requested: str) -> Voice:
@@ -55,23 +56,33 @@ def _catalog_voice(config: Config, engine: VoiceEngine, requested: str) -> Voice
     )
 
 
-def _cache_path(config: Config, engine: VoiceEngine, voice_id: str) -> Path:
+def _cache_path(config: Config, engine: VoiceEngine, voice: Voice) -> Path:
     # A digest rather than the id: configured voice names may hold any character.
     folder = config.data_dir / PREVIEWS_DIR / config.voice_engine
-    return folder / f"{_cache_key(config, voice_id)}.{engine.extension}"
+    return folder / f"{_cache_key(config, voice)}.{engine.extension}"
 
 
-def _cache_key(config: Config, voice_id: str) -> str:
-    # The engine's own non-secret settings (base URL, model) are in the key, so a
-    # sample from another server or model is never served.
+def _cache_key(config: Config, voice: Voice) -> str:
+    material = json.dumps(
+        [voice.id, voice.sample_text, _output_settings(config)], sort_keys=True
+    )
+    return hashlib.sha256(material.encode()).hexdigest()[:32]
+
+
+def _output_settings(config: Config) -> dict[str, object]:
+    """The engine's own settings that change how a voice sounds (base URL, model).
+
+    Secrets are left out, and so is the engine's voice list: adding a voice must
+    not pay again for samples of the voices already there.
+    """
     secrets = set(secret_setting_keys())
-    engine_settings = {
+    return {
         key: value
         for key, value in config.model_dump(mode="json").items()
-        if key.startswith(f"{config.voice_engine}_") and key not in secrets
+        if key.startswith(f"{config.voice_engine}_")
+        and key not in secrets
+        and not key.endswith(VOICE_LIST_SUFFIX)
     }
-    material = json.dumps([voice_id, engine_settings], sort_keys=True)
-    return hashlib.sha256(material.encode()).hexdigest()[:32]
 
 
 def _synthesize_once(engine: VoiceEngine, voice: Voice, path: Path) -> None:
@@ -87,9 +98,10 @@ def _synthesize_once(engine: VoiceEngine, voice: Voice, path: Path) -> None:
 
 
 def _write_atomically(engine: VoiceEngine, voice: Voice, path: Path) -> None:
-    handle, temporary = tempfile.mkstemp(dir=path.parent, suffix=".pending")
-    os.close(handle)
-    pending = Path(temporary)
+    # A fixed name is safe under the synthesis lock, and a run that was killed
+    # leaves one file the next attempt overwrites. It keeps the extension because
+    # engines such as Kokoro pick the audio format from it.
+    pending = path.with_name(f"{path.stem}.pending{path.suffix}")
     try:
         engine.synthesize(voice.sample_text, pending, voice.id)
         pending.replace(path)

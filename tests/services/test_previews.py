@@ -19,5 +19,6 @@ def test_preview_waits_for_a_narration_holding_the_synthesis_lock(
     worker.join(5)
 
     assert is_waiting
+    assert not worker.is_alive()
     assert calls_while_locked == []
     assert engine.calls == [SAMPLE_TEXT]
