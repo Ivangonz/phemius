@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from phemius.api.params import Id
 from phemius.errors import NotFoundError
 from phemius.services import access as access_service
 from phemius.store import audio as audio_store
@@ -25,7 +26,7 @@ class AudioUrl(BaseModel):
 
 
 @router.get("/{audio_id}")
-def get_audio(audio_id: int) -> Audio:
+def get_audio(audio_id: Id) -> Audio:
     audio = audio_store.get_audio(audio_id)
     if audio is None:
         raise NotFoundError(f"Audio {audio_id} not found")
@@ -33,7 +34,7 @@ def get_audio(audio_id: int) -> Audio:
 
 
 @router.get("/{audio_id}/url")
-def get_audio_url(audio_id: int) -> AudioUrl:
+def get_audio_url(audio_id: Id) -> AudioUrl:
     """A short-lived URL for the audio file that works without the token header."""
     _ready_audio_path(audio_id)
     signed = access_service.sign_audio_url(audio_id)
@@ -44,7 +45,7 @@ def get_audio_url(audio_id: int) -> AudioUrl:
 
 
 @router.get("/{audio_id}/file", response_class=FileResponse)
-def get_audio_file(audio_id: int) -> FileResponse:
+def get_audio_file(audio_id: Id) -> FileResponse:
     path = _ready_audio_path(audio_id)
     media_type = MEDIA_TYPES.get(path.suffix, "application/octet-stream")
     return FileResponse(path, media_type=media_type)

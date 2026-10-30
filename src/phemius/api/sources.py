@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Response, status
 
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
+from phemius.api.params import Id, OptionalQueryId
 from phemius.services import sources
 from phemius.services.sources import NewSourceRequest, SourceChange, SourceView
 from phemius.store.sources import ActivityEntry
@@ -28,7 +29,7 @@ def add_source(request: NewSourceRequest) -> SourceView:
 
 @router.get("/activity")
 def list_activity(
-    source_id: int | None = None,
+    source_id: OptionalQueryId = None,
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> Page[ActivityEntry]:
@@ -38,36 +39,36 @@ def list_activity(
 
 
 @router.get("/{source_id}")
-def get_source(source_id: int) -> SourceView:
+def get_source(source_id: Id) -> SourceView:
     return sources.describe_source(sources.get_source(source_id))
 
 
 @router.patch("/{source_id}")
-def update_source(source_id: int, change: SourceChange) -> SourceView:
+def update_source(source_id: Id, change: SourceChange) -> SourceView:
     """Partial update. Rules merge: a rule sent as null follows the global
     setting again. A new config restarts the watcher and syncs."""
     return sources.describe_source(sources.update_source(source_id, change))
 
 
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_source(source_id: int) -> Response:
+def delete_source(source_id: Id) -> Response:
     """Delete a source and its activity. Its documents stay in the library."""
     sources.delete_source(source_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{source_id}/pause")
-def pause_source(source_id: int) -> SourceView:
+def pause_source(source_id: Id) -> SourceView:
     return sources.describe_source(sources.pause_source(source_id))
 
 
 @router.post("/{source_id}/resume")
-def resume_source(source_id: int) -> SourceView:
+def resume_source(source_id: Id) -> SourceView:
     """Watch again and sync, which imports what changed while paused."""
     return sources.describe_source(sources.resume_source(source_id))
 
 
 @router.post("/{source_id}/sync", status_code=status.HTTP_202_ACCEPTED)
-def sync_source(source_id: int) -> SourceView:
+def sync_source(source_id: Id) -> SourceView:
     """Sync now, in the background. A paused source is not synced."""
     return sources.describe_source(sources.request_sync(source_id))

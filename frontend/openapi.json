@@ -2625,6 +2625,8 @@
             "name": "audio_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Audio Id",
               "type": "integer"
             }
@@ -2667,6 +2669,8 @@
             "name": "audio_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Audio Id",
               "type": "integer"
             }
@@ -2703,6 +2707,8 @@
             "name": "audio_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Audio Id",
               "type": "integer"
             }
@@ -2912,6 +2918,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 9223372036854775807,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -3168,6 +3175,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 9223372036854775807,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -3436,6 +3444,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 9223372036854775807,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -3521,6 +3530,8 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Job Id",
               "type": "integer"
             }
@@ -3563,6 +3574,8 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Job Id",
               "type": "integer"
             }
@@ -3680,6 +3693,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 9223372036854775807,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -3766,6 +3780,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
+                  "minimum": 1,
                   "type": "integer"
                 },
                 {
@@ -3793,6 +3809,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "maximum": 9223372036854775807,
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -3837,6 +3854,8 @@
             "name": "source_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Source Id",
               "type": "integer"
             }
@@ -3870,6 +3889,8 @@
             "name": "source_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Source Id",
               "type": "integer"
             }
@@ -3911,6 +3932,8 @@
             "name": "source_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Source Id",
               "type": "integer"
             }
@@ -3963,6 +3986,8 @@
             "name": "source_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Source Id",
               "type": "integer"
             }
@@ -4006,6 +4031,8 @@
             "name": "source_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Source Id",
               "type": "integer"
             }
@@ -4049,6 +4076,8 @@
             "name": "source_id",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Source Id",
               "type": "integer"
             }
