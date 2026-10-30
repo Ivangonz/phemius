@@ -6,6 +6,7 @@ import { useCheckScriptModel } from "@/hooks/useScriptModels"
 import { useUpdateSettings } from "@/hooks/useSettings"
 import {
   buildSettingsPatch,
+  PROVIDERS,
   isLocked,
   scriptModelFormSchema,
   toFormValues,
@@ -13,12 +14,16 @@ import {
   type ScriptModelFormValues,
   type SettingsOverview,
 } from "@/lib/scriptModelSettings"
+import { ConnectionResult } from "./ConnectionResult"
 import { ProviderCards } from "./ProviderCards"
 import { ProviderFields } from "./ProviderFields"
-import { ScriptModelStatus } from "./ScriptModelStatus"
+import { SettingsFormStatus } from "./SettingsFormStatus"
 import { TextSettingField } from "./TextSettingField"
 
 type ScriptModelFormProps = { overview: SettingsOverview }
+
+const PROVIDER_LOCKED_NOTE =
+  "Locked: the provider is set by PHEMIUS_SCRIPT_PROVIDER on the server. Unset it and restart to choose here."
 
 const LENGTH_NOTE =
   "Higher limits allow longer scripts but use more provider credit per document. If you see credit errors, lower it."
@@ -73,7 +78,13 @@ export function ScriptModelForm({ overview }: ScriptModelFormProps) {
         onSubmit={(event) => void handleSave(event)}
         className="flex flex-col gap-4.5"
       >
-        <ProviderCards isLocked={isLocked(overview, "script_provider")} />
+        <ProviderCards
+          name="script_provider"
+          legend="Where the model runs"
+          options={PROVIDERS}
+          isLocked={isLocked(overview, "script_provider")}
+          lockedNote={PROVIDER_LOCKED_NOTE}
+        />
         <ProviderFields key={savedCount} overview={overview} />
         <TextSettingField
           name="script_max_tokens"
@@ -93,12 +104,12 @@ export function ScriptModelForm({ overview }: ScriptModelFormProps) {
             {check.isPending ? "Testing…" : "Test connection"}
           </Button>
         </div>
-        <ScriptModelStatus
+        <SettingsFormStatus
           saveError={update.error}
           isSaved={update.isSuccess}
           hasNoChanges={hasNoChanges}
           isTesting={check.isPending}
-          connection={check.data}
+          testResult={check.data && <ConnectionResult result={check.data} />}
         />
       </form>
     </FormProvider>

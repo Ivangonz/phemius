@@ -1,10 +1,6 @@
 import { useId, useState } from "react"
 import { useFormContext } from "react-hook-form"
 import { Button } from "@/components/ui/Button"
-import type {
-  ScriptModelFormValues,
-  SecretKey,
-} from "@/lib/scriptModelSettings"
 import type { components } from "@/lib/api-schema"
 import { FieldShell } from "./FieldShell"
 import { describedBy, INPUT_CLASSES } from "./fieldProps"
@@ -12,7 +8,7 @@ import { describedBy, INPUT_CLASSES } from "./fieldProps"
 type SecretStatus = components["schemas"]["SecretStatus"]
 
 type SecretFieldProps = {
-  name: SecretKey
+  name: string
   label: string
   status: SecretStatus | undefined
   isOptional?: boolean
@@ -30,10 +26,9 @@ export function SecretField({
   isOptional = false,
 }: SecretFieldProps) {
   const id = useId()
-  const { register, formState, resetField } =
-    useFormContext<ScriptModelFormValues>()
+  const { register, formState, getFieldState, resetField } = useFormContext()
   const [isReplacing, setIsReplacing] = useState(false)
-  const error = formState.errors[name]?.message
+  const error = getFieldState(name, formState).error?.message
   const isLocked = status?.is_locked ?? false
   const hasKey = status?.has_key ?? false
   const isEditing = !isLocked && (!hasKey || isReplacing)

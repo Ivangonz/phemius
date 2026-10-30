@@ -1,5 +1,5 @@
 import type { UseFormRegisterReturn } from "react-hook-form"
-import type { Provider, ProviderTag } from "@/lib/scriptModelSettings"
+import type { ProviderOption, ProviderTag } from "@/lib/scriptModelSettings"
 
 const TAG_CLASSES: Record<ProviderTag, string> = {
   Cloud: "bg-chip text-chip-ink",
@@ -8,8 +8,8 @@ const TAG_CLASSES: Record<ProviderTag, string> = {
 }
 
 type ProviderCardProps = {
-  provider: Provider
-  registration: UseFormRegisterReturn<"script_provider">
+  provider: ProviderOption
+  registration: UseFormRegisterReturn
   isDisabled: boolean
 }
 

@@ -1,13 +1,10 @@
 import { useId, type ReactNode } from "react"
 import { useFormContext } from "react-hook-form"
-import type { ScriptModelFormValues } from "@/lib/scriptModelSettings"
 import { FieldShell } from "./FieldShell"
 import { describedBy, INPUT_CLASSES } from "./fieldProps"
 
-type TextFieldName = "model" | "ollama_url" | "script_base_url"
-
 type TextSettingFieldProps = {
-  name: TextFieldName | "script_max_tokens"
+  name: string
   label: string
   isLocked: boolean
   description?: ReactNode
@@ -22,8 +19,8 @@ export function TextSettingField({
   placeholder,
 }: TextSettingFieldProps) {
   const id = useId()
-  const { register, formState } = useFormContext<ScriptModelFormValues>()
-  const error = formState.errors[name]?.message
+  const { register, formState, getFieldState } = useFormContext()
+  const error = getFieldState(name, formState).error?.message
   const isNumber = name === "script_max_tokens"
 
   return (

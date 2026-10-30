@@ -15,11 +15,14 @@ type ValueKey =
 type FieldKey = ValueKey | SecretKey
 export type ProviderTag = "Cloud" | "Your server" | "Local"
 
-export type Provider = {
+export type ProviderOption = {
   id: string
   label: string
   tag: ProviderTag
   description: string
+}
+
+export type Provider = ProviderOption & {
   fields: FieldKey[]
   keyField?: SecretKey
   isKeyRequired?: boolean
