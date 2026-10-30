@@ -11,10 +11,16 @@ from typing import Literal, TypedDict, cast
 from phemius.store.database import transaction
 
 type SourceStatus = Literal["active", "paused"]
-type ActivityAction = Literal["imported", "updated", "skipped", "failed"]
+type ActivityAction = Literal["imported", "updated", "skipped", "failed", "reimport"]
+type ExclusionOrder = Literal["-created", "item_key"]
 type UpdateOutcome = Literal["updated", "missing", "duplicate"]
 
 _COLUMNS = "id, kind, name, config, rules, status, last_sync, error, created, updated"
+
+_EXCLUSION_ORDER: dict[ExclusionOrder, str] = {
+    "-created": "created DESC, id DESC",
+    "item_key": "item_key, id",
+}
 
 
 class StoredSource(TypedDict):
@@ -79,6 +85,19 @@ class SourcePage:
 @dataclass(frozen=True)
 class ActivityPage:
     items: list[ActivityEntry]
+    total: int
+
+
+class StoredExclusion(TypedDict):
+    id: int
+    # The document's `docs.source`, which starts with the source's key prefix.
+    item_key: str
+    created: float
+
+
+@dataclass(frozen=True)
+class ExclusionPage:
+    items: list[StoredExclusion]
     total: int
 
 
@@ -225,21 +244,25 @@ def record_activity(activity: NewActivity) -> None:
         is_repeatable = activity.action in ("skipped", "failed")
         if is_repeatable and _repeats_latest(connection, activity):
             return
-        connection.execute(
-            "INSERT INTO source_activity"
-            " (source_id, action, item, doc_id, detail, created)"
-            " SELECT ?, ?, ?, ?, ?, ?"
-            " WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?)",
-            (
-                activity.source_id,
-                activity.action,
-                activity.item,
-                activity.document_id,
-                activity.detail,
-                time.time(),
-                activity.source_id,
-            ),
-        )
+        _insert_activity(connection, activity)
+
+
+def _insert_activity(connection: sqlite3.Connection, activity: NewActivity) -> None:
+    connection.execute(
+        "INSERT INTO source_activity"
+        " (source_id, action, item, doc_id, detail, created)"
+        " SELECT ?, ?, ?, ?, ?, ?"
+        " WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?)",
+        (
+            activity.source_id,
+            activity.action,
+            activity.item,
+            activity.document_id,
+            activity.detail,
+            time.time(),
+            activity.source_id,
+        ),
+    )
 
 
 def _repeats_latest(connection: sqlite3.Connection, activity: NewActivity) -> bool:
@@ -274,6 +297,43 @@ def is_excluded_on(connection: sqlite3.Connection, source_id: int, key: str) -> 
         (source_id, key),
     ).fetchone()
     return row is not None
+
+
+def list_exclusions(
+    source_id: int, order_by: ExclusionOrder, limit: int, offset: int
+) -> ExclusionPage:
+    with transaction() as connection:
+        total: int = connection.execute(
+            "SELECT COUNT(*) FROM source_exclusions WHERE source_id = ?", (source_id,)
+        ).fetchone()[0]
+        rows = connection.execute(
+            "SELECT id, item_key, created FROM source_exclusions WHERE source_id = ?"
+            f" ORDER BY {_EXCLUSION_ORDER[order_by]} LIMIT ? OFFSET ?",
+            (source_id, limit, offset),
+        ).fetchall()
+    return ExclusionPage([cast(StoredExclusion, dict(row)) for row in rows], total)
+
+
+def get_exclusion(source_id: int, exclusion_id: int) -> StoredExclusion | None:
+    with transaction() as connection:
+        row = connection.execute(
+            "SELECT id, item_key, created FROM source_exclusions"
+            " WHERE id = ? AND source_id = ?",
+            (exclusion_id, source_id),
+        ).fetchone()
+    return cast(StoredExclusion, dict(row)) if row else None
+
+
+def lift_exclusion(exclusion_id: int, activity: NewActivity) -> bool:
+    """Let a sync import the item again, and record `activity` with it."""
+    with transaction(is_immediate=True) as connection:
+        cursor = connection.execute(
+            "DELETE FROM source_exclusions WHERE id = ? AND source_id = ?",
+            (exclusion_id, activity.source_id),
+        )
+        if cursor.rowcount:
+            _insert_activity(connection, activity)
+    return cursor.rowcount > 0
 
 
 def list_activity(source_id: int | None, limit: int, offset: int) -> ActivityPage:

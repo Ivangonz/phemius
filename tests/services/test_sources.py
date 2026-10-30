@@ -612,6 +612,56 @@ def test_a_folder_added_again_imports_what_was_deleted_from_it(
     assert _titles() == ["Guide"]
 
 
+def _delete_only_document(folder: Path, name: str) -> int:
+    source_id = _add_folder_with_rules(folder, auto_audio=False)
+    (folder / name).parent.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text("# Guide\n\nInstall it.")
+    source_service.sync_source(source_id)
+    documents.delete_document(_only_document()["id"])
+    return source_id
+
+
+def test_a_deleted_document_is_listed_as_excluded(watched: Path) -> None:
+    source_id = _delete_only_document(watched, "guides/setup.md")
+
+    exclusions, total = source_service.list_exclusions(source_id, "-created", 25, 0)
+
+    assert total == 1
+    assert [(item.name, item.item_key) for item in exclusions] == [
+        ("setup.md", "guides/setup.md")
+    ]
+
+
+def test_lifting_an_exclusion_imports_the_item_on_the_next_sync(
+    watched: Path,
+) -> None:
+    source_id = _delete_only_document(watched, "guide.md")
+    [exclusion], _ = source_service.list_exclusions(source_id, "-created", 25, 0)
+
+    source_service.lift_exclusion(source_id, exclusion.id)
+    source_service.sync_source(source_id)
+
+    assert _titles() == ["Guide"]
+    assert source_service.list_exclusions(source_id, "-created", 25, 0) == ([], 0)
+    assert [entry[:2] for entry in _activity(source_id)[:2]] == [
+        ("imported", "guide.md"),
+        ("reimport", "guide.md"),
+    ]
+
+
+def test_another_sources_exclusion_cannot_be_lifted(
+    watched: Path, tmp_path: Path
+) -> None:
+    source_id = _delete_only_document(watched, "guide.md")
+    other_id = _add_folder(tmp_path / "other")
+    [exclusion], _ = source_service.list_exclusions(source_id, "-created", 25, 0)
+
+    with pytest.raises(NotFoundError):
+        source_service.lift_exclusion(other_id, exclusion.id)
+
+    assert source_service.list_exclusions(source_id, "-created", 25, 0)[1] == 1
+
+
 def test_unknown_sources_raise_not_found(library: None) -> None:
     with pytest.raises(NotFoundError):
         source_service.pause_source(404)

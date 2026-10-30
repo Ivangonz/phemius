@@ -10,7 +10,6 @@ export const libraryConfig: LibraryConfig = {
   voices: { "kokoro:af_heart": "Heart" },
   default_voice: "af_heart",
   tts_status: { is_ready: true, message: "Kokoro is ready." },
-  watch_dir: null,
   llm: true,
   script_provider: "openrouter",
   model: "anthropic/claude-haiku-5.5",

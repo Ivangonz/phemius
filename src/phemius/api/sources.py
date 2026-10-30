@@ -3,8 +3,13 @@ from fastapi import APIRouter, Response, status
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
 from phemius.api.params import Id, OptionalQueryId
 from phemius.services import sources
-from phemius.services.sources import NewSourceRequest, SourceChange, SourceView
-from phemius.store.sources import ActivityEntry
+from phemius.services.sources import (
+    NewSourceRequest,
+    SourceChange,
+    SourceExclusion,
+    SourceView,
+)
+from phemius.store.sources import ActivityEntry, ExclusionOrder
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
@@ -72,3 +77,25 @@ def resume_source(source_id: Id) -> SourceView:
 def sync_source(source_id: Id) -> SourceView:
     """Sync now, in the background. A paused source is not synced."""
     return sources.describe_source(sources.request_sync(source_id))
+
+
+@router.get("/{source_id}/exclusions")
+def list_exclusions(
+    source_id: Id,
+    order_by: ExclusionOrder = "-created",
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> Page[SourceExclusion]:
+    """Items whose document was deleted, so syncs do not import them again."""
+    items, total = sources.list_exclusions(source_id, order_by, limit, offset)
+    return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.delete(
+    "/{source_id}/exclusions/{exclusion_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def lift_exclusion(source_id: Id, exclusion_id: Id) -> Response:
+    """Re-import an excluded item: an active source syncs now, a paused one on
+    resume."""
+    sources.lift_exclusion(source_id, exclusion_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

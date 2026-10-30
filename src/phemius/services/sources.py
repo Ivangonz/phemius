@@ -9,7 +9,7 @@ import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Annotated
 
 import structlog
@@ -29,17 +29,21 @@ from phemius.sources import Source, Watcher
 from phemius.store import sources as source_store
 from phemius.store.sources import (
     ActivityPage,
+    ExclusionOrder,
     KeptSource,
     NewActivity,
     NewSource,
     SourceChanges,
     SourceStatus,
+    StoredExclusion,
     StoredSource,
 )
 
 log = structlog.get_logger(__name__)
 
 type SourceName = Annotated[str, Field(min_length=1, max_length=200)]
+
+REIMPORT_DETAIL = "Brought back from Excluded files; the next sync imports it."
 
 
 class NewSourceRequest(BaseModel):
@@ -101,6 +105,53 @@ def list_sources(limit: int, offset: int) -> tuple[list[SourceView], int]:
 
 def list_activity(source_id: int | None, limit: int, offset: int) -> ActivityPage:
     return source_store.list_activity(source_id, limit, offset)
+
+
+class SourceExclusion(BaseModel):
+    """An item whose document was deleted, so syncs do not import it again."""
+
+    id: int
+    name: str = Field(description="The item's file name, for display.")
+    item_key: str = Field(description="Where the item is within its source.")
+    created: float
+
+
+def list_exclusions(
+    source_id: int, order_by: ExclusionOrder, limit: int, offset: int
+) -> tuple[list[SourceExclusion], int]:
+    key_prefix = _adapter(get_source(source_id)).key_prefix
+    page = source_store.list_exclusions(source_id, order_by, limit, offset)
+    return [_describe_exclusion(item, key_prefix) for item in page.items], page.total
+
+
+def _describe_exclusion(exclusion: StoredExclusion, key_prefix: str) -> SourceExclusion:
+    item_key = exclusion["item_key"].removeprefix(key_prefix)
+    return SourceExclusion(
+        id=exclusion["id"],
+        name=PurePath(item_key).name or item_key,
+        item_key=item_key,
+        created=exclusion["created"],
+    )
+
+
+def lift_exclusion(source_id: int, exclusion_id: int) -> None:
+    """Let syncs import an excluded item again, and sync an active source now
+    so the item is back without a second click."""
+    source = get_source(source_id)
+    exclusion = source_store.get_exclusion(source_id, exclusion_id)
+    if exclusion is None:
+        raise _exclusion_not_found(exclusion_id)
+    item = _describe_exclusion(exclusion, _adapter(source).key_prefix).item_key
+    activity = NewActivity(source_id, "reimport", item, REIMPORT_DETAIL)
+    if not source_store.lift_exclusion(exclusion_id, activity):
+        raise _exclusion_not_found(exclusion_id)
+    log.info("source_exclusion_lifted", source_id=source_id, exclusion_id=exclusion_id)
+    if source["status"] == "active":
+        _sync_in_background(source_id)
+
+
+def _exclusion_not_found(exclusion_id: int) -> NotFoundError:
+    return NotFoundError(f"Excluded item {exclusion_id} not found")
 
 
 @dataclass(frozen=True)

@@ -25,6 +25,7 @@ def test_get_reports_value_source_and_lock(client: TestClient) -> None:
     }
     assert body["values"]["script_provider"]["value"] == "offline"
     assert body["values"]["default_voice"]["value"] is None
+    assert "watch_dir" not in body["values"]
     assert body["secrets"]["openrouter_api_key"] == {
         "has_key": False,
         "source": "default",
@@ -84,7 +85,13 @@ def test_patch_rejects_a_value_locked_by_env(client: TestClient) -> None:
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("output_format", "flac"), ("script_max_tokens", 0), ("unknown", "x")],
+    [
+        ("output_format", "flac"),
+        ("script_max_tokens", 0),
+        ("unknown", "x"),
+        # Watched folders are sources now (/api/sources).
+        ("watch_dir", "/docs"),
+    ],
 )
 def test_patch_rejects_invalid_values_with_field_errors(
     client: TestClient, field: str, value: object

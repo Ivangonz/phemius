@@ -42,6 +42,7 @@ def test_config_reports_offline_rules_without_a_model(client: TestClient) -> Non
 
     assert body["llm"] is False
     assert body["script_provider"] == "offline"
+    assert "watch_dir" not in body
 
 
 def test_config_reports_configured_provider_without_the_key(
