@@ -25,7 +25,13 @@ export function LibraryResults({
 
   if (!page) {
     if (result.isError)
-      return <ListError error={result.error} onRetry={() => result.refetch()} />
+      return (
+        <ListError
+          title="The library could not be loaded."
+          error={result.error}
+          onRetry={() => result.refetch()}
+        />
+      )
     return (
       <p role="status" className="text-muted">
         Loading documents…

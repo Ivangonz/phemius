@@ -137,7 +137,7 @@ describe("player bar", () => {
     await user.click(within(nav).getByRole("link", { name: "Sources" }))
     await screen.findByRole("heading", { level: 1, name: "Sources" })
     await user.click(within(nav).getByRole("link", { name: "Queue" }))
-    await screen.findByRole("heading", { level: 1, name: "Queue" })
+    await screen.findByRole("heading", { level: 1, name: "Queue and activity" })
 
     expect(audioElement()).toBe(audio)
     expect(audio.paused).toBe(false)

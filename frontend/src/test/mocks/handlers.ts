@@ -3,6 +3,7 @@ import type { AccessStatus } from "@/hooks/useAccess"
 import type { LibraryConfig } from "@/hooks/useLibraryConfig"
 import { healthyChecks, makeCheckRun, serveChecks } from "./checks"
 import { documentsHandler } from "./documents"
+import { queueHandlers } from "./queue"
 import { settingsHandler } from "./settings"
 
 export const libraryConfig: LibraryConfig = {
@@ -42,6 +43,7 @@ export const handlers = [
     }),
   ),
   documentsHandler(() => []),
+  ...queueHandlers({ jobs: [], isPaused: false }),
   ...serveChecks({
     lastRun: makeCheckRun(healthyChecks),
     runs: [makeCheckRun(healthyChecks)],
