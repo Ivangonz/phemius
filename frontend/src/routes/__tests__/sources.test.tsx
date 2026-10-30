@@ -1,6 +1,6 @@
-import { cleanup, screen, within } from "@testing-library/react"
+import { act, cleanup, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { components } from "@/lib/api-schema"
 import { makeSource } from "@/test/factories"
 import { server } from "@/test/mocks/server"
@@ -19,6 +19,10 @@ function openSources(sources: SourceView[]) {
 const findCard = (name: string) => screen.findByRole("region", { name })
 
 describe("sources screen", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("shows a watched folder with its status in text and its path", async () => {
     openSources([makeSource({ id: 1, name: "notes" })])
 
@@ -61,5 +65,45 @@ describe("sources screen", () => {
     expect(
       within(card).getByText("Last sync failed: The folder is missing."),
     ).toBeInTheDocument()
+  })
+
+  it("shows Syncing after Sync now until the server finishes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    openSources([makeSource({ id: 1, name: "notes" })])
+    const card = await findCard("notes")
+
+    await user.click(within(card).getByRole("button", { name: "Sync now" }))
+
+    expect(await within(card).findByText("Syncing")).toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(2_500))
+    expect(await within(card).findByText("Watching")).toBeInTheDocument()
+  })
+
+  it("has no Delete for a source set by the environment", async () => {
+    openSources([makeSource({ id: 1, name: "inbox", is_locked: true })])
+
+    const card = await findCard("inbox")
+
+    expect(within(card).getByRole("button", { name: "Pause" })).toBeVisible()
+    expect(within(card).queryByRole("button", { name: "Delete" })).toBeNull()
+    expect(within(card).getByText(/PHEMIUS_WATCH_DIR/)).toBeInTheDocument()
+  })
+
+  it("deletes a source only after confirming", async () => {
+    const user = userEvent.setup()
+    openSources([makeSource({ id: 1, name: "notes" })])
+    const card = await findCard("notes")
+    const deleteButton = within(card).getByRole("button", { name: "Delete" })
+
+    await user.click(deleteButton)
+    await user.click(within(card).getByRole("button", { name: "Cancel" }))
+    expect(deleteButton).toHaveFocus()
+
+    await user.click(deleteButton)
+    await user.click(
+      within(card).getByRole("button", { name: "Delete source" }),
+    )
+    expect(await screen.findByText(/No sources yet/)).toBeInTheDocument()
   })
 })
