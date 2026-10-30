@@ -1,18 +1,23 @@
+import { useState } from "react"
 import type { UseQueryResult } from "@tanstack/react-query"
 import { ListError } from "@/components/library/ListError"
 import type { components } from "@/lib/api-schema"
 import { isDocumentChanged, listAudioVersions } from "@/lib/audioVersions"
+import { VersionDetail } from "./VersionDetail"
+import { VersionList } from "./VersionList"
 
 type VersionPage = components["schemas"]["Page_VersionSummary_"]
 
 type VersionsSectionProps = {
   result: UseQueryResult<VersionPage>
+  title: string
 }
 
 const PANEL_CLASSES =
   "flex min-w-0 flex-[2_1_560px] flex-col gap-5 rounded-panel border border-line bg-surface p-4 md:p-5.5"
 
-export function VersionsSection({ result }: VersionsSectionProps) {
+export function VersionsSection({ result, title }: VersionsSectionProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const page = result.data
 
   if (!page) {
@@ -32,6 +37,8 @@ export function VersionsSection({ result }: VersionsSectionProps) {
   }
 
   const versions = listAudioVersions(page.items)
+  const selected =
+    versions.find((version) => version.id === selectedId) ?? versions[0]
 
   return (
     <section aria-label="Audio versions" className={PANEL_CLASSES}>
@@ -41,7 +48,16 @@ export function VersionsSection({ result }: VersionsSectionProps) {
           audio yet.
         </p>
       )}
-      {versions.length === 0 && (
+      {selected ? (
+        <>
+          <VersionList
+            versions={versions}
+            selectedId={selected.id}
+            onSelect={setSelectedId}
+          />
+          <VersionDetail key={selected.id} version={selected} title={title} />
+        </>
+      ) : (
         <p className="text-muted">No audio yet for this document.</p>
       )}
     </section>

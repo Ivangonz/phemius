@@ -31,7 +31,7 @@ export function DocumentPage({ documentId }: { documentId: number }) {
     <div className="flex flex-col gap-5.5">
       <DocumentHeader document={document.data} />
       <div className="flex flex-wrap items-start gap-5">
-        <VersionsSection result={versions} />
+        <VersionsSection result={versions} title={document.data.title} />
       </div>
     </div>
   )
