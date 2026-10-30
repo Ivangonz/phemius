@@ -122,3 +122,29 @@ export function makeJob(
     ...overrides,
   }
 }
+
+type SourceView = components["schemas"]["SourceView"]
+
+export function makeSource(
+  overrides: Partial<SourceView> & Pick<SourceView, "id" | "name">,
+): SourceView {
+  return {
+    kind: "folder",
+    config: { path: `/home/me/${overrides.name}` },
+    status: "active",
+    last_sync: 1_761_600_000,
+    error: null,
+    created: 1_761_600_000,
+    updated: 1_761_600_000,
+    rules: {},
+    effective_rules: {
+      auto_audio: true,
+      file_types: [".md", ".txt"],
+      keep_versions: true,
+      regenerate_on_change: false,
+      skip_not_recommended: true,
+    },
+    is_locked: false,
+    ...overrides,
+  }
+}
