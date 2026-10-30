@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button"
 import type { SourceView } from "@/hooks/useSources"
 import { useSyncTracker } from "@/hooks/useSyncTracker"
 import { AddFolderForm } from "./AddFolderForm"
+import { AddSourceTiles } from "./AddSourceTiles"
 import { SourceList } from "./SourceList"
 
 const DESCRIPTION =
@@ -41,6 +42,7 @@ export function SourcesPage() {
           <AddFolderForm onAdded={handleAdded} onCancel={handleCloseAdd} />
         )}
         <SourceList isSyncing={syncs.isSyncing} onSyncStarted={syncs.track} />
+        <AddSourceTiles onAddFolder={() => setIsAdding(true)} />
       </div>
     </>
   )

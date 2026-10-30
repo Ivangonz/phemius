@@ -4,6 +4,7 @@ import { makeSource } from "@/test/factories"
 
 type SourceView = components["schemas"]["SourceView"]
 type NewSourceRequest = components["schemas"]["NewSourceRequest"]
+type SourceChange = components["schemas"]["SourceChange"]
 
 // One list behind every /api/sources route, so a change survives the refetch
 // that follows it. A sync finishes on the second list request after it, so
@@ -61,6 +62,13 @@ export function serveSources(initial: SourceView[]) {
       sources = [...sources, added]
       syncing = { id, listsLeft: 2 }
       return HttpResponse.json(added, { status: 201 })
+    }),
+    http.patch("/api/sources/:id", async ({ params, request }) => {
+      const body = (await request.json()) as SourceChange
+      return change(params.id, {
+        ...(body.name ? { name: body.name } : {}),
+        ...(body.config ? { config: body.config } : {}),
+      })
     }),
     http.delete("/api/sources/:id", ({ params }) => {
       sources = sources.filter((source) => source.id !== Number(params.id))

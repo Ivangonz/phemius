@@ -10,6 +10,7 @@ import { SourceField } from "./SourceField"
 type SourceFormProps = {
   label: string
   defaultValues: SourceFormValues
+  isPathLocked?: boolean
   submitLabel: string
   onSave: (values: SourceFormValues) => Promise<unknown>
   onCancel: () => void
@@ -29,6 +30,7 @@ function showFieldErrors(
 export function SourceForm({
   label,
   defaultValues,
+  isPathLocked = false,
   submitLabel,
   onSave,
   onCancel,
@@ -41,8 +43,8 @@ export function SourceForm({
   const { isSubmitting } = form.formState
 
   useEffect(() => {
-    form.setFocus("path")
-  }, [form])
+    form.setFocus(isPathLocked ? "name" : "path")
+  }, [form, isPathLocked])
 
   const handleSubmit = form.handleSubmit(async (values) => {
     setSaveError(null)
@@ -69,6 +71,7 @@ export function SourceForm({
           name="path"
           label="Folder path"
           placeholder="/home/me/docs"
+          isLocked={isPathLocked}
         />
         <SourceField
           name="name"

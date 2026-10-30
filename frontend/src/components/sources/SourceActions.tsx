@@ -8,6 +8,7 @@ import {
 } from "@/hooks/useSources"
 import { getErrorMessage } from "@/lib/api"
 import { DeleteSourceConfirm } from "./DeleteSourceConfirm"
+import { EditSourceForm } from "./EditSourceForm"
 
 type SourceActionsProps = {
   source: SourceView
@@ -23,7 +24,9 @@ export function SourceActions({
   const action = useSourceAction()
   const deletion = useDeleteSource()
   const [isConfirming, setIsConfirming] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
   const deleteButton = useRef<HTMLButtonElement>(null)
+  const editButton = useRef<HTMLButtonElement>(null)
   const isPaused = source.status === "paused"
   const isBusy = action.isPending || deletion.isPending
   const error = action.error ?? deletion.error
@@ -34,6 +37,11 @@ export function SourceActions({
       { id: source.id, action: name },
       { onSuccess: () => name !== "pause" && onSyncStarted(source) },
     )
+  }
+
+  function handleCloseEdit() {
+    setIsEditing(false)
+    editButton.current?.focus()
   }
 
   function handleCancelDelete() {
@@ -59,6 +67,14 @@ export function SourceActions({
           {isSyncing ? "Syncing…" : "Sync now"}
         </Button>
       )}
+      <Button
+        ref={editButton}
+        variant="secondary"
+        aria-expanded={isEditing}
+        onClick={() => setIsEditing(true)}
+      >
+        Edit
+      </Button>
       {!source.is_locked && (
         <Button
           ref={deleteButton}
@@ -69,6 +85,13 @@ export function SourceActions({
         >
           Delete
         </Button>
+      )}
+      {isEditing && (
+        <EditSourceForm
+          source={source}
+          onSyncStarted={onSyncStarted}
+          onClose={handleCloseEdit}
+        />
       )}
       {isConfirming && (
         <DeleteSourceConfirm

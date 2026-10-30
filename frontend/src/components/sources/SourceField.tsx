@@ -7,6 +7,7 @@ import type { SourceFormValues } from "@/lib/sourceForm"
 type SourceFieldProps = {
   name: keyof SourceFormValues
   label: string
+  isLocked?: boolean
   description?: string
   placeholder?: string
 }
@@ -14,6 +15,7 @@ type SourceFieldProps = {
 export function SourceField({
   name,
   label,
+  isLocked = false,
   description,
   placeholder,
 }: SourceFieldProps) {
@@ -22,16 +24,23 @@ export function SourceField({
   const error = formState.errors[name]?.message
 
   return (
-    <FieldShell id={id} label={label} description={description} error={error}>
+    <FieldShell
+      id={id}
+      label={label}
+      description={description}
+      error={error}
+      isLocked={isLocked}
+    >
       <input
         id={id}
         type="text"
         spellCheck={false}
         autoComplete="off"
         placeholder={placeholder}
+        readOnly={isLocked}
         aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(id, { description, error })}
-        className={INPUT_CLASSES}
+        aria-describedby={describedBy(id, { isLocked, description, error })}
+        className={`${INPUT_CLASSES} read-only:bg-page read-only:text-muted`}
         {...register(name)}
       />
     </FieldShell>
