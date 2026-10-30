@@ -2,6 +2,72 @@ import type { components } from "@/lib/api-schema"
 
 type DocumentListItem = components["schemas"]["DocumentListItem"]
 type Job = components["schemas"]["Job"]
+type Document = components["schemas"]["Document"]
+type VersionSummary = components["schemas"]["VersionSummary"]
+type Audio = components["schemas"]["Audio"]
+
+const DESCRIBED = {
+  category: "how-to / tutorial",
+  summary: "Deploy the billing service to staging in three steps.",
+  suggested_tone: "teacher",
+  tone_rationale: "It reads as a step-by-step how-to.",
+  audio_suitability: "recommended",
+  suitability_reason: null,
+  suitability_source: null,
+  content_hash: "hash",
+} as const
+
+export function makeDocumentDetail(
+  overrides: Partial<Document> & Pick<Document, "id" | "title">,
+): Document {
+  return {
+    ...DESCRIBED,
+    version_id: 1,
+    version: 1,
+    source: "github: acme/billing · docs/deploy-guide.md",
+    source_id: null,
+    text: "The original text.",
+    created: 1_761_600_000,
+    ...overrides,
+  }
+}
+
+export function makeVersion(
+  overrides: Partial<VersionSummary> & Pick<VersionSummary, "id" | "number">,
+): VersionSummary {
+  return {
+    ...DESCRIBED,
+    title: "Deploying the Billing Service",
+    created: 1_761_600_000 + overrides.number,
+    audio: [],
+    ...overrides,
+  }
+}
+
+export function makeAudio(
+  overrides: Partial<Audio> & Pick<Audio, "id" | "tone">,
+): Audio {
+  return {
+    doc_id: 1,
+    version_id: 1,
+    voice: "kokoro:af_heart",
+    script: `The ${overrides.tone} script.`,
+    path: `audio/${overrides.id}.m4a`,
+    format: "m4a",
+    size_bytes: 4_200_000,
+    duration_seconds: 378,
+    conversion_note: null,
+    created: 1_761_700_000 + overrides.id,
+    job_id: 100 + overrides.id,
+    status: "done",
+    stage: "converting",
+    error: null,
+    hint: null,
+    section_titles: [],
+    chapters: [],
+    ...overrides,
+  }
+}
 
 export function makeDocument(
   overrides: Partial<DocumentListItem> & Pick<DocumentListItem, "id" | "title">,
