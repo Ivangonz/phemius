@@ -1,6 +1,6 @@
-import type { ButtonHTMLAttributes } from "react"
+import type { ComponentProps } from "react"
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonProps = ComponentProps<"button"> & {
   variant?: "primary" | "secondary"
 }
 

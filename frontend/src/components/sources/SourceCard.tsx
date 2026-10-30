@@ -10,11 +10,19 @@ import {
 } from "@/lib/sourceDetails"
 import { SourceActions } from "./SourceActions"
 
-type SourceCardProps = { source: SourceView }
+type SourceCardProps = {
+  source: SourceView
+  isSyncing: boolean
+  onSyncStarted: (source: SourceView) => void
+}
 
-export function SourceCard({ source }: SourceCardProps) {
+export function SourceCard({
+  source,
+  isSyncing,
+  onSyncStarted,
+}: SourceCardProps) {
   const titleId = useId()
-  const status = sourceStatus(source)
+  const status = sourceStatus(source, isSyncing)
   const path = folderPath(source)
 
   return (
@@ -39,9 +47,16 @@ export function SourceCard({ source }: SourceCardProps) {
             <p className="text-danger-ink">Last sync failed: {source.error}</p>
           )}
           <p>{describeFileTypes(source)}</p>
+          {source.is_locked && (
+            <p>Set by PHEMIUS_WATCH_DIR, so it cannot be moved or deleted.</p>
+          )}
         </div>
       </div>
-      <SourceActions source={source} />
+      <SourceActions
+        source={source}
+        isSyncing={isSyncing}
+        onSyncStarted={onSyncStarted}
+      />
     </section>
   )
 }

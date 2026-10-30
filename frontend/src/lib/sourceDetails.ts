@@ -9,11 +9,12 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind
 }
 
-export function sourceStatus(source: SourceView): {
-  label: string
-  kind: StatusKind
-} {
+export function sourceStatus(
+  source: SourceView,
+  isSyncing: boolean,
+): { label: string; kind: StatusKind } {
   if (source.status === "paused") return { label: "Paused", kind: "idle" }
+  if (isSyncing) return { label: "Syncing", kind: "working" }
   if (source.error) return { label: "Error", kind: "failed" }
   return { label: "Watching", kind: "ready" }
 }

@@ -1,9 +1,14 @@
 import { ListError } from "@/components/library/ListError"
-import { useSources } from "@/hooks/useSources"
+import { useSources, type SourceView } from "@/hooks/useSources"
 import { SourceCard } from "./SourceCard"
 
-export function SourceList() {
-  const result = useSources()
+type SourceListProps = {
+  isSyncing: (source: SourceView) => boolean
+  onSyncStarted: (source: SourceView) => void
+}
+
+export function SourceList({ isSyncing, onSyncStarted }: SourceListProps) {
+  const result = useSources(isSyncing)
   const items = result.data?.items
 
   if (!items) {
@@ -29,5 +34,12 @@ export function SourceList() {
       </p>
     )
 
-  return items.map((source) => <SourceCard key={source.id} source={source} />)
+  return items.map((source) => (
+    <SourceCard
+      key={source.id}
+      source={source}
+      isSyncing={isSyncing(source)}
+      onSyncStarted={onSyncStarted}
+    />
+  ))
 }
