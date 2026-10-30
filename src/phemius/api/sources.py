@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response, status
 
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
-from phemius.api.params import Id, QueryId
+from phemius.api.params import Id, OptionalQueryId
 from phemius.services import sources
 from phemius.services.sources import NewSourceRequest, SourceChange, SourceView
 from phemius.store.sources import ActivityEntry
@@ -29,7 +29,7 @@ def add_source(request: NewSourceRequest) -> SourceView:
 
 @router.get("/activity")
 def list_activity(
-    source_id: QueryId | None = None,
+    source_id: OptionalQueryId = None,
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> Page[ActivityEntry]:

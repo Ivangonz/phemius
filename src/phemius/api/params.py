@@ -8,4 +8,4 @@ from fastapi import Path, Query
 MAX_ID = 2**63 - 1
 
 type Id = Annotated[int, Path(ge=1, le=MAX_ID)]
-type QueryId = Annotated[int, Query(ge=1, le=MAX_ID)]
+type OptionalQueryId = Annotated[int | None, Query(ge=1, le=MAX_ID)]

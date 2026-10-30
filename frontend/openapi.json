@@ -1579,11 +1579,6 @@
         "title": "Page[VersionSummary]",
         "type": "object"
       },
-      "QueryId": {
-        "maximum": 9.223372036854776e+18,
-        "minimum": 1.0,
-        "type": "integer"
-      },
       "QueuePage": {
         "properties": {
           "is_paused": {
@@ -3785,7 +3780,9 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/QueryId"
+                  "maximum": 9223372036854775807,
+                  "minimum": 1,
+                  "type": "integer"
                 },
                 {
                   "type": "null"
