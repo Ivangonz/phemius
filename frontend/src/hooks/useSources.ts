@@ -4,6 +4,7 @@ import type { components } from "@/lib/api-schema"
 
 export type SourceView = components["schemas"]["SourceView"]
 type SourcePage = components["schemas"]["Page_SourceView_"]
+type NewSource = components["schemas"]["NewSourceRequest"]
 export type SourceAction = "pause" | "resume" | "sync"
 
 // Activity lives under this key too, so one invalidation refreshes both.
@@ -35,6 +36,14 @@ export function useSourceAction() {
     mutationFn: ({ id, action }: { id: number; action: SourceAction }) =>
       api.post<SourceView>(`/sources/${id}/${action}`),
     onSettled: invalidate,
+  })
+}
+
+export function useAddSource() {
+  const invalidate = useInvalidateSources()
+  return useMutation({
+    mutationFn: (source: NewSource) => api.post<SourceView>("/sources", source),
+    onSuccess: invalidate,
   })
 }
 
