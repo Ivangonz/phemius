@@ -1632,6 +1632,37 @@
         "title": "Page[VersionSummary]",
         "type": "object"
       },
+      "Page_VoiceView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[VoiceView]",
+        "type": "object"
+      },
       "QueuePage": {
         "properties": {
           "is_paused": {
@@ -1869,6 +1900,12 @@
           "access_mode": {
             "$ref": "#/components/schemas/AccessMode",
             "default": "local"
+          },
+          "default_tone": {
+            "default": "neutral",
+            "minLength": 1,
+            "title": "Default Tone",
+            "type": "string"
           },
           "default_voice": {
             "anyOf": [
@@ -2627,6 +2664,70 @@
           "message"
         ],
         "title": "VoiceEngineStatus",
+        "type": "object"
+      },
+      "VoiceView": {
+        "properties": {
+          "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accent"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "is_installed": {
+            "title": "Is Installed",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "accent",
+          "is_installed",
+          "size_bytes",
+          "license",
+          "is_default"
+        ],
+        "title": "VoiceView",
         "type": "object"
       },
       "WatchOnChange": {
@@ -4358,6 +4459,100 @@
         "summary": "Today",
         "tags": [
           "stats"
+        ]
+      }
+    },
+    "/api/voices": {
+      "get": {
+        "description": "The configured engine's voices, default first. Sends no provider request.",
+        "operationId": "list_voices_api_voices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "order_by",
+            "required": false,
+            "schema": {
+              "default": "default",
+              "enum": [
+                "default",
+                "label"
+              ],
+              "title": "Order By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_VoiceView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Voices",
+        "tags": [
+          "voices"
+        ]
+      }
+    },
+    "/api/voices/check": {
+      "post": {
+        "description": "Test the configured voice engine now. Hosted engines send a real request.\n\nAlways a fresh check: once hosted checks are cached (#64), this bypasses it.",
+        "operationId": "check_voice_engine_api_voices_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceEngineStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Check Voice Engine",
+        "tags": [
+          "voices"
         ]
       }
     }
