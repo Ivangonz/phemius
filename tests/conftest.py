@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from phemius import config
 from phemius.app import create_app
+from phemius.errors import VoiceError
 from phemius.models import SCRIPT_MODELS
 from phemius.models.base import ScriptModel
 from phemius.services import ffmpeg
@@ -15,7 +16,7 @@ from phemius.voices import piper as piper_voices
 from phemius.voices.downloads import Fetch
 from phemius.voices.piper import PiperEngine
 from tests.services.fakes import FAKE_EXECUTABLE, FakeFfmpeg, UseFfmpeg
-from tests.voices.fakes import UsePiper, fake_catalogue
+from tests.voices.fakes import SynthesisCounter, UseCounter, UsePiper, fake_catalogue
 
 LOCAL_URL = "http://127.0.0.1:8000"
 
@@ -83,6 +84,19 @@ def use_ffmpeg(monkeypatch: pytest.MonkeyPatch) -> UseFfmpeg:
         fake = fake or FakeFfmpeg()
         monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake.run)
         return fake
+
+    return use
+
+
+@pytest.fixture
+def use_counter(monkeypatch: pytest.MonkeyPatch) -> UseCounter:
+    """Registers a counting voice engine as `engine_name` and selects it."""
+
+    def use(engine_name: str, error: VoiceError | None = None) -> SynthesisCounter:
+        engine = SynthesisCounter(engine_name, error)
+        monkeypatch.setitem(ENGINES, engine_name, lambda loaded_config: engine)
+        monkeypatch.setenv("PHEMIUS_TTS", engine_name)
+        return engine
 
     return use
 

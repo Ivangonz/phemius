@@ -14,6 +14,7 @@ from pathlib import Path
 
 import structlog
 
+from phemius.services import synthesis
 from phemius.store import audio as audio_store
 from phemius.store.permissions import create_private_dir
 from phemius.voices.base import VoiceEngine
@@ -78,7 +79,8 @@ def _narrate_part(
         stale.unlink(missing_ok=True)
     # Renamed once written, so a part cut off mid-write never has a part's name.
     pending = part.with_name(f"{index}.pending.wav")
-    engine.synthesize(script, pending, voice)
+    with synthesis.lock:
+        engine.synthesize(script, pending, voice)
     pending.replace(part)
 
 

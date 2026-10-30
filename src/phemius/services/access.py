@@ -21,6 +21,7 @@ MIN_ENV_TOKEN_LENGTH = 16
 # Long enough for a long listen; the player fetches a fresh URL when one expires.
 AUDIO_URL_LIFETIME_SECONDS = 6 * 60 * 60
 AUDIO_URL_KEY_LABEL = b"phemius-audio-url-v1"
+PREVIEW_URL_KEY_LABEL = b"phemius-preview-url-v1"
 # Unix seconds fit in 12 digits for millennia; a longer value is not ours.
 MAX_EXPIRES_DIGITS = 12
 
@@ -160,16 +161,37 @@ def sign_audio_url(audio_id: int) -> AudioUrlSignature:
 
     Without a token there is nothing to sign with, so the signature is None.
     """
-    expires = int(time.time()) + AUDIO_URL_LIFETIME_SECONDS
-    stored_hash = access_store.read_token_hash()
-    if stored_hash is None:
-        return AudioUrlSignature(expires=expires, signature=None)
-    signature = _audio_signature(stored_hash, audio_id, expires)
-    return AudioUrlSignature(expires=expires, signature=signature)
+    return _sign_url(AUDIO_URL_KEY_LABEL, str(audio_id))
 
 
 def is_valid_audio_signature(
     audio_id: int, expires: str | None, signature: str | None
+) -> bool:
+    return _is_valid_signature(AUDIO_URL_KEY_LABEL, str(audio_id), expires, signature)
+
+
+def sign_preview_url(voice_id: str) -> AudioUrlSignature:
+    """Sign one voice preview's URL until it expires, as for audio files."""
+    return _sign_url(PREVIEW_URL_KEY_LABEL, voice_id)
+
+
+def is_valid_preview_signature(
+    voice_id: str, expires: str | None, signature: str | None
+) -> bool:
+    return _is_valid_signature(PREVIEW_URL_KEY_LABEL, voice_id, expires, signature)
+
+
+def _sign_url(label: bytes, resource: str) -> AudioUrlSignature:
+    expires = int(time.time()) + AUDIO_URL_LIFETIME_SECONDS
+    stored_hash = access_store.read_token_hash()
+    if stored_hash is None:
+        return AudioUrlSignature(expires=expires, signature=None)
+    signature = _url_signature(stored_hash, label, resource, expires)
+    return AudioUrlSignature(expires=expires, signature=signature)
+
+
+def _is_valid_signature(
+    label: bytes, resource: str, expires: str | None, signature: str | None
 ) -> bool:
     expires_at = _unix_seconds(expires)
     if not signature or expires_at is None or expires_at < time.time():
@@ -177,7 +199,7 @@ def is_valid_audio_signature(
     stored_hash = access_store.read_token_hash()
     if stored_hash is None:
         return False
-    expected = _audio_signature(stored_hash, audio_id, expires_at)
+    expected = _url_signature(stored_hash, label, resource, expires_at)
     # compare_digest raises on non-ASCII text, so compare bytes.
     return hmac.compare_digest(expected.encode(), signature.encode())
 
@@ -189,10 +211,11 @@ def _unix_seconds(value: str | None) -> int | None:
     return int(value) if value.isascii() and value.isdecimal() else None
 
 
-def _audio_signature(token_hash: str, audio_id: int, expires: int) -> str:
-    # Keyed from the token hash, so regenerating the token revokes every URL.
-    key = hmac.new(token_hash.encode(), AUDIO_URL_KEY_LABEL, hashlib.sha256)
-    message = f"{audio_id}:{expires}".encode()
+def _url_signature(token_hash: str, label: bytes, resource: str, expires: int) -> str:
+    # Keyed from the token hash, so regenerating the token revokes every URL. A
+    # key per label keeps an audio URL's signature from opening a preview.
+    key = hmac.new(token_hash.encode(), label, hashlib.sha256)
+    message = f"{resource}:{expires}".encode()
     return hmac.new(key.digest(), message, hashlib.sha256).hexdigest()
 
 
