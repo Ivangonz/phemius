@@ -133,6 +133,13 @@
       },
       "Audio": {
         "properties": {
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            },
+            "title": "Chapters",
+            "type": "array"
+          },
           "conversion_note": {
             "anyOf": [
               {
@@ -294,7 +301,8 @@
           "stage",
           "error",
           "hint",
-          "section_titles"
+          "section_titles",
+          "chapters"
         ],
         "title": "Audio",
         "type": "object"
@@ -571,6 +579,31 @@
           "files"
         ],
         "title": "Body_upload_documents_api_docs_post",
+        "type": "object"
+      },
+      "Chapter": {
+        "properties": {
+          "start_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Seconds"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "start_seconds"
+        ],
+        "title": "Chapter",
         "type": "object"
       },
       "CheckId": {

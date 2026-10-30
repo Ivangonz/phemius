@@ -389,3 +389,28 @@ def test_existing_audio_has_no_sections_and_keeps_its_script(
     audio = audio_store.get_audio(1)
     assert audio is not None
     assert (audio["script"], audio["section_titles"]) == ("Script.", [])
+
+
+def test_existing_sections_have_chapters_without_start_times(
+    isolated_env: Path,
+) -> None:
+    db_path = isolated_env / "library.db"
+    _library_before_jobs(db_path)
+    with sqlite3.connect(db_path) as connection:
+        for migration in MIGRATIONS[5:13]:
+            migration(connection)
+        connection.execute(
+            "INSERT INTO audio_sections (audio_id, position, title, script)"
+            " VALUES (1, 0, 'Setup', 'Script.'), (1, 1, 'Usage', 'More.')"
+        )
+        connection.execute("PRAGMA user_version=13")
+    connection.close()
+
+    database.init_database(db_path)
+
+    audio = audio_store.get_audio(1)
+    assert audio is not None
+    assert audio["chapters"] == [
+        {"title": "Setup", "start_seconds": None},
+        {"title": "Usage", "start_seconds": None},
+    ]

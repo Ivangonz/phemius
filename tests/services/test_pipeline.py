@@ -1,8 +1,9 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from phemius.errors import ModelError
+from phemius.errors import ModelError, VoiceError
 from phemius.models.base import Script, SectionContext, TokenUsage
 from phemius.services import pipeline, queue, runner
 from phemius.store import audio as audio_store
@@ -12,7 +13,10 @@ from phemius.store import jobs as job_store
 from phemius.store.audio import Audio
 from phemius.store.documents import NewDocument
 from phemius.store.jobs import Job
+from phemius.voices import ENGINES
+from phemius.voices.stub import StubEngine
 from tests.models.fakes import FakeScriptModel, RecordingScriptModel, UseScriptModel
+from tests.services.fakes import FakeFfmpeg, UseFfmpeg
 
 HEADINGS = ["Setup", "Usage", "Upgrades"]
 SUMMARY = "Explains how deploys roll out."
@@ -225,3 +229,170 @@ def test_a_stopping_runner_writes_no_more_sections(
     # Left running, so the next start fails it as interrupted.
     assert _job(job_id)["state"] == "running"
     assert _audio(job_id)["script"] is None
+
+
+class GrowingScriptModel(SectionScriptModel):
+    """Writes section n as n paragraphs, so the stub narrates it in n seconds."""
+
+    def write_script(
+        self,
+        title: str,
+        text: str,
+        tone: str,
+        section: SectionContext | None = None,
+    ) -> Script:
+        super().write_script(title, text, tone, section)
+        paragraphs = ["A spoken paragraph."] * len(self.sections)
+        return Script("\n\n".join(paragraphs), TokenUsage(1000, 200))
+
+
+class CountingEngine(StubEngine):
+    """The stub engine, running `on_synthesize` before each section it narrates."""
+
+    def __init__(self, on_synthesize: Callable[[int], object]) -> None:
+        self.on_synthesize = on_synthesize
+        self.calls = 0
+
+    def synthesize(self, script: str, out_path: Path, voice: str) -> None:
+        self.calls += 1
+        self.on_synthesize(self.calls)
+        super().synthesize(script, out_path, voice)
+
+
+def _use_engine(monkeypatch: pytest.MonkeyPatch, engine: StubEngine) -> None:
+    monkeypatch.setitem(ENGINES, "stub", lambda config: engine)
+
+
+def _scripted_audio(use_script_model: UseScriptModel, text: str = LONG_TEXT) -> int:
+    use_script_model(GrowingScriptModel())
+    job_id = _queue_audio(text)
+    assert runner.run_next("writing_script")
+    assert _job(job_id)["stage"] == "narrating"
+    return job_id
+
+
+def _audio_files(isolated_env: Path) -> list[str]:
+    audio_dir = isolated_env / "audio"
+    return (
+        sorted(path.name for path in audio_dir.rglob("*")) if audio_dir.exists() else []
+    )
+
+
+def test_sections_are_narrated_into_one_file_with_chapters(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
+    job_id = _scripted_audio(use_script_model)
+
+    assert runner.run_next("narrating")
+
+    audio = _audio(job_id)
+    assert _job(job_id)["state"] == "done", _job(job_id)["error"]
+    assert audio["chapters"] == [
+        {"title": "Setup", "start_seconds": 0.0},
+        {"title": "Usage", "start_seconds": 1.0},
+        {"title": "Upgrades", "start_seconds": 3.0},
+    ]
+    assert audio["duration_seconds"] == 6.0
+    assert _audio_files(isolated_env) == [f"{audio['id']}.wav"]
+
+
+def test_a_one_section_audio_is_one_chapter_at_the_start(
+    use_script_model: UseScriptModel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
+    job_id = _scripted_audio(use_script_model, "Deploys roll out in waves.")
+
+    assert runner.run_next("narrating")
+
+    audio = _audio(job_id)
+    assert audio["chapters"] == [{"title": "Guide", "start_seconds": 0.0}]
+    assert audio["duration_seconds"] == 1.0
+
+
+def test_conversion_keeps_the_chapter_times(
+    use_script_model: UseScriptModel,
+    use_ffmpeg: UseFfmpeg,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "m4a")
+    use_ffmpeg(FakeFfmpeg())
+    job_id = _scripted_audio(use_script_model)
+
+    assert runner.run_next("narrating") and runner.run_next("converting")
+
+    audio = _audio(job_id)
+    assert (audio["format"], _job(job_id)["state"]) == ("m4a", "done")
+    assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [0, 1, 3]
+
+
+def test_cancelling_between_sections_stores_nothing_and_leaves_no_files(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = _scripted_audio(use_script_model)
+    engine = CountingEngine(lambda calls: queue.cancel_job(job_id))
+    _use_engine(monkeypatch, engine)
+
+    assert runner.run_next("narrating")
+
+    audio = _audio(job_id)
+    assert engine.calls == 1
+    assert _job(job_id)["state"] == "cancelled"
+    assert audio["path"] is None
+    assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [None] * 3
+    assert _audio_files(isolated_env) == []
+
+
+def test_a_stopping_runner_narrates_no_more_sections(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = _scripted_audio(use_script_model)
+    engine = CountingEngine(lambda calls: None)
+    _use_engine(monkeypatch, engine)
+    claimed = job_store.claim_next("narrating")
+    assert claimed is not None
+
+    is_current = pipeline.narrate(claimed, lambda: engine.calls >= 1)
+
+    assert (is_current, engine.calls) == (False, 1)
+    assert _job(job_id)["state"] == "running"
+    assert _audio(job_id)["path"] is None
+    assert _audio_files(isolated_env) == []
+
+
+def test_a_failed_section_leaves_no_files_and_a_retry_narrates_again(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
+    job_id = _scripted_audio(use_script_model)
+
+    def fail_second_section(calls: int) -> None:
+        if calls == 2:
+            raise VoiceError("The voice server stopped.", hint="Check the server.")
+
+    _use_engine(monkeypatch, CountingEngine(fail_second_section))
+
+    assert runner.run_next("narrating")
+
+    assert (_job(job_id)["state"], _job(job_id)["hint"]) == (
+        "failed",
+        "Check the server.",
+    )
+    assert _audio_files(isolated_env) == []
+
+    _use_engine(monkeypatch, StubEngine())
+    assert queue.retry_job(job_id)["stage"] == "narrating"
+    assert runner.run_next("narrating")
+
+    audio = _audio(job_id)
+    assert _job(job_id)["state"] == "done"
+    assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [0, 1, 3]
+    assert _audio_files(isolated_env) == [f"{audio['id']}.wav"]

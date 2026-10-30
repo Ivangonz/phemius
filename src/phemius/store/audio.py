@@ -33,6 +33,12 @@ class AudioSummary(TypedDict):
     section_titles: list[str]
 
 
+class Chapter(TypedDict):
+    title: str
+    # Where the section starts in the audio; None until it is narrated.
+    start_seconds: float | None
+
+
 class Audio(TypedDict):
     id: int
     doc_id: int
@@ -52,6 +58,8 @@ class Audio(TypedDict):
     error: str | None
     hint: str | None
     section_titles: list[str]
+    # One per script section, in order; empty before the script is written.
+    chapters: list[Chapter]
 
 
 @dataclass(frozen=True)
@@ -69,10 +77,32 @@ def get_audio(audio_id: int) -> Audio | None:
             " FROM audio a JOIN jobs j ON j.audio_id = a.id WHERE a.id = ?",
             (audio_id,),
         ).fetchone()
-        titles = section_titles(connection, [audio_id])
+        chapters = _chapters(connection, audio_id)
     if row is None:
         return None
-    return cast(Audio, {**dict(row), "section_titles": titles[audio_id]})
+    titles = [chapter["title"] for chapter in chapters]
+    return cast(Audio, {**dict(row), "section_titles": titles, "chapters": chapters})
+
+
+def _chapters(connection: sqlite3.Connection, audio_id: int) -> list[Chapter]:
+    rows = connection.execute(
+        "SELECT title, start_seconds FROM audio_sections WHERE audio_id = ?"
+        " ORDER BY position",
+        (audio_id,),
+    )
+    return [
+        Chapter(title=row["title"], start_seconds=row["start_seconds"]) for row in rows
+    ]
+
+
+def section_scripts(audio_id: int) -> list[str]:
+    """The audio's section scripts in order; empty for audio written before #31."""
+    with transaction() as connection:
+        rows = connection.execute(
+            "SELECT script FROM audio_sections WHERE audio_id = ? ORDER BY position",
+            (audio_id,),
+        ).fetchall()
+    return [row["script"] for row in rows]
 
 
 def section_titles(

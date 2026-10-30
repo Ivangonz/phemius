@@ -5,6 +5,7 @@ narration worker, so synthesis happens one audio at a time.
 """
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import overload
 
@@ -26,7 +27,7 @@ from phemius.store.documents import (
 from phemius.store.jobs import AudioFile, AudioFormat, ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
-from phemius.voices.wav import wav_duration_seconds
+from phemius.voices.wav import join_wav_files, wav_duration_seconds
 
 log = structlog.get_logger(__name__)
 
@@ -164,7 +165,9 @@ def write_script(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
 def narrate(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
     """The `narrating` stage. False if the job was cancelled meanwhile.
 
-    One synthesis call, so there is no point at which to check `is_stopping`.
+    Sections are narrated in order and joined into one WAV with each one's
+    start time. Between sections it stops early, keeping no audio, when the
+    job is cancelled or `is_stopping` turns true.
 
     The job is done with the WAV, or queued for `converting` when another
     output format is set.
@@ -172,8 +175,18 @@ def narrate(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
     audio = audio_store.get_audio(job.audio_id)
     if audio is None or not audio["script"] or not audio["voice"]:
         raise NotFoundError("This audio has no script to narrate.")
-    wav_path = _synthesize(job.audio_id, audio["script"], audio["voice"])
+    sections = audio_store.section_scripts(job.audio_id)
+    narrated = _narrate_sections(
+        job.audio_id,
+        sections or [audio["script"]],
+        audio["voice"],
+        should_continue=lambda: not is_stopping() and job_store.is_current(job),
+    )
+    if narrated is None:
+        return False
+    wav_path, starts = narrated
     wav = _audio_file(wav_path, "wav", wav_duration_seconds(wav_path))
+    wav = replace(wav, chapter_starts=tuple(starts) if sections else ())
     is_wav_output = load_config().output_format == "wav"
     save = job_store.finish_audio if is_wav_output else job_store.queue_conversion
     if save(job, wav):
@@ -226,13 +239,34 @@ def error_text(error: Exception) -> str:
     return str(error)
 
 
-def _synthesize(audio_id: int, script: str, voice: str) -> Path:
+def _narrate_sections(
+    audio_id: int,
+    scripts: list[str],
+    voice: str,
+    should_continue: Callable[[], bool],
+) -> tuple[Path, list[float]] | None:
+    """The narrated file and each section's start, or None if stopped early.
+
+    A one-section script is narrated straight to the file, as before sections.
+    """
     config = load_config()
     create_private_dir(config.audio_dir)
     engine = get_engine(config)
     out_path = config.audio_dir / f"{audio_id}.{engine.extension}"
-    engine.synthesize(script, out_path, voice)
-    return out_path
+    if len(scripts) == 1:
+        engine.synthesize(scripts[0], out_path, voice)
+        return out_path, [0.0]
+    parts: list[Path] = []
+    try:
+        for number, script in enumerate(scripts):
+            if not should_continue():
+                return None
+            parts.append(config.audio_dir / f"{audio_id}.part{number}.wav")
+            engine.synthesize(script, parts[-1], voice)
+        return out_path, join_wav_files(parts, out_path)
+    finally:
+        for part in parts:
+            part.unlink(missing_ok=True)
 
 
 def _audio_file(

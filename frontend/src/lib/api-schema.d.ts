@@ -651,6 +651,8 @@ export interface components {
         };
         /** Audio */
         Audio: {
+            /** Chapters */
+            chapters: components["schemas"]["Chapter"][];
             /** Conversion Note */
             conversion_note: string | null;
             /** Created */
@@ -772,6 +774,13 @@ export interface components {
         Body_upload_documents_api_docs_post: {
             /** Files */
             files: string[];
+        };
+        /** Chapter */
+        Chapter: {
+            /** Start Seconds */
+            start_seconds: number | null;
+            /** Title */
+            title: string;
         };
         /** @enum {string} */
         CheckId: "python" | "script_model" | "voice_engine" | "library" | "watch_folder" | "ffmpeg";
