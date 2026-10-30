@@ -36,7 +36,7 @@ from phemius.api.errors import register_exception_handlers
 from phemius.config import Config, load_config
 from phemius.logs import configure_logging
 from phemius.services import access as access_service
-from phemius.services import backup
+from phemius.services import backup, pipeline
 from phemius.services import sources as source_service
 from phemius.services.runner import start_runner
 from phemius.services.voices import check_engine
@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = load_config()
     create_private_dir(config.audio_dir)
     backup.remove_leftovers(config.data_dir)
+    pipeline.remove_leftover_parts(config.audio_dir)
     _prepare_access(app, config)
     runner = start_runner()
     source_service.start_sources()

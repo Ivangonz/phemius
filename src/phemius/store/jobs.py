@@ -78,6 +78,8 @@ class AudioFile:
     duration_seconds: float | None = None
     # Why the audio is WAV when another format was configured.
     conversion_note: str | None = None
+    # Each section's start in seconds, in order; empty keeps the stored times.
+    chapter_starts: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -248,6 +250,14 @@ def _save_audio_file(job: ClaimedJob, file: AudioFile, assignments: str) -> bool
                 job.audio_id,
             ),
         )
+        connection.executemany(
+            "UPDATE audio_sections SET start_seconds = ?"
+            " WHERE audio_id = ? AND position = ?",
+            [
+                (start, job.audio_id, position)
+                for position, start in enumerate(file.chapter_starts)
+            ],
+        )
     return True
 
 
@@ -341,6 +351,7 @@ def clear_audio_files() -> list[str]:
             "UPDATE audio SET path = NULL, format = NULL, size_bytes = NULL,"
             " conversion_note = NULL"
         )
+        connection.execute("UPDATE audio_sections SET start_seconds = NULL")
     return [row["path"] for row in rows]
 
 

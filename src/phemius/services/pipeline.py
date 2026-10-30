@@ -26,11 +26,14 @@ from phemius.store.documents import (
 from phemius.store.jobs import AudioFile, AudioFormat, ClaimedJob, QueuedAudio
 from phemius.store.permissions import create_private_dir
 from phemius.voices import get_engine
-from phemius.voices.wav import wav_duration_seconds
+from phemius.voices.wav import WavJoiner, wav_duration_seconds
 
 log = structlog.get_logger(__name__)
 
 type StopCheck = Callable[[], bool]
+
+# Section parts are `{audio_id}.part{n}.wav` in the audio folder while narrating.
+PART_INFIX = ".part"
 
 
 def never_stops() -> bool:
@@ -164,7 +167,9 @@ def write_script(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
 def narrate(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
     """The `narrating` stage. False if the job was cancelled meanwhile.
 
-    One synthesis call, so there is no point at which to check `is_stopping`.
+    Sections are narrated in order and joined into one WAV with each one's
+    start time. Between sections it stops early, keeping no audio, when the
+    job is cancelled or `is_stopping` turns true.
 
     The job is done with the WAV, or queued for `converting` when another
     output format is set.
@@ -172,13 +177,20 @@ def narrate(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
     audio = audio_store.get_audio(job.audio_id)
     if audio is None or not audio["script"] or not audio["voice"]:
         raise NotFoundError("This audio has no script to narrate.")
-    wav_path = _synthesize(job.audio_id, audio["script"], audio["voice"])
-    wav = _audio_file(wav_path, "wav", wav_duration_seconds(wav_path))
+    sections = audio_store.section_scripts(job.audio_id)
+    wav = _narrate_sections(
+        job.audio_id,
+        sections or [audio["script"]],
+        audio["voice"],
+        should_continue=lambda: not is_stopping() and job_store.is_current(job),
+    )
+    if wav is None:
+        return False
     is_wav_output = load_config().output_format == "wav"
     save = job_store.finish_audio if is_wav_output else job_store.queue_conversion
     if save(job, wav):
         return True
-    wav_path.unlink(missing_ok=True)
+    Path(wav.path).unlink(missing_ok=True)
     return False
 
 
@@ -201,7 +213,7 @@ def convert(job: ClaimedJob, is_stopping: StopCheck = never_stops) -> bool:
         conversion.path,
         conversion.format,
         audio["duration_seconds"],
-        conversion.note,
+        conversion_note=conversion.note,
     )
     is_converted = conversion.path != wav_path
     if not job_store.finish_audio(job, saved):
@@ -226,21 +238,60 @@ def error_text(error: Exception) -> str:
     return str(error)
 
 
-def _synthesize(audio_id: int, script: str, voice: str) -> Path:
+def _narrate_sections(
+    audio_id: int,
+    scripts: list[str],
+    voice: str,
+    should_continue: Callable[[], bool],
+) -> AudioFile | None:
+    """The narrated WAV with each section's start, or None if stopped early.
+
+    A one-section script is narrated straight to the file, as before sections.
+    Each part is appended as soon as it is narrated and then deleted, so disk
+    use peaks at the output plus one part.
+    """
     config = load_config()
     create_private_dir(config.audio_dir)
     engine = get_engine(config)
     out_path = config.audio_dir / f"{audio_id}.{engine.extension}"
-    engine.synthesize(script, out_path, voice)
-    return out_path
+    if len(scripts) == 1:
+        engine.synthesize(scripts[0], out_path, voice)
+        return _audio_file(out_path, "wav", wav_duration_seconds(out_path), (0.0,))
+    with WavJoiner(out_path) as joiner:
+        for number, script in enumerate(scripts):
+            if not should_continue():
+                break
+            part = config.audio_dir / f"{audio_id}{PART_INFIX}{number}.wav"
+            try:
+                engine.synthesize(script, part, voice)
+                joiner.append(part)
+            finally:
+                part.unlink(missing_ok=True)
+    if len(joiner.starts) < len(scripts):
+        out_path.unlink(missing_ok=True)
+        return None
+    return _audio_file(out_path, "wav", joiner.duration_seconds, tuple(joiner.starts))
+
+
+def remove_leftover_parts(audio_dir: Path) -> None:
+    """Remove section parts a stopped server left behind; none is in use yet."""
+    for path in audio_dir.glob(f"*{PART_INFIX}*.wav"):
+        if path.is_file():
+            path.unlink(missing_ok=True)
 
 
 def _audio_file(
     path: Path,
     audio_format: AudioFormat,
     duration_seconds: float | None,
+    chapter_starts: tuple[float, ...] = (),
     conversion_note: str | None = None,
 ) -> AudioFile:
     return AudioFile(
-        str(path), audio_format, path.stat().st_size, duration_seconds, conversion_note
+        str(path),
+        audio_format,
+        path.stat().st_size,
+        duration_seconds,
+        conversion_note,
+        chapter_starts,
     )

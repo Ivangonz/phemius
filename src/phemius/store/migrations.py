@@ -353,6 +353,11 @@ def _add_source_exclusions(connection: sqlite3.Connection) -> None:
     )
 
 
+def _add_chapter_start_times(connection: sqlite3.Connection) -> None:
+    # Where each section starts in the narrated audio; NULL until it is narrated.
+    connection.execute("ALTER TABLE audio_sections ADD COLUMN start_seconds REAL")
+
+
 MIGRATIONS: list[Migration] = [
     _create_initial_schema,
     _namespace_voice_ids,
@@ -367,6 +372,7 @@ MIGRATIONS: list[Migration] = [
     _add_sources,
     _add_audio_sections,
     _add_source_exclusions,
+    _add_chapter_start_times,
 ]
 
 
