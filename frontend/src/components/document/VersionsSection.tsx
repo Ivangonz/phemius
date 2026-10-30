@@ -1,4 +1,3 @@
-import { useState } from "react"
 import type { UseQueryResult } from "@tanstack/react-query"
 import { ListError } from "@/components/library/ListError"
 import type { components } from "@/lib/api-schema"
@@ -11,13 +10,19 @@ type VersionPage = components["schemas"]["Page_VersionSummary_"]
 type VersionsSectionProps = {
   result: UseQueryResult<VersionPage>
   title: string
+  selectedId: number | null
+  onSelect: (audioId: number) => void
 }
 
 const PANEL_CLASSES =
   "flex min-w-0 flex-[2_1_560px] flex-col gap-5 rounded-panel border border-line bg-surface p-4 md:p-5.5"
 
-export function VersionsSection({ result, title }: VersionsSectionProps) {
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+export function VersionsSection({
+  result,
+  title,
+  selectedId,
+  onSelect,
+}: VersionsSectionProps) {
   const page = result.data
 
   if (!page) {
@@ -44,8 +49,8 @@ export function VersionsSection({ result, title }: VersionsSectionProps) {
     <section aria-label="Audio versions" className={PANEL_CLASSES}>
       {isDocumentChanged(page.items) && (
         <p className="rounded-control bg-warning px-3.5 py-3 text-warning-ink">
-          This document changed since its last audio. The newest text has no
-          audio yet.
+          This document changed since its last audio. Generate a version to hear
+          the newest text.
         </p>
       )}
       {selected ? (
@@ -53,7 +58,7 @@ export function VersionsSection({ result, title }: VersionsSectionProps) {
           <VersionList
             versions={versions}
             selectedId={selected.id}
-            onSelect={setSelectedId}
+            onSelect={onSelect}
           />
           <VersionDetail key={selected.id} version={selected} title={title} />
         </>

@@ -1,12 +1,12 @@
 import { RowPlayButton } from "@/components/library/RowPlayButton"
 import { StatusBadge } from "@/components/library/StatusBadge"
 import { useAudio, type AudioDetail } from "@/hooks/useAudio"
+import { useVersionStatus } from "@/hooks/useVersionStatus"
 import {
   describeVersion,
   formatDate,
   type AudioVersion,
 } from "@/lib/audioVersions"
-import { describeJob } from "@/lib/documentStatus"
 import { formatBytes } from "@/lib/formatBytes"
 import { ScriptView } from "./ScriptView"
 
@@ -27,7 +27,7 @@ function describeFile(audio: AudioDetail | undefined): string[] {
 
 export function VersionDetail({ version, title }: VersionDetailProps) {
   const { data: audio } = useAudio(version.id)
-  const status = describeJob(version)
+  const status = useVersionStatus(version)
   const textVersion =
     version.version === null ? [] : [`Text version ${version.version}`]
   const meta = [...describeFile(audio), ...textVersion].join(" · ")
