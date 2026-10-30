@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw"
 import type { AccessStatus } from "@/hooks/useAccess"
 import type { LibraryConfig } from "@/hooks/useLibraryConfig"
+import { activityHandler } from "./activity"
 import { healthyChecks, makeCheckRun, serveChecks } from "./checks"
 import { documentsHandler } from "./documents"
 import { queueHandlers, quietDay, todayStatsHandler } from "./queue"
@@ -50,4 +51,5 @@ export const handlers = [
     runs: [makeCheckRun(healthyChecks)],
   }).handlers,
   settingsHandler(),
+  activityHandler(),
 ]
