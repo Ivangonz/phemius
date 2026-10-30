@@ -3,6 +3,7 @@ import type { DocumentStatus } from "./librarySearch"
 
 type DocumentListItem = components["schemas"]["DocumentListItem"]
 type JobStage = components["schemas"]["JobStage"]
+type JobState = components["schemas"]["JobState"]
 
 export type StatusKind = "ready" | "working" | "failed" | "idle"
 
@@ -40,4 +41,8 @@ export function describeStatus({
   if (status === "no_audio" && is_changed)
     return { label: "Changed, no audio yet", kind }
   return { label: STATUS_LABELS[status], kind }
+}
+
+export function isJobActive({ status }: { status: JobState }): boolean {
+  return status === "queued" || status === "running"
 }
