@@ -154,3 +154,39 @@ describe("generating a version", () => {
     expect(alert).toHaveTextContent("Run `uv sync --extra kokoro`.")
   })
 })
+
+describe("comparing versions", () => {
+  it("shows two versions' scripts side by side", async () => {
+    serveDocument({
+      audio: [
+        makeAudio({ id: 7, tone: "teacher" }),
+        makeAudio({ id: 8, tone: "podcast" }),
+      ],
+    })
+    const user = await openDocument()
+
+    await user.click(
+      screen.getByRole("button", { name: "Compare two versions" }),
+    )
+
+    const left = screen.getByRole("region", { name: "First version" })
+    const right = screen.getByRole("region", { name: "Second version" })
+    expect(await within(left).findByText("The podcast script.")).toBeVisible()
+    expect(await within(right).findByText("The teacher script.")).toBeVisible()
+
+    await user.selectOptions(
+      within(right).getByRole("combobox", { name: "Second version" }),
+      "8",
+    )
+    expect(await within(right).findByText("The podcast script.")).toBeVisible()
+  })
+
+  it("offers comparing only when there are two versions", async () => {
+    serveDocument()
+    await openDocument()
+
+    expect(
+      screen.queryByRole("button", { name: "Compare two versions" }),
+    ).toBeNull()
+  })
+})
