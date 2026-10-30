@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { useFormContext } from "react-hook-form"
+import { useFormContext, type FieldValues, type Path } from "react-hook-form"
 import { Button } from "@/components/ui/Button"
 import type { components } from "@/lib/api-schema"
 import { FieldShell } from "./FieldShell"
@@ -7,8 +7,8 @@ import { describedBy, INPUT_CLASSES } from "./fieldProps"
 
 type SecretStatus = components["schemas"]["SecretStatus"]
 
-type SecretFieldProps = {
-  name: string
+type SecretFieldProps<T extends FieldValues> = {
+  name: NoInfer<Path<T>>
   label: string
   status: SecretStatus | undefined
   isOptional?: boolean
@@ -18,15 +18,16 @@ const STORED_NOTE =
   "Keys are stored on this computer only and never shown again."
 
 // A saved key is never sent to the browser: the field shows "Key saved" and
-// only a newly typed key is saved.
-export function SecretField({
+// only a newly typed key is saved. T defaults to never so a caller must name
+// its form type and tsc checks `name` against it.
+export function SecretField<T extends FieldValues = never>({
   name,
   label,
   status,
   isOptional = false,
-}: SecretFieldProps) {
+}: SecretFieldProps<T>) {
   const id = useId()
-  const { register, formState, getFieldState, resetField } = useFormContext()
+  const { register, formState, getFieldState, resetField } = useFormContext<T>()
   const [isReplacing, setIsReplacing] = useState(false)
   const error = getFieldState(name, formState).error?.message
   const isLocked = status?.is_locked ?? false

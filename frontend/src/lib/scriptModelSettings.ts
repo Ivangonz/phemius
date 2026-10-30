@@ -1,8 +1,11 @@
 import { z } from "zod"
-import type { components } from "./api-schema"
-
-export type SettingsOverview = components["schemas"]["SettingsOverview"]
-export type SettingsUpdate = components["schemas"]["Settings"]
+import {
+  isLocked,
+  savedValue,
+  type ProviderOption,
+  type SettingsOverview,
+  type SettingsUpdate,
+} from "./settingsFields"
 
 export type SecretKey =
   "openrouter_api_key" | "openai_api_key" | "script_api_key"
@@ -13,15 +16,6 @@ type ValueKey =
   | "script_base_url"
   | "script_max_tokens"
 type FieldKey = ValueKey | SecretKey
-export type ProviderTag = "Cloud" | "Your server" | "Local"
-
-export type ProviderOption = {
-  id: string
-  label: string
-  tag: ProviderTag
-  description: string
-}
-
 export type Provider = ProviderOption & {
   fields: FieldKey[]
   keyField?: SecretKey
@@ -128,17 +122,6 @@ export function validateProviderFields(
     if (!overview.secrets[keyField]?.has_key)
       errors[keyField] = "Enter an API key."
   return errors
-}
-
-export function isLocked(overview: SettingsOverview, key: string): boolean {
-  return (
-    overview.values[key]?.is_locked ?? overview.secrets[key]?.is_locked ?? false
-  )
-}
-
-export function savedValue(overview: SettingsOverview, key: string): string {
-  const value = overview.values[key]?.value
-  return value === null || value === undefined ? "" : String(value)
 }
 
 export function toFormValues(

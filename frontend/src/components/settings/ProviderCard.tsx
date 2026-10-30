@@ -1,5 +1,5 @@
 import type { UseFormRegisterReturn } from "react-hook-form"
-import type { ProviderOption, ProviderTag } from "@/lib/scriptModelSettings"
+import type { ProviderOption, ProviderTag } from "@/lib/settingsFields"
 
 const TAG_CLASSES: Record<ProviderTag, string> = {
   Cloud: "bg-chip text-chip-ink",

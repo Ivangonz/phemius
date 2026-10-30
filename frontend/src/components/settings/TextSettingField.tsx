@@ -1,27 +1,30 @@
 import { useId, type ReactNode } from "react"
-import { useFormContext } from "react-hook-form"
+import { useFormContext, type FieldValues, type Path } from "react-hook-form"
 import { FieldShell } from "./FieldShell"
 import { describedBy, INPUT_CLASSES } from "./fieldProps"
 
-type TextSettingFieldProps = {
-  name: string
+type TextSettingFieldProps<T extends FieldValues> = {
+  name: NoInfer<Path<T>>
   label: string
   isLocked: boolean
+  isNumber?: boolean
   description?: ReactNode
   placeholder?: string
 }
 
-export function TextSettingField({
+// T defaults to never so a caller must name its form type and tsc checks
+// `name` against it.
+export function TextSettingField<T extends FieldValues = never>({
   name,
   label,
   isLocked,
+  isNumber = false,
   description,
   placeholder,
-}: TextSettingFieldProps) {
+}: TextSettingFieldProps<T>) {
   const id = useId()
-  const { register, formState, getFieldState } = useFormContext()
+  const { register, formState, getFieldState } = useFormContext<T>()
   const error = getFieldState(name, formState).error?.message
-  const isNumber = name === "script_max_tokens"
 
   return (
     <FieldShell

@@ -7,13 +7,12 @@ import { useUpdateSettings } from "@/hooks/useSettings"
 import {
   buildSettingsPatch,
   PROVIDERS,
-  isLocked,
   scriptModelFormSchema,
   toFormValues,
   validateProviderFields,
   type ScriptModelFormValues,
-  type SettingsOverview,
 } from "@/lib/scriptModelSettings"
+import { isLocked, type SettingsOverview } from "@/lib/settingsFields"
 import { ConnectionResult } from "./ConnectionResult"
 import { ProviderCards } from "./ProviderCards"
 import { ProviderFields } from "./ProviderFields"
@@ -78,7 +77,7 @@ export function ScriptModelForm({ overview }: ScriptModelFormProps) {
         onSubmit={(event) => void handleSave(event)}
         className="flex flex-col gap-4.5"
       >
-        <ProviderCards
+        <ProviderCards<ScriptModelFormValues>
           name="script_provider"
           legend="Where the model runs"
           options={PROVIDERS}
@@ -86,8 +85,9 @@ export function ScriptModelForm({ overview }: ScriptModelFormProps) {
           lockedNote={PROVIDER_LOCKED_NOTE}
         />
         <ProviderFields key={savedCount} overview={overview} />
-        <TextSettingField
+        <TextSettingField<ScriptModelFormValues>
           name="script_max_tokens"
+          isNumber
           label="Longest script, in tokens"
           isLocked={isLocked(overview, "script_max_tokens")}
           description={LENGTH_NOTE}

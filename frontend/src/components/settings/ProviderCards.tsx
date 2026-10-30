@@ -1,25 +1,26 @@
 import { useId } from "react"
-import { useFormContext } from "react-hook-form"
-import type { ProviderOption } from "@/lib/scriptModelSettings"
+import { useFormContext, type FieldValues, type Path } from "react-hook-form"
+import type { ProviderOption } from "@/lib/settingsFields"
 import { ProviderCard } from "./ProviderCard"
 
-type ProviderCardsProps = {
-  name: string
+type ProviderCardsProps<T extends FieldValues> = {
+  name: NoInfer<Path<T>>
   legend: string
   options: ProviderOption[]
   isLocked: boolean
   lockedNote: string
 }
 
-export function ProviderCards({
+// T defaults to never so a caller must name its form type.
+export function ProviderCards<T extends FieldValues = never>({
   name,
   legend,
   options,
   isLocked,
   lockedNote,
-}: ProviderCardsProps) {
+}: ProviderCardsProps<T>) {
   const lockedId = useId()
-  const { register } = useFormContext()
+  const { register } = useFormContext<T>()
   const registration = register(name)
 
   return (

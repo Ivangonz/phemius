@@ -1,11 +1,13 @@
 import { useFormContext, useWatch } from "react-hook-form"
 import {
   findProvider,
+  type ScriptModelFormValues,
+} from "@/lib/scriptModelSettings"
+import {
   isLocked,
   savedValue,
-  type ScriptModelFormValues,
   type SettingsOverview,
-} from "@/lib/scriptModelSettings"
+} from "@/lib/settingsFields"
 import { OllamaModelField } from "./OllamaModelField"
 import { SecretField } from "./SecretField"
 import { TextSettingField } from "./TextSettingField"
@@ -38,7 +40,7 @@ export function ProviderFields({ overview }: ProviderFieldsProps) {
   return (
     <div className="flex flex-col gap-4.5">
       {has("ollama_url") && (
-        <TextSettingField
+        <TextSettingField<ScriptModelFormValues>
           name="ollama_url"
           label="Ollama address"
           isLocked={locked("ollama_url")}
@@ -49,7 +51,7 @@ export function ProviderFields({ overview }: ProviderFieldsProps) {
         <OllamaModelField isLocked={locked("ollama_model")} />
       )}
       {has("script_base_url") && (
-        <TextSettingField
+        <TextSettingField<ScriptModelFormValues>
           name="script_base_url"
           label="Base URL"
           isLocked={locked("script_base_url")}
@@ -62,7 +64,7 @@ export function ProviderFields({ overview }: ProviderFieldsProps) {
         />
       )}
       {keyField && (
-        <SecretField
+        <SecretField<ScriptModelFormValues>
           name={keyField}
           label={KEY_LABELS[keyField]}
           status={overview.secrets[keyField]}
@@ -70,7 +72,7 @@ export function ProviderFields({ overview }: ProviderFieldsProps) {
         />
       )}
       {has("model") && (
-        <TextSettingField
+        <TextSettingField<ScriptModelFormValues>
           name="model"
           label="Model"
           isLocked={locked("model")}
