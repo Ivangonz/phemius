@@ -1,10 +1,13 @@
+import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from phemius.voices import ENGINES, Voice, VoiceCheck
 from phemius.voices import piper as piper_voices
+from tests.voices.fakes import VOICE, UsePiper, fake_fetch
 
 JOE = "piper:en_US-joe-medium"
 LESSAC = "piper:en_US-lessac-medium"
@@ -137,3 +140,58 @@ def test_unknown_engine_lists_no_voices_and_checks_not_ready(
 
     assert client.get("/api/voices").json()["items"] == []
     assert client.post("/api/voices/check").json()["is_ready"] is False
+
+
+def _wait_for_installed(client: TestClient, voice_id: str) -> dict[str, Any]:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        items: list[dict[str, Any]] = client.get("/api/voices").json()["items"]
+        voice = next(item for item in items if item["id"] == voice_id)
+        if voice["download"]["state"] != "downloading":
+            return voice
+        time.sleep(0.05)
+    raise AssertionError("the download did not finish")
+
+
+def test_download_returns_202_and_progress_shows_on_the_voice(
+    client: TestClient, use_piper: UsePiper
+) -> None:
+    use_piper(fake_fetch)
+
+    response = client.post(f"/api/voices/{VOICE}/download")
+
+    assert response.status_code == 202
+    assert response.json()["state"] == "downloading"
+    voice = _wait_for_installed(client, VOICE)
+    assert voice["is_installed"] is True
+    assert voice["download"]["done"] == voice["download"]["total"]
+
+
+def test_download_for_an_engine_without_downloads_is_a_409(client: TestClient) -> None:
+    response = client.post("/api/voices/stub:silent/download")
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "voice_download_conflict"
+    assert response.json()["hint"]
+
+
+@pytest.mark.parametrize(
+    ("voice_id", "status"),
+    [
+        ("piper:missing", 404),
+        ("kokoro:af_heart", 404),
+        ("piper:..", 404),
+        ("..%2F..%2Fetc%2Fpasswd", 404),
+        ("piper%3A..%5Cwindows", 422),
+        ("piper:" + "a" * 200, 422),
+    ],
+)
+def test_hostile_voice_ids_are_a_4xx_in_the_error_shape(
+    client: TestClient, use_piper: UsePiper, voice_id: str, status: int
+) -> None:
+    use_piper(fake_fetch)
+
+    response = client.post(f"/api/voices/{voice_id}/download")
+
+    assert response.status_code == status
+    assert {"detail", "code"} <= response.json().keys()

@@ -689,6 +689,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voices/{voice_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Voice
+         * @description Download a voice in the background; its progress shows in the voice list.
+         *
+         *     Asking again while it downloads returns the same download. Fetches from the
+         *     voice catalogue host, never a paid provider.
+         */
+        post: operations["download_voice_api_voices__voice_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -944,6 +967,26 @@ export interface components {
             version: number;
         };
         DocumentStatus: components["schemas"]["JobState"] | "no_audio";
+        /**
+         * DownloadProgress
+         * @description A voice download started since the server started; bytes done of total.
+         */
+        DownloadProgress: {
+            /**
+             * Done
+             * @default 0
+             */
+            done?: number;
+            /** Hint */
+            hint?: string | null;
+            /** Message */
+            message?: string | null;
+            state: components["schemas"]["DownloadState"];
+            /** Total */
+            total?: number | null;
+        };
+        /** @enum {string} */
+        DownloadState: "downloading" | "installed" | "failed";
         /**
          * EffectiveRules
          * @description The rules a source applies, with the global settings filled in.
@@ -1552,6 +1595,8 @@ export interface components {
         VoiceView: {
             /** Accent */
             accent: string | null;
+            /** @description The download started since the server started, if any. */
+            download: components["schemas"]["DownloadProgress"] | null;
             /** Id */
             id: string;
             /** Is Default */
@@ -2757,6 +2802,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceEngineStatus"];
+                };
+            };
+        };
+    };
+    download_voice_api_voices__voice_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadProgress"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -37,7 +37,7 @@ from phemius.api.errors import register_exception_handlers
 from phemius.config import Config, load_config
 from phemius.logs import configure_logging
 from phemius.services import access as access_service
-from phemius.services import backup, narration_parts
+from phemius.services import backup, narration_parts, voice_downloads
 from phemius.services import sources as source_service
 from phemius.services.runner import start_runner
 from phemius.services.voices import check_engine
@@ -67,6 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _prepare_access(app, config)
     runner = start_runner()
     source_service.start_sources()
+    voice_downloads.start_downloads()
     log.info(
         "phemius_started",
         version=__version__,
@@ -75,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     _warn_if_voice_engine_not_ready()
     yield
+    voice_downloads.stop_downloads()
     source_service.stop_sources()
     runner.stop()
 

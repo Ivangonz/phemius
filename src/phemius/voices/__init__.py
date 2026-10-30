@@ -9,10 +9,17 @@ from collections.abc import Callable
 from phemius.config import Config
 from phemius.errors import VoiceError
 from phemius.voices import elevenlabs, kokoro, openai_speech, piper, stub
-from phemius.voices.base import Voice, VoiceCheck, VoiceEngine, namespace_voice
+from phemius.voices.base import (
+    DownloadableEngine,
+    Voice,
+    VoiceCheck,
+    VoiceEngine,
+    namespace_voice,
+)
 
 __all__ = [
     "ENGINES",
+    "DownloadableEngine",
     "Voice",
     "VoiceCheck",
     "VoiceEngine",

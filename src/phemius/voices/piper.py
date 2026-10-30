@@ -4,6 +4,7 @@ Voices download on demand from a pinned revision of the rhasspy/piper-voices
 catalogue into `<data folder>/voices/piper`.
 """
 
+import threading
 import wave
 from dataclasses import dataclass
 from functools import lru_cache
@@ -147,6 +148,9 @@ class PiperEngine:
         self._voices_dir = voices_dir
         self._fetch = fetch
         self._loaded: dict[str, Any] = {}  # one PiperVoice per voice name
+        # Narration and a download from the Voices screen would otherwise
+        # write the same `.part` file at once.
+        self._download_lock = threading.Lock()
 
     def voices(self) -> list[Voice]:
         return [
@@ -179,13 +183,14 @@ class PiperEngine:
         Raises `VoiceError` on a network failure or a checksum mismatch.
         """
         entry = _catalogue_voice(voice)
-        missing = [
-            (suffix, file)
-            for suffix, file in self._files(entry)
-            if not self._path(entry, suffix).exists()
-        ]
-        if missing:
-            self._download_files(entry, missing, on_progress)
+        with self._download_lock:
+            missing = [
+                (suffix, file)
+                for suffix, file in self._files(entry)
+                if not self._path(entry, suffix).exists()
+            ]
+            if missing:
+                self._download_files(entry, missing, on_progress)
         return self._path(entry, MODEL_SUFFIX)
 
     def synthesize(self, script: str, out_path: Path, voice: str) -> None:

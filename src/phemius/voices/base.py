@@ -2,7 +2,9 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
+
+from phemius.voices.downloads import Progress
 
 SAMPLE_TEXT = "Hi there. This is how your documentation will sound."
 
@@ -46,6 +48,15 @@ class VoiceEngine(Protocol):
 
     def check(self) -> VoiceCheck:
         """Whether the engine can synthesize; hosted engines send a real request."""
+        ...
+
+
+@runtime_checkable
+class DownloadableEngine(VoiceEngine, Protocol):
+    """An engine whose voices download on first use, or ahead of time."""
+
+    def download(self, voice: str, on_progress: Progress) -> Path:
+        """Download `voice` unless installed. Raises `VoiceError` on failure."""
         ...
 
 
