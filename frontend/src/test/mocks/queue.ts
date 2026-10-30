@@ -2,6 +2,21 @@ import { http, HttpResponse } from "msw"
 import type { components } from "@/lib/api-schema"
 
 type Job = components["schemas"]["Job"]
+type TodayStats = components["schemas"]["TodayStats"]
+
+export const quietDay: TodayStats = {
+  date: "2026-10-30",
+  utc_offset_minutes: 0,
+  scripts_written: 0,
+  audio_files: 0,
+  narration_minutes: 0,
+  estimated_cost_usd: null,
+  unpriced_scripts: 0,
+}
+
+export function todayStatsHandler(getStats: () => TodayStats) {
+  return http.get("/api/stats/today", () => HttpResponse.json(getStats()))
+}
 
 export type QueueState = { jobs: Job[]; isPaused: boolean }
 

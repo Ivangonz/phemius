@@ -2,8 +2,10 @@ import { PageHeader } from "@/components/PageHeader"
 import { ListError } from "@/components/library/ListError"
 import { useQueue, type Job } from "@/hooks/useQueue"
 import { EmptyQueue } from "./EmptyQueue"
+import { FinishedToday } from "./FinishedToday"
 import { JobList } from "./JobList"
 import { PauseQueueButton } from "./PauseQueueButton"
+import { TodayPanel } from "./TodayPanel"
 
 const VOICE_ORDER_NOTE =
   "Voices render one at a time, so waiting jobs start in order."
@@ -39,15 +41,21 @@ export function QueuePage() {
         />
         {page && <PauseQueueButton isPaused={isPaused} />}
       </div>
-      {result.isError && !page && (
-        <ListError
-          title="The queue could not be loaded."
-          error={result.error}
-          onRetry={() => result.refetch()}
-        />
-      )}
-      {page?.items.length === 0 && <EmptyQueue />}
-      {page && page.items.length > 0 && <JobList jobs={page.items} />}
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="flex min-w-0 flex-[2_1_560px] flex-col gap-3">
+          {result.isError && !page && (
+            <ListError
+              title="The queue could not be loaded."
+              error={result.error}
+              onRetry={() => result.refetch()}
+            />
+          )}
+          {page?.items.length === 0 && <EmptyQueue />}
+          {page && page.items.length > 0 && <JobList jobs={page.items} />}
+          <FinishedToday />
+        </div>
+        <TodayPanel />
+      </div>
     </div>
   )
 }
