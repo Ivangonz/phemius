@@ -5,6 +5,18 @@ import { makeSource } from "@/test/factories"
 type SourceView = components["schemas"]["SourceView"]
 type NewSourceRequest = components["schemas"]["NewSourceRequest"]
 type SourceChange = components["schemas"]["SourceChange"]
+type ImportRules = components["schemas"]["ImportRules"]
+
+// What a source applies for a rule it does not set.
+const GLOBAL_RULES = makeSource({ id: 0, name: "global" }).effective_rules
+
+function applyRules(source: SourceView, sent: ImportRules) {
+  const merged = { ...source.rules, ...sent }
+  const own = Object.fromEntries(
+    Object.entries(merged).filter(([, value]) => value !== null),
+  )
+  return { rules: own, effective_rules: { ...GLOBAL_RULES, ...own } }
+}
 
 // One list behind every /api/sources route, so a change survives the refetch
 // that follows it. A sync finishes on the second list request after it, so
@@ -65,9 +77,11 @@ export function serveSources(initial: SourceView[]) {
     }),
     http.patch("/api/sources/:id", async ({ params, request }) => {
       const body = (await request.json()) as SourceChange
+      const source = sources.find((item) => item.id === Number(params.id))
       return change(params.id, {
         ...(body.name ? { name: body.name } : {}),
         ...(body.config ? { config: body.config } : {}),
+        ...(source && body.rules ? applyRules(source, body.rules) : {}),
       })
     }),
     http.delete("/api/sources/:id", ({ params }) => {
