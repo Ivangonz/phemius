@@ -205,6 +205,8 @@ def test_adding_the_same_folder_twice_is_a_conflict(
         ("POST", "/api/sources/404/pause"),
         ("POST", "/api/sources/404/resume"),
         ("POST", "/api/sources/404/sync"),
+        ("GET", "/api/sources/404/exclusions"),
+        ("DELETE", "/api/sources/404/exclusions/1"),
     ],
 )
 def test_unknown_sources_are_not_found(
@@ -214,6 +216,74 @@ def test_unknown_sources_are_not_found(
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+def _wait_for_titles(client: TestClient, titles: list[str]) -> None:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        items = client.get("/api/docs").json()["items"]
+        if sorted(document["title"] for document in items) == titles:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"the library never held {titles}")
+
+
+def _excluded_guide(client: TestClient, folder: Path) -> tuple[int, dict[str, Any]]:
+    folder.mkdir()
+    (folder / "guide.md").write_text("# Guide\n\nInstall it.")
+    source = _add_folder(client, folder, rules=MANUAL_AUDIO)
+    _wait_for_titles(client, ["Guide"])
+    [document] = client.get("/api/docs").json()["items"]
+    assert client.delete(f"/api/docs/{document['id']}").status_code == 204
+    page = client.get(f"/api/sources/{source['id']}/exclusions").json()
+    [exclusion] = page["items"]
+    return source["id"], exclusion
+
+
+def test_excluded_files_are_listed_and_can_be_reimported(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source_id, exclusion = _excluded_guide(client, tmp_path / "docs")
+
+    response = client.delete(f"/api/sources/{source_id}/exclusions/{exclusion['id']}")
+
+    assert (exclusion["name"], exclusion["item_key"]) == ("guide.md", "guide.md")
+    assert response.status_code == 204
+    _wait_for_titles(client, ["Guide"])
+    page = client.get(f"/api/sources/{source_id}/exclusions").json()
+    assert page["total"] == 0
+    activity = client.get("/api/sources/activity").json()["items"]
+    assert "reimport" in {entry["action"] for entry in activity}
+
+
+def test_another_sources_exclusion_is_not_found(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _, exclusion = _excluded_guide(client, tmp_path / "docs")
+    other = _add_folder(client, tmp_path / "other")
+
+    response = client.delete(f"/api/sources/{other['id']}/exclusions/{exclusion['id']}")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/sources/0/exclusions",
+        f"/api/sources/{2**63}/exclusions",
+        "/api/sources/1/exclusions/0",
+        f"/api/sources/1/exclusions/{2**63}",
+    ],
+)
+def test_out_of_range_exclusion_ids_are_rejected(client: TestClient, path: str) -> None:
+    method = "GET" if path.endswith("exclusions") else "DELETE"
+
+    response = client.request(method, path)
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
 
 
 @pytest.fixture

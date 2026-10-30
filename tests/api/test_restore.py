@@ -494,23 +494,26 @@ def test_restore_keeps_this_installations_endpoints_and_folders(
 ) -> None:
     archive_watch_dir = tmp_path / "their-docs"
     archive_watch_dir.mkdir()
-    archive_settings = {**ARCHIVE_ENDPOINTS, "watch_dir": str(archive_watch_dir)}
-    assert client.patch("/api/settings", json=archive_settings).status_code == 200
+    assert client.patch("/api/settings", json=ARCHIVE_ENDPOINTS).status_code == 200
+    # Saved before /api/sources owned watched folders; the settings API no longer
+    # takes it.
+    settings_store.save_settings({"watch_dir": str(archive_watch_dir)})
     archive = _download_backup(client)
     mine = {
         "script_base_url": "http://mine.test/v1",
         "openai_speech_base_url": "http://mine.test/speech",
         "ollama_url": "http://mine.test:11434",
         "script_provider": "offline",
-        "watch_dir": None,
     }
     assert client.patch("/api/settings", json=mine).status_code == 200
+    settings_store.save_settings({"watch_dir": None})
 
     response = _restore(client, archive)
 
     assert response.status_code == 200
     restored = settings_store.read_settings()
     assert {key: restored.get(key) for key in mine} == mine
+    assert "watch_dir" not in restored
 
 
 def _folder_with_guide(folder: Path) -> int:

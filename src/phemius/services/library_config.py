@@ -33,7 +33,6 @@ class LibraryConfig(BaseModel):
     voices: dict[str, str]
     default_voice: str | None
     tts_status: VoiceEngineStatus
-    watch_dir: str | None
     llm: bool
     script_provider: str
     model: str
@@ -52,7 +51,6 @@ def describe_library() -> LibraryConfig:
         voices={voice.id: voice.label for voice in voices.list_voices()},
         default_voice=voices.default_voice(),
         tts_status=VoiceEngineStatus(**asdict(voices.check_engine())),
-        watch_dir=str(config.watch_dir) if config.watch_dir else None,
         llm=config.script_provider != OFFLINE_PROVIDER,
         script_provider=script_model.provider,
         model=script_model.model,

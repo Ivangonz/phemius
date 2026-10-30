@@ -527,6 +527,47 @@ export interface paths {
         patch: operations["update_source_api_sources__source_id__patch"];
         trace?: never;
     };
+    "/api/sources/{source_id}/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Exclusions
+         * @description Items whose document was deleted, so syncs do not import them again.
+         */
+        get: operations["list_exclusions_api_sources__source_id__exclusions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sources/{source_id}/exclusions/{exclusion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Lift Exclusion
+         * @description Re-import an excluded item: an active source syncs now, a paused one on
+         *     resume.
+         */
+        delete: operations["lift_exclusion_api_sources__source_id__exclusions__exclusion_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sources/{source_id}/pause": {
         parameters: {
             query?: never;
@@ -630,7 +671,7 @@ export interface components {
             token: string;
         };
         /** @enum {string} */
-        ActivityAction: "imported" | "updated" | "skipped" | "failed";
+        ActivityAction: "imported" | "updated" | "skipped" | "failed" | "reimport";
         /** ActivityEntry */
         ActivityEntry: {
             action: components["schemas"]["ActivityAction"];
@@ -1012,8 +1053,6 @@ export interface components {
             voices: {
                 [key: string]: string;
             };
-            /** Watch Dir */
-            watch_dir: string | null;
         };
         /** NewSourceRequest */
         NewSourceRequest: {
@@ -1054,6 +1093,17 @@ export interface components {
         Page_DocumentListItem_: {
             /** Items */
             items: components["schemas"]["DocumentListItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** Page[SourceExclusion] */
+        Page_SourceExclusion_: {
+            /** Items */
+            items: components["schemas"]["SourceExclusion"][];
             /** Limit */
             limit: number;
             /** Offset */
@@ -1244,8 +1294,6 @@ export interface components {
              * @default kokoro
              */
             voice_engine?: string;
-            /** Watch Dir */
-            watch_dir?: string | null;
             /** @default mark */
             watch_on_change?: components["schemas"]["WatchOnChange"];
         };
@@ -1293,6 +1341,26 @@ export interface components {
             } | null;
             name?: components["schemas"]["SourceName"] | null;
             rules?: components["schemas"]["ImportRules"] | null;
+        };
+        /**
+         * SourceExclusion
+         * @description An item whose document was deleted, so syncs do not import it again.
+         */
+        SourceExclusion: {
+            /** Created */
+            created: number;
+            /** Id */
+            id: number;
+            /**
+             * Item Key
+             * @description Where the item is within its source.
+             */
+            item_key: string;
+            /**
+             * Name
+             * @description The item's file name, for display.
+             */
+            name: string;
         };
         SourceName: string;
         /** @enum {string} */
@@ -2364,6 +2432,71 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SourceView"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_exclusions_api_sources__source_id__exclusions_get: {
+        parameters: {
+            query?: {
+                order_by?: "-created" | "item_key";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SourceExclusion_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lift_exclusion_api_sources__source_id__exclusions__exclusion_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+                exclusion_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

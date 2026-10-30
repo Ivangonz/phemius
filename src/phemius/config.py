@@ -85,9 +85,6 @@ class Settings(BaseModel):
     default_voice: Annotated[
         Annotated[str, Field(min_length=1)] | None, EnvVar("PHEMIUS_VOICE")
     ] = None
-    watch_dir: Annotated[
-        Path | None, AfterValidator(_expand_user), EnvVar("PHEMIUS_WATCH_DIR")
-    ] = None
     # "mark" by default: editors save often, and regenerating on every save would
     # spend model credits and voice time on drafts.
     watch_on_change: Annotated[
@@ -167,7 +164,18 @@ class Settings(BaseModel):
     ] = "local"
 
 
-class Config(Settings):
+class ConfiguredSettings(Settings):
+    """Every setting read from the environment or the saved settings, including
+    ones the settings API no longer takes."""
+
+    # Adopted as a folder source on start (see `adopt_watch_folder`); watched
+    # folders are managed through /api/sources.
+    watch_dir: Annotated[
+        Path | None, AfterValidator(_expand_user), EnvVar("PHEMIUS_WATCH_DIR")
+    ] = None
+
+
+class Config(ConfiguredSettings):
     data_dir: Path
     log_level: str
     # Always resolved by load_config; None is meaningful only in a settings update.
@@ -193,12 +201,14 @@ def read_env(name: str) -> str | None:
 
 
 def setting_env(key: str) -> EnvVar:
-    metadata = Settings.model_fields[key].metadata
+    metadata = ConfiguredSettings.model_fields[key].metadata
     return next(item for item in metadata if isinstance(item, EnvVar))
 
 
 def secret_setting_keys() -> list[str]:
-    return [key for key in Settings.model_fields if setting_env(key).is_secret]
+    return [
+        key for key in ConfiguredSettings.model_fields if setting_env(key).is_secret
+    ]
 
 
 def env_override(key: str) -> str | None:
@@ -212,7 +222,9 @@ def configured_values() -> dict[str, ConfiguredValue]:
     tests that never open a library, only environment and defaults apply.
     """
     saved = settings_store.read_settings() if database.is_initialized() else {}
-    return {key: _configured_value(key, saved) for key in Settings.model_fields}
+    return {
+        key: _configured_value(key, saved) for key in ConfiguredSettings.model_fields
+    }
 
 
 def _configured_value(key: str, saved: dict[str, object]) -> ConfiguredValue:

@@ -38,8 +38,10 @@ class SettingsOverview(BaseModel):
 
 def describe_settings() -> SettingsOverview:
     values = load_config().model_dump(mode="json")
+    configured_by_key = configured_values()
     overview = SettingsOverview(values={}, secrets={})
-    for key, configured in configured_values().items():
+    for key in Settings.model_fields:
+        configured = configured_by_key[key]
         is_locked = configured.source == "env"
         if setting_env(key).is_secret:
             overview.secrets[key] = SecretStatus(
