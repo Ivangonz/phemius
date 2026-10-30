@@ -21,10 +21,10 @@ describe("app shell", () => {
   })
 
   it.each([
-    ["Sources", "/sources"],
-    ["Queue", "/queue"],
-    ["Settings", "/settings"],
-  ])("navigates to %s and marks it active", async (name, path) => {
+    ["Sources", "/sources", "Sources"],
+    ["Queue", "/queue", "Queue and activity"],
+    ["Settings", "/settings", "Settings"],
+  ])("navigates to %s and marks it active", async (name, path, heading) => {
     const user = userEvent.setup()
     const { router } = renderAppAt("/")
     await screen.findByRole("heading", { level: 1, name: "Library" })
@@ -32,7 +32,7 @@ describe("app shell", () => {
     await user.click(within(mainNav()).getByRole("link", { name }))
 
     expect(
-      await screen.findByRole("heading", { level: 1, name }),
+      await screen.findByRole("heading", { level: 1, name: heading }),
     ).toBeInTheDocument()
     expect(router.state.location.pathname).toBe(path)
     expect(within(mainNav()).getByRole("link", { name })).toHaveAttribute(
