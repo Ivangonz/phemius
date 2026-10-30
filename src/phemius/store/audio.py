@@ -105,6 +105,16 @@ def section_scripts(audio_id: int) -> list[str]:
     return [row["script"] for row in rows]
 
 
+def existing_audio_ids(audio_ids: Sequence[int]) -> set[int]:
+    """Those of `audio_ids` still in the library."""
+    marks = ", ".join("?" * len(audio_ids))
+    with transaction() as connection:
+        rows = connection.execute(
+            f"SELECT id FROM audio WHERE id IN ({marks})", list(audio_ids)
+        ).fetchall()
+    return {row["id"] for row in rows}
+
+
 def section_titles(
     connection: sqlite3.Connection, audio_ids: Sequence[int]
 ) -> defaultdict[int, list[str]]:
