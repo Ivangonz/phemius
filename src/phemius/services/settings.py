@@ -4,6 +4,7 @@ import structlog
 from pydantic import BaseModel, SecretStr
 
 from phemius.config import (
+    Config,
     Settings,
     SettingSource,
     configured_values,
@@ -11,7 +12,9 @@ from phemius.config import (
     load_config,
     setting_env,
 )
-from phemius.errors import SettingLockedError
+from phemius.errors import InvalidSettingError, SettingLockedError
+from phemius.models.prompts import TONES
+from phemius.services import voices
 from phemius.store import settings as settings_store
 
 log = structlog.get_logger(__name__)
@@ -60,6 +63,7 @@ def update_settings(update: Settings) -> None:
     """Save the fields set in `update`. `None` removes the saved value."""
     keys = sorted(update.model_fields_set)
     _reject_locked(keys)
+    _reject_unknown_defaults(update)
     settings_store.save_settings({key: _storable(update, key) for key in keys})
     log.info("settings_updated", keys=keys)
 
@@ -76,6 +80,28 @@ def _reject_locked(keys: list[str]) -> None:
             hint="Unset the variable and restart to change it here.",
             field_errors=locked,
         )
+
+
+def _reject_unknown_defaults(update: Settings) -> None:
+    unknown: dict[str, str] = {}
+    if "default_tone" in update.model_fields_set and update.default_tone not in TONES:
+        unknown["default_tone"] = f"Choose one of: {', '.join(TONES)}."
+    if update.default_voice is not None:
+        config = _config_with_engine_of(update)
+        if not voices.is_known_voice(update.default_voice, config):
+            unknown["default_voice"] = f"Not a {config.voice_engine} voice."
+    if unknown:
+        raise InvalidSettingError(
+            "Some settings are not offered by this library.", field_errors=unknown
+        )
+
+
+def _config_with_engine_of(update: Settings) -> Config:
+    # The same update may switch the engine; check the voice against that one.
+    config = load_config()
+    if "voice_engine" in update.model_fields_set:
+        return config.model_copy(update={"voice_engine": update.voice_engine})
+    return config
 
 
 def _storable(update: Settings, key: str) -> object:

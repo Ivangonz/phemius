@@ -21,6 +21,7 @@ class Voice:
     sample_text: str = SAMPLE_TEXT
     is_installed: bool = True
     size_bytes: int | None = None
+    license: str | None = None
 
 
 @dataclass(frozen=True)

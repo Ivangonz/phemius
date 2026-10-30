@@ -119,7 +119,7 @@ def build_audio(
     and `VoiceError` when PHEMIUS_TTS or PHEMIUS_VOICE is misconfigured.
     """
     document = _get_document(document_id)
-    tone = tone or document["suggested_tone"]
+    tone = tone or document["suggested_tone"] or load_config().default_tone
     voice = voices.resolve_voice(voice)
     queued = job_store.enqueue_audio(document_id, document["version_id"], tone, voice)
     log.info("audio_queued", audio_id=queued.audio_id, job_id=queued.job_id)

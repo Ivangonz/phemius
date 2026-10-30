@@ -72,7 +72,7 @@ def library(isolated_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     database.init_database(isolated_env / "library.db")
 
 
-def _queue_audio(text: str = LONG_TEXT) -> int:
+def _queue_audio(text: str = LONG_TEXT, suggested_tone: str = "teacher") -> int:
     stored = document_store.add_document(
         NewDocument(
             title="Guide",
@@ -80,7 +80,7 @@ def _queue_audio(text: str = LONG_TEXT) -> int:
             text=text,
             category="how-to",
             summary=SUMMARY,
-            suggested_tone="teacher",
+            suggested_tone=suggested_tone,
             tone_rationale="Teacher suits a guide.",
             audio_suitability="recommended",
             suitability_reason="Mostly prose.",
@@ -102,6 +102,22 @@ def _audio(job_id: int) -> Audio:
     audio = audio_store.get_audio(audio_id)
     assert audio is not None
     return audio
+
+
+def test_a_document_with_no_suggested_tone_gets_the_default_tone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_DEFAULT_TONE", "podcast")
+
+    assert _audio(_queue_audio(suggested_tone=""))["tone"] == "podcast"
+
+
+def test_a_suggested_tone_wins_over_the_default_tone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_DEFAULT_TONE", "podcast")
+
+    assert _audio(_queue_audio())["tone"] == "teacher"
 
 
 def test_a_long_document_is_written_section_by_section_in_order(
