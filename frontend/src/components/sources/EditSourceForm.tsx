@@ -4,6 +4,7 @@ import {
   toSourceFormValues,
   type SourceFormValues,
 } from "@/lib/sourceForm"
+import { ExcludedFiles } from "./ExcludedFiles"
 import { SourceForm } from "./SourceForm"
 import { SourceRules } from "./SourceRules"
 
@@ -41,6 +42,7 @@ export function EditSourceForm({
       />
       <div className="flex flex-wrap items-start gap-4">
         <SourceRules source={source} />
+        <ExcludedFiles source={source} onSyncStarted={onSyncStarted} />
       </div>
     </div>
   )

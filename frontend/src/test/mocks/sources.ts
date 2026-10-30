@@ -6,6 +6,7 @@ type SourceView = components["schemas"]["SourceView"]
 type NewSourceRequest = components["schemas"]["NewSourceRequest"]
 type SourceChange = components["schemas"]["SourceChange"]
 type ImportRules = components["schemas"]["ImportRules"]
+type SourceExclusion = components["schemas"]["SourceExclusion"]
 
 // What a source applies for a rule it does not set.
 const GLOBAL_RULES = makeSource({ id: 0, name: "global" }).effective_rules
@@ -21,8 +22,14 @@ function applyRules(source: SourceView, sent: ImportRules) {
 // One list behind every /api/sources route, so a change survives the refetch
 // that follows it. A sync finishes on the second list request after it, so
 // the first refetch still sees it running.
-export function serveSources(initial: SourceView[]) {
+export function serveSources(
+  initial: SourceView[],
+  initialExclusions: Record<number, SourceExclusion[]> = {},
+) {
   let sources = [...initial]
+  const exclusions = new Map(
+    Object.entries(initialExclusions).map(([id, items]) => [Number(id), items]),
+  )
   let syncing: { id: unknown; listsLeft: number } | null = null
 
   function change(id: unknown, patch: Partial<SourceView>) {
@@ -97,6 +104,25 @@ export function serveSources(initial: SourceView[]) {
         ...(body.config ? { config: body.config } : {}),
         ...(source && body.rules ? applyRules(source, body.rules) : {}),
       })
+    }),
+    http.get("/api/sources/:id/exclusions", ({ params }) => {
+      const items = exclusions.get(Number(params.id)) ?? []
+      return HttpResponse.json({
+        items,
+        total: items.length,
+        limit: 25,
+        offset: 0,
+      })
+    }),
+    http.delete("/api/sources/:id/exclusions/:exclusionId", ({ params }) => {
+      const id = Number(params.id)
+      const remaining = (exclusions.get(id) ?? []).filter(
+        (item) => item.id !== Number(params.exclusionId),
+      )
+      exclusions.set(id, remaining)
+      const source = sources.find((item) => item.id === id)
+      if (source?.status === "active") syncing = { id, listsLeft: 2 }
+      return new HttpResponse(null, { status: 204 })
     }),
     http.delete("/api/sources/:id", ({ params }) => {
       sources = sources.filter((source) => source.id !== Number(params.id))
