@@ -40,15 +40,17 @@ const KNOWN_FILE_TYPES = [
   ".pdf",
 ]
 
-export type RuleView<T> = { value: T; isOwn: boolean }
+export type RuleView<T> = { value: T; isOwn: boolean; isResetting: boolean }
 
 // While a save is in flight, show what was sent rather than the stale source.
-function ownRule<K extends keyof ImportRules>(
+function viewRule<K extends keyof ImportRules>(
   source: SourceView,
   key: K,
   pending: ImportRules | undefined,
-): ImportRules[K] {
-  return pending && key in pending ? pending[key] : source.rules[key]
+) {
+  const isSent = pending !== undefined && key in pending
+  const own = isSent ? pending[key] : source.rules[key]
+  return { own, isOwn: own != null, isResetting: isSent && own === null }
 }
 
 export function switchRule(
@@ -56,16 +58,16 @@ export function switchRule(
   key: SwitchRule,
   pending: ImportRules | undefined,
 ): RuleView<boolean> {
-  const own = ownRule(source, key, pending)
-  return { value: own ?? source.effective_rules[key], isOwn: own != null }
+  const { own, ...state } = viewRule(source, key, pending)
+  return { value: own ?? source.effective_rules[key], ...state }
 }
 
 export function fileTypesRule(
   source: SourceView,
   pending: ImportRules | undefined,
 ): RuleView<string[]> {
-  const own = ownRule(source, "file_types", pending)
-  return { value: own ?? source.effective_rules.file_types, isOwn: own != null }
+  const { own, ...state } = viewRule(source, "file_types", pending)
+  return { value: own ?? source.effective_rules.file_types, ...state }
 }
 
 export function fileTypeOptions(selected: string[]): string[] {
@@ -82,8 +84,8 @@ export function toggleFileType(
   return (isChecked ? [...rest, type] : rest).sort()
 }
 
-export function describeRule(rule: RuleView<string>): string {
-  return rule.isOwn
-    ? `This source: ${rule.value}`
-    : `Follows global setting: ${rule.value}`
+// The global value is unknown until the server answers a reset.
+export function describeRule(rule: RuleView<string>, follows: string): string {
+  if (rule.isOwn) return `This source: ${rule.value}`
+  return rule.isResetting ? follows : `${follows}: ${rule.value}`
 }

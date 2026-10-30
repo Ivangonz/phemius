@@ -11,7 +11,7 @@ type RuleSwitchProps = {
 export function RuleSwitch({ label, rule, onChange }: RuleSwitchProps) {
   const originId = useId()
   const input = useRef<HTMLInputElement>(null)
-  const state = { value: rule.value ? "On" : "Off", isOwn: rule.isOwn }
+  const state = { ...rule, value: rule.value ? "On" : "Off" }
 
   function handleReset() {
     onChange(null)
@@ -35,7 +35,7 @@ export function RuleSwitch({ label, rule, onChange }: RuleSwitchProps) {
       <RuleOrigin
         id={originId}
         label={label}
-        description={describeRule(state)}
+        description={describeRule(state, "Follows global setting")}
         isOwn={rule.isOwn}
         onReset={handleReset}
       />

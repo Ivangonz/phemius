@@ -1,5 +1,5 @@
 import { useId } from "react"
-import { useUpdateSource, type SourceView } from "@/hooks/useSources"
+import { useUpdateRules, type SourceView } from "@/hooks/useSources"
 import type { components } from "@/lib/api-schema"
 import {
   fileTypesRule,
@@ -17,14 +17,7 @@ type SourceRulesProps = { source: SourceView }
 
 export function SourceRules({ source }: SourceRulesProps) {
   const titleId = useId()
-  const update = useUpdateSource()
-  const pending = update.isPending
-    ? (update.variables.change.rules ?? undefined)
-    : undefined
-
-  function save(rules: ImportRules) {
-    update.mutate({ id: source.id, change: { rules } })
-  }
+  const { save, pending, error, isSaving } = useUpdateRules(source.id)
 
   function saveSwitch(key: SwitchRule, value: boolean | null) {
     const rules: ImportRules = {}
@@ -52,7 +45,10 @@ export function SourceRules({ source }: SourceRulesProps) {
         rule={fileTypesRule(source, pending)}
         onChange={(types) => save({ file_types: types })}
       />
-      {update.error && <SaveError error={update.error} />}
+      <p role="status" className="text-secondary text-muted">
+        {isSaving ? "Saving…" : ""}
+      </p>
+      {error !== null && <SaveError error={error} />}
     </section>
   )
 }

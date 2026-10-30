@@ -17,11 +17,14 @@ export function FileTypeRules({ rule, onChange }: FileTypeRulesProps) {
   const fieldset = useRef<HTMLFieldSetElement>(null)
   const selected = rule.value
   const isOnlyOne = selected.length === 1
-  const state = { value: selected.join(", "), isOwn: rule.isOwn }
+  const state = { ...rule, value: selected.join(", ") }
 
   function handleReset() {
     onChange(null)
-    fieldset.current?.querySelector("input")?.focus()
+    const inputs = fieldset.current?.querySelectorAll("input") ?? []
+    Array.from(inputs)
+      .find((input) => !input.disabled)
+      ?.focus()
   }
 
   return (
@@ -60,7 +63,7 @@ export function FileTypeRules({ rule, onChange }: FileTypeRulesProps) {
       <RuleOrigin
         id={originId}
         label="File types"
-        description={describeRule(state)}
+        description={describeRule(state, "Follows the default")}
         isOwn={rule.isOwn}
         onReset={handleReset}
       />

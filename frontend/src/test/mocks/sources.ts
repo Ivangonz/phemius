@@ -77,6 +77,20 @@ export function serveSources(initial: SourceView[]) {
     }),
     http.patch("/api/sources/:id", async ({ params, request }) => {
       const body = (await request.json()) as SourceChange
+      if (body.rules?.file_types?.length === 0)
+        return HttpResponse.json(
+          {
+            detail: "Request validation failed",
+            code: "validation_error",
+            errors: [
+              {
+                field: "rules.file_types",
+                message: "List should have at least 1 item",
+              },
+            ],
+          },
+          { status: 422 },
+        )
       const source = sources.find((item) => item.id === Number(params.id))
       return change(params.id, {
         ...(body.name ? { name: body.name } : {}),
