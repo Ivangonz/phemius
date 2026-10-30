@@ -238,6 +238,11 @@ def _check_database(db_path: Path) -> int:
         raise _not_a_backup(
             f"Its database holds objects Phemius did not create: {', '.join(foreign)}."
         )
+    mistyped = backup_store.mistyped_columns(db_path)
+    if mistyped:
+        raise _not_a_backup(
+            f"Its database holds values of the wrong type in: {', '.join(mistyped)}."
+        )
     return schema_version
 
 
