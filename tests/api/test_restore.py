@@ -423,6 +423,64 @@ def test_archive_with_foreign_schema_objects_is_rejected(
     assert settings_store.read_settings()["script_base_url"] == "http://mine.test/v1"
 
 
+MISTYPED_VALUES = {
+    "text_in_start_seconds": (
+        "UPDATE audio_sections SET start_seconds = 'soon';",
+        "audio_sections.start_seconds",
+    ),
+    "text_in_duration_seconds": (
+        "UPDATE audio SET duration_seconds = 'soon';",
+        "audio.duration_seconds",
+    ),
+    "blob_in_an_id": ("UPDATE audio SET version_id = x'736f6f6e';", "audio.version_id"),
+    "float_in_an_integer": ("UPDATE audio SET size_bytes = 1.5;", "audio.size_bytes"),
+}
+
+
+@pytest.mark.parametrize(
+    ("sql", "column"), MISTYPED_VALUES.values(), ids=MISTYPED_VALUES
+)
+@pytest.mark.parametrize(
+    "path", ["/api/library/restore", "/api/library/restore/inspect"]
+)
+def test_archive_with_a_mistyped_value_is_rejected_and_the_library_is_untouched(
+    client: TestClient,
+    backup_bytes: bytes,
+    isolated_env: Path,
+    sql: str,
+    column: str,
+    path: str,
+) -> None:
+    current = _generate_audio(client, "standup-notes.md")
+    titles = _titles(client)
+
+    archive = _rebuilt(backup_bytes, _with_database_change(sql))
+    response = _restore(client, archive, path)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "invalid_backup"
+    assert column in body["detail"]
+    assert "soon" not in body["detail"] and "1.5" not in body["detail"]
+    assert _titles(client) == titles
+    assert Path(current["path"]).is_file()
+    assert not list(isolated_env.glob(".restore-*"))
+
+
+def test_archive_with_nulls_and_whole_numbers_in_real_columns_restores(
+    client: TestClient, backup_bytes: bytes
+) -> None:
+    archive = _rebuilt(
+        backup_bytes,
+        _with_database_change(
+            "UPDATE audio SET duration_seconds = NULL, created = 7;"
+            " UPDATE audio_sections SET start_seconds = 0;"
+        ),
+    )
+
+    assert _restore(client, archive).status_code == 200
+
+
 ARCHIVE_ENDPOINTS = {
     "script_base_url": "http://archive.test/v1",
     "openai_speech_base_url": "http://archive.test/speech",
@@ -527,8 +585,7 @@ def test_an_archive_cannot_exclude_items_of_sources_it_does_not_have(
     source_id = _folder_with_guide(tmp_path / "docs")
     planted = (
         "INSERT INTO source_exclusions (source_id, item_key, created)"
-        f" VALUES ({source_id + 1}, '/elsewhere/guide.md', 0),"
-        f" ({source_id}, 42, 'not a time'), ({source_id}, x'00', 0);"
+        f" VALUES ({source_id + 1}, '/elsewhere/guide.md', 0);"
     )
     archive = _rebuilt(_download_backup(client), _with_database_change(planted))
 

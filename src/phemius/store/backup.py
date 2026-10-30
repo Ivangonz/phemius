@@ -150,6 +150,72 @@ def _schema_objects(connection: sqlite3.Connection) -> set[SchemaObject]:
     return {(row[0], row[1], " ".join((row[2] or "").split())) for row in rows}
 
 
+def mistyped_columns(path: Path) -> list[str]:
+    """`table.column` names holding a value of a type the schema does not declare.
+
+    SQLite stores any value in any column, so a crafted archive could put text
+    where the API expects a number. Expected types come from each column's
+    declared type, so columns added by later migrations are covered too. The
+    snapshot's declared types are only trustworthy once `foreign_schema_objects`
+    has found its schema identical to the migrations'.
+    """
+    with _open(path) as connection:
+        return [
+            f"{table}.{column}"
+            for table, column, allowed in _typed_columns(connection)
+            if _holds_other_types(connection, table, column, allowed)
+        ]
+
+
+def _typed_columns(
+    connection: sqlite3.Connection,
+) -> Iterator[tuple[str, str, list[str]]]:
+    tables = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+        " AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).fetchall()
+    for (table,) in tables:
+        columns = connection.execute(
+            'SELECT name, type, "notnull" FROM pragma_table_info(?) ORDER BY cid',
+            (table,),
+        ).fetchall()
+        for column in columns:
+            allowed = _storage_classes(column["type"])
+            if allowed is not None:
+                nulls = [] if column["notnull"] else ["null"]
+                yield table, column["name"], [*allowed, *nulls]
+
+
+def _storage_classes(declared_type: str) -> list[str] | None:
+    """What `typeof()` may return in a column, by SQLite's affinity rules;
+    `None` when any value is acceptable (BLOB or no declared type)."""
+    upper = declared_type.upper()
+    if "INT" in upper:
+        return ["integer"]
+    if any(name in upper for name in ("CHAR", "CLOB", "TEXT")):
+        return ["text"]
+    if upper == "" or "BLOB" in upper:
+        return None
+    # REAL and NUMERIC affinity: a whole number is a valid float to the API.
+    return ["integer", "real"]
+
+
+def _holds_other_types(
+    connection: sqlite3.Connection, table: str, column: str, allowed: list[str]
+) -> bool:
+    placeholders = ", ".join("?" for _ in allowed)
+    row = connection.execute(
+        f"SELECT 1 FROM {_quoted(table)}"
+        f" WHERE typeof({_quoted(column)}) NOT IN ({placeholders}) LIMIT 1",
+        allowed,
+    ).fetchone()
+    return row is not None
+
+
+def _quoted(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
 def prepare_restore(
     path: Path,
     staged_audio_dir: Path,
