@@ -654,6 +654,7 @@ starts; saved settings apply on their next use without a restart (except
 | `PHEMIUS_OLLAMA_TIMEOUT` | `ollama_timeout` | `600` | Seconds to wait for one Ollama reply. A positive whole number. |
 | `PHEMIUS_TTS` | `voice_engine` | `kokoro` | Voice engine: `kokoro`, `piper`, `openai_speech`, `elevenlabs` or `stub` (silent audio, no model download). See [Voices](#voices). |
 | `PHEMIUS_VOICE` | `default_voice` | the engine's first voice (`kokoro:af_heart`) | Default voice for new audio. A voice id of the configured engine; see [Voices](#voices). |
+| `PHEMIUS_DEFAULT_TONE` | `default_tone` | `neutral` | Tone for audio of a document with no suggested tone: `neutral`, `conversational`, `podcast`, `teacher` or `executive`. |
 | `PHEMIUS_OPENAI_SPEECH_BASE_URL` | `openai_speech_base_url` | `https://api.openai.com/v1` | Base URL of an OpenAI-compatible speech server. See [Hosted voices](#hosted-voices). |
 | `PHEMIUS_OPENAI_SPEECH_API_KEY` | `openai_speech_api_key` | not set | API key for the speech server; leave unset for a server that needs none. Write-only through the API. |
 | `PHEMIUS_OPENAI_SPEECH_MODEL` | `openai_speech_model` | `tts-1` | Speech model name sent to the server. |
@@ -691,8 +692,10 @@ Every endpoint is listed with its schema in the interactive docs at
 | --- | --- |
 | `GET /api/health` | `{"status": "ok"}` when the database is readable and the data folder is writable; `503` otherwise |
 | `GET /api/config` | Tones, voices, default voice, voice engine and its `tts_status`, script provider, model, last categorizing error, watched folder |
+| `GET /api/voices` | The configured engine's voices with `label`, `accent`, `is_installed`, `size_bytes` (download size), `license` and `is_default`. `?order_by=` is `default` (default voice first, then the engine's order) or `label`. Paginated with `?limit=` (default 25, max 100) and `?offset=`. Sends no provider request |
+| `POST /api/voices/check` | Test the voice engine now: `{"is_ready", "message", "hint"}`. Hosted engines send a real (possibly paid) request |
 | `GET /api/settings` | Every setting with its value, `source` (`env`, `saved` or `default`) and `is_locked`; secrets only as `has_key` |
-| `PATCH /api/settings` | Save some settings (only the fields sent; `null` removes a saved value). `409` if a field is locked by an environment variable, `422` for invalid values |
+| `PATCH /api/settings` | Save some settings (only the fields sent; `null` removes a saved value). `409` if a field is locked by an environment variable, `422` for invalid values, including a `default_voice` the engine does not offer or an unknown `default_tone` |
 | `GET /api/docs` | Library: one summary per document (latest version, its newest audio's `audio_id`, `status` and `stage`, `is_changed`, `audio_suitability`, and a `signature` that changes only when the row does). Filter with `?category=`, `?tone=`, `?status=` (a job state or `no_audio`) and `?q=` (title search). `?order_by=` is `-created` (default), `created`, `title` or `-updated`. Paginated with `?limit=` (default 25, max 100) and `?offset=` |
 | `POST /api/docs` | Upload one or more files (multipart field `files`). Uploading a changed file with the same name adds a version. Generates audio unless `?auto_audio=false`, or the document is rated `not_recommended` and `PHEMIUS_SKIP_NOT_RECOMMENDED` is on (`is_audio_skipped` in the result) |
 | `GET /api/docs/{id}` | One document's latest version, including its extracted text, `tone_rationale`, `audio_suitability` (`recommended`, `partial`, `not_recommended`, or `null` when unknown because it was imported before ratings existed), `suitability_reason` and `suitability_source` (`model`, or `heuristic` when the offline rules judged it) |

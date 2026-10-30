@@ -20,6 +20,7 @@ ENV_NAMES = [
     "SCRIPT_PROVIDER",
     "TTS",
     "VOICE",
+    "DEFAULT_TONE",
     "WATCH_DIR",
     "WATCH_ON_CHANGE",
     "SKIP_NOT_RECOMMENDED",

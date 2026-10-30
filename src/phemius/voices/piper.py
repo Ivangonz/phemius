@@ -156,6 +156,7 @@ class PiperEngine:
                 accent=entry.accent,
                 is_installed=self._is_downloaded(entry),
                 size_bytes=entry.size_bytes,
+                license=entry.license,
             )
             for entry in CATALOGUE
         ]

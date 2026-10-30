@@ -31,6 +31,13 @@ class InvalidInputError(PhemiusError):
     status_code = 400
 
 
+class InvalidSettingError(PhemiusError):
+    """A setting value is well-formed but not one this library offers."""
+
+    code = "invalid_setting"
+    status_code = 422
+
+
 class InvalidBackupError(InvalidInputError):
     """An uploaded archive is not a backup this version of Phemius can restore."""
 

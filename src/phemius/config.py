@@ -85,6 +85,10 @@ class Settings(BaseModel):
     default_voice: Annotated[
         Annotated[str, Field(min_length=1)] | None, EnvVar("PHEMIUS_VOICE")
     ] = None
+    # Applies when a document has no suggested tone; a known tone is checked on save.
+    default_tone: Annotated[
+        str, Field(min_length=1), EnvVar("PHEMIUS_DEFAULT_TONE")
+    ] = "neutral"
     # "mark" by default: editors save often, and regenerating on every save would
     # spend model credits and voice time on drafts.
     watch_on_change: Annotated[

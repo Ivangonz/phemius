@@ -1,8 +1,25 @@
 """Choose and validate voices for the configured voice engine."""
 
+from typing import Literal
+
+from pydantic import BaseModel
+
 from phemius.config import Config, load_config
 from phemius.errors import InvalidInputError, VoiceError
 from phemius.voices import Voice, VoiceCheck, get_engine, namespace_voice
+
+# "default": the default voice, then the engine's own order.
+type VoiceOrder = Literal["default", "label"]
+
+
+class VoiceView(BaseModel):
+    id: str
+    label: str
+    accent: str | None
+    is_installed: bool
+    size_bytes: int | None
+    license: str | None
+    is_default: bool
 
 
 def list_voices() -> list[Voice]:
@@ -11,6 +28,28 @@ def list_voices() -> list[Voice]:
         return get_engine(load_config()).voices()
     except VoiceError:
         return []
+
+
+def list_voice_views(
+    order_by: VoiceOrder, limit: int, offset: int
+) -> tuple[list[VoiceView], int]:
+    """A page of the configured engine's voices and their total. No provider call."""
+    default_id = default_voice()
+    views = [_view(voice, voice.id == default_id) for voice in list_voices()]
+    if order_by == "label":
+        views.sort(key=lambda view: view.label.casefold())
+    else:
+        views.sort(key=lambda view: not view.is_default)
+    return views[offset : offset + limit], len(views)
+
+
+def is_known_voice(voice: str, config: Config) -> bool:
+    """Whether `config`'s engine offers `voice`, bare or namespaced."""
+    try:
+        available = {known.id for known in get_engine(config).voices()}
+    except VoiceError:
+        return False
+    return namespace_voice(config.voice_engine, voice) in available
 
 
 def check_engine() -> VoiceCheck:
@@ -57,3 +96,15 @@ def _default_voice(config: Config, available: list[str]) -> str:
             hint=f"Set PHEMIUS_VOICE to one of: {', '.join(available)}.",
         )
     return voice_id
+
+
+def _view(voice: Voice, is_default: bool) -> VoiceView:
+    return VoiceView(
+        id=voice.id,
+        label=voice.label,
+        accent=voice.accent,
+        is_installed=voice.is_installed,
+        size_bytes=voice.size_bytes,
+        license=voice.license,
+        is_default=is_default,
+    )

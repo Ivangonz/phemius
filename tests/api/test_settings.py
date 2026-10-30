@@ -102,6 +102,52 @@ def test_patch_rejects_invalid_values_with_field_errors(
     assert response.json()["errors"][0]["field"] == field
 
 
+def test_patch_saves_a_known_default_voice_and_tone(client: TestClient) -> None:
+    response = client.patch(
+        "/api/settings",
+        json={"default_voice": "stub:silent", "default_tone": "teacher"},
+    )
+
+    values = response.json()["values"]
+    assert values["default_voice"]["value"] == "stub:silent"
+    assert values["default_tone"]["value"] == "teacher"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("default_voice", "kokoro:af_heart"),
+        ("default_voice", "../../etc/passwd"),
+        ("default_voice", "x" * 10_000),
+        ("default_tone", "shouting"),
+        ("default_tone", "../neutral"),
+        ("default_tone", "y" * 10_000),
+    ],
+)
+def test_patch_rejects_an_unknown_default_voice_or_tone(
+    client: TestClient, field: str, value: str
+) -> None:
+    response = client.patch("/api/settings", json={field: value})
+
+    assert response.status_code == 422
+    body = response.json()
+    assert [error["field"] for error in body["errors"]] == [field]
+    assert value not in response.text
+    assert client.get("/api/settings").json()["values"][field]["source"] == "default"
+
+
+def test_default_voice_is_checked_against_the_engine_saved_with_it(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("PHEMIUS_TTS")
+
+    response = client.patch(
+        "/api/settings", json={"voice_engine": "stub", "default_voice": "af_heart"}
+    )
+
+    assert response.status_code == 422
+
+
 def test_next_job_uses_changed_provider_model_and_voice(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
