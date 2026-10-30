@@ -1,3 +1,4 @@
+import wave
 from collections.abc import Callable
 from pathlib import Path
 
@@ -5,8 +6,9 @@ import pytest
 
 from phemius.errors import ModelError, VoiceError
 from phemius.models.base import Script, SectionContext, TokenUsage
+from phemius.services import documents as document_service
 from phemius.services import library as library_service
-from phemius.services import pipeline, queue, runner
+from phemius.services import narration_parts, pipeline, queue, runner
 from phemius.store import audio as audio_store
 from phemius.store import database
 from phemius.store import documents as document_store
@@ -290,9 +292,11 @@ def _scripted_audio(use_script_model: UseScriptModel, text: str = LONG_TEXT) -> 
 
 def _audio_files(isolated_env: Path) -> list[str]:
     audio_dir = isolated_env / "audio"
-    return (
-        sorted(path.name for path in audio_dir.rglob("*")) if audio_dir.exists() else []
-    )
+    return sorted(path.name for path in audio_dir.rglob("*") if path.is_file())
+
+
+def _parts(isolated_env: Path, audio_id: int) -> list[Path]:
+    return sorted((isolated_env / "audio" / "parts" / str(audio_id)).glob("*.wav"))
 
 
 def test_sections_are_narrated_into_one_file_with_chapters(
@@ -345,7 +349,7 @@ def test_conversion_keeps_the_chapter_times(
     assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [0, 1, 3]
 
 
-def test_cancelling_between_sections_stores_nothing_and_leaves_no_files(
+def test_cancelling_between_sections_stores_nothing_and_keeps_the_part(
     use_script_model: UseScriptModel,
     isolated_env: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -361,7 +365,8 @@ def test_cancelling_between_sections_stores_nothing_and_leaves_no_files(
     assert _job(job_id)["state"] == "cancelled"
     assert audio["path"] is None
     assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [None] * 3
-    assert _audio_files(isolated_env) == []
+    assert len(_parts(isolated_env, audio["id"])) == 1
+    assert len(_audio_files(isolated_env)) == 1
 
 
 def test_a_stopping_runner_narrates_no_more_sections(
@@ -380,10 +385,11 @@ def test_a_stopping_runner_narrates_no_more_sections(
     assert (is_current, engine.calls) == (False, 1)
     assert _job(job_id)["state"] == "running"
     assert _audio(job_id)["path"] is None
-    assert _audio_files(isolated_env) == []
+    assert len(_parts(isolated_env, claimed.audio_id)) == 1
+    assert len(_audio_files(isolated_env)) == 1
 
 
-def test_a_failed_section_leaves_no_files_and_a_retry_narrates_again(
+def test_a_failed_section_keeps_the_narrated_part_and_a_retry_resumes(
     use_script_model: UseScriptModel,
     isolated_env: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -403,49 +409,153 @@ def test_a_failed_section_leaves_no_files_and_a_retry_narrates_again(
         "failed",
         "Check the server.",
     )
-    assert _audio_files(isolated_env) == []
+    assert len(_parts(isolated_env, _audio(job_id)["id"])) == 1
 
-    _use_engine(monkeypatch, StubEngine())
+    engine = CountingEngine(lambda calls: None)
+    _use_engine(monkeypatch, engine)
     assert queue.retry_job(job_id)["stage"] == "narrating"
     assert runner.run_next("narrating")
 
     audio = _audio(job_id)
-    assert _job(job_id)["state"] == "done"
+    assert (_job(job_id)["state"], engine.calls) == ("done", 2)
     assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [0, 1, 3]
     assert _audio_files(isolated_env) == [f"{audio['id']}.wav"]
 
 
-def test_each_part_is_deleted_before_the_next_section_is_narrated(
+def _stop_after_two_sections(
+    use_script_model: UseScriptModel, monkeypatch: pytest.MonkeyPatch
+) -> int:
+    """A job whose narration stopped after two of its three sections."""
+    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
+    job_id = _scripted_audio(use_script_model)
+    engine = CountingEngine(lambda calls: None)
+    _use_engine(monkeypatch, engine)
+    claimed = job_store.claim_next("narrating")
+    assert claimed is not None
+    assert not pipeline.narrate(claimed, lambda: engine.calls >= 2)
+    assert job_store.fail_interrupted_jobs() == 1
+    return job_id
+
+
+def _retry_narration(monkeypatch: pytest.MonkeyPatch, job_id: int) -> int:
+    """Retry the job's narration; returns how many sections were narrated."""
+    engine = CountingEngine(lambda calls: None)
+    _use_engine(monkeypatch, engine)
+    assert queue.retry_job(job_id)["stage"] == "narrating"
+    assert runner.run_next("narrating")
+    assert _job(job_id)["state"] == "done", _job(job_id)["error"]
+    return engine.calls
+
+
+def test_a_retry_after_a_restart_narrates_only_the_remaining_sections(
     use_script_model: UseScriptModel,
     isolated_env: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
-    job_id = _scripted_audio(use_script_model)
-    audio_id = _audio(job_id)["id"]
-    files_seen: list[list[str]] = []
-    _use_engine(
-        monkeypatch,
-        CountingEngine(lambda calls: files_seen.append(_audio_files(isolated_env))),
-    )
+    job_id = _stop_after_two_sections(use_script_model, monkeypatch)
 
-    assert runner.run_next("narrating")
+    assert _retry_narration(monkeypatch, job_id) == 1
 
-    joined = f"{audio_id}.wav"
-    assert files_seen == [[], [joined], [joined]]
+    audio = _audio(job_id)
+    assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [0, 1, 3]
+    assert audio["duration_seconds"] == 6.0
+    assert _audio_files(isolated_env) == [f"{audio['id']}.wav"]
 
 
-def test_leftover_parts_are_removed_and_other_audio_is_kept(
-    isolated_env: Path,
+@pytest.mark.parametrize(
+    ("statement", "narrated"),
+    [
+        ("UPDATE audio_sections SET script = 'Changed.' WHERE position = 0", 2),
+        ("UPDATE audio SET voice = 'stub:other'", 3),
+    ],
+    ids=["script", "voice"],
+)
+def test_a_changed_section_script_or_voice_is_narrated_again(
+    use_script_model: UseScriptModel,
+    monkeypatch: pytest.MonkeyPatch,
+    statement: str,
+    narrated: int,
 ) -> None:
+    job_id = _stop_after_two_sections(use_script_model, monkeypatch)
+    with database.transaction() as connection:
+        connection.execute(statement)
+
+    assert _retry_narration(monkeypatch, job_id) == narrated
+
+
+def _write_other_format(part: Path) -> None:
+    with wave.open(str(part), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(8000)
+        wav_file.writeframes(b"\x00\x00" * 8000)
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        lambda part: part.write_bytes(part.read_bytes()[:-100]),
+        lambda part: part.write_bytes(b"RIFF not a wave"),
+        _write_other_format,
+    ],
+    ids=["truncated", "not_wav", "other_format"],
+)
+def test_a_damaged_part_is_narrated_again_not_joined(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    damage: Callable[[Path], object],
+) -> None:
+    job_id = _stop_after_two_sections(use_script_model, monkeypatch)
+    damage(_parts(isolated_env, _audio(job_id)["id"])[1])
+
+    assert _retry_narration(monkeypatch, job_id) == 2
+
+    assert _audio(job_id)["duration_seconds"] == 6.0
+
+
+def test_deleting_the_document_removes_its_leftover_parts(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = _stop_after_two_sections(use_script_model, monkeypatch)
+
+    document_service.delete_document(_audio(job_id)["doc_id"])
+
+    assert _audio_files(isolated_env) == []
+
+
+def test_deleting_all_audio_removes_leftover_parts(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stop_after_two_sections(use_script_model, monkeypatch)
+
+    library_service.delete_all_audio()
+
+    assert _audio_files(isolated_env) == []
+
+
+def test_the_startup_sweep_keeps_only_parts_of_existing_audio(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = _stop_after_two_sections(use_script_model, monkeypatch)
     audio_dir = isolated_env / "audio"
-    audio_dir.mkdir(parents=True)
-    for name in ["7.part0.wav", "7.part12.wav", "7.wav", "8.m4a"]:
+    kept = _audio_files(isolated_env)
+    for name in ["999/0-a.wav", "stray/0-a.wav", "99999999999999999999/0-a.wav"]:
+        (audio_dir / "parts" / name).parent.mkdir()
+        (audio_dir / "parts" / name).write_bytes(b"audio")
+    for name in ["7.part0.wav", "7.part12.wav", "8.m4a"]:
         (audio_dir / name).write_bytes(b"audio")
 
-    pipeline.remove_leftover_parts(audio_dir)
+    narration_parts.remove_leftovers(audio_dir)
 
-    assert _audio_files(isolated_env) == ["7.wav", "8.m4a"]
+    assert _audio_files(isolated_env) == sorted([*kept, "8.m4a"])
+    assert len(_parts(isolated_env, _audio(job_id)["id"])) == 2
 
 
 def test_deleting_all_audio_clears_the_chapter_times(

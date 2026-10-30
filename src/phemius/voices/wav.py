@@ -14,6 +14,8 @@ from phemius.errors import VoiceError
 MISMATCH_HINT = "Retry the job; if it fails again, choose another voice."
 FRAMES_PER_READ = 1 << 16
 
+type WavFormat = tuple[int, int, int]
+
 
 @dataclass(frozen=True)
 class Clip:
@@ -50,6 +52,28 @@ def wav_duration_seconds(path: Path) -> float | None:
         return None
 
 
+def complete_wav_format(path: Path) -> WavFormat | None:
+    """The format of a WAV file holding every frame its header declares.
+
+    None for a missing, unreadable, empty or truncated file.
+    """
+    try:
+        with wave.open(str(path), "rb") as wav_file:
+            frame_size = wav_file.getnchannels() * wav_file.getsampwidth()
+            frames_read = 0
+            while frames := wav_file.readframes(FRAMES_PER_READ):
+                frames_read += len(frames) // frame_size
+            if frames_read == 0 or frames_read != wav_file.getnframes():
+                return None
+            return _format_of(wav_file)
+    except (wave.Error, EOFError, OSError):
+        return None
+
+
+def _format_of(wav_file: wave.Wave_read) -> WavFormat:
+    return wav_file.getnchannels(), wav_file.getsampwidth(), wav_file.getframerate()
+
+
 def write_clips(clips: list[Clip], out_path: Path) -> None:
     """Write `clips` back to back as one WAV file."""
     if not any(clip.frames for clip in clips):
@@ -79,7 +103,7 @@ class WavJoiner:
         self.out_path = out_path
         self.starts: list[float] = []
         self._frames = 0
-        self._format: tuple[int, int, int] | None = None
+        self._format: WavFormat | None = None
         self._out: wave.Wave_write | None = None
 
     @property
@@ -114,7 +138,7 @@ class WavJoiner:
             raise _write_error() from error
 
     def _check_format(self, part: wave.Wave_read) -> None:
-        part_format = (part.getnchannels(), part.getsampwidth(), part.getframerate())
+        part_format = _format_of(part)
         if self._format is None:
             self._format = part_format
         elif part_format != self._format:

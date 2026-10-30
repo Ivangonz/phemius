@@ -10,7 +10,7 @@ import structlog
 
 from phemius.config import load_config
 from phemius.errors import PhemiusError
-from phemius.services import maintenance, pipeline
+from phemius.services import maintenance, narration_parts, pipeline
 from phemius.services.import_rules import EffectiveRules, ImportRules, effective_rules
 from phemius.sources import SourceItem
 from phemius.store import documents as document_store
@@ -110,6 +110,7 @@ def _prune_earlier_versions(document_id: int) -> None:
         paths = document_store.prune_earlier_versions(document_id)
         for recorded in paths:
             Path(recorded).unlink(missing_ok=True)
+        narration_parts.remove_leftovers(load_config().audio_dir)
     log.info("earlier_versions_pruned", document_id=document_id, files=len(paths))
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import structlog
 
 from phemius.config import load_config
-from phemius.services import maintenance
+from phemius.services import maintenance, narration_parts
 from phemius.store import jobs as job_store
 
 log = structlog.get_logger(__name__)
@@ -27,5 +27,6 @@ def delete_all_audio() -> int:
         for leftover in audio_dir.glob("*"):
             if leftover.is_file():
                 leftover.unlink(missing_ok=True)
+        narration_parts.remove_all(audio_dir)
     log.info("all_audio_deleted", count=len(paths))
     return len(paths)

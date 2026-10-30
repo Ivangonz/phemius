@@ -4,8 +4,9 @@ from pathlib import Path
 
 import structlog
 
+from phemius.config import load_config
 from phemius.errors import DocumentBusyError, LibraryBusyError, NotFoundError
-from phemius.services import maintenance
+from phemius.services import maintenance, narration_parts
 from phemius.store import documents as document_store
 
 log = structlog.get_logger(__name__)
@@ -28,6 +29,8 @@ def delete_document(document_id: int) -> None:
         deleted = document_store.delete_document(document_id)
         for recorded in deleted.audio_paths:
             Path(recorded).unlink(missing_ok=True)
+        if deleted.outcome == "deleted":
+            narration_parts.remove_leftovers(load_config().audio_dir)
     if deleted.outcome == "missing":
         raise NotFoundError(f"Document {document_id} not found")
     if deleted.outcome == "job_running":
