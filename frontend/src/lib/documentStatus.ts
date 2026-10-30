@@ -43,6 +43,17 @@ export function describeStatus({
   return { label: STATUS_LABELS[status], kind }
 }
 
+type Job = { status: JobState; stage: JobStage }
+
 export function isJobActive({ status }: { status: JobState }): boolean {
   return status === "queued" || status === "running"
+}
+
+export function describeJob({ status, stage }: Job): {
+  label: string
+  kind: StatusKind
+} {
+  const kind = STATUS_KINDS[status]
+  if (status === "running") return { label: STAGE_LABELS[stage], kind }
+  return { label: STATUS_LABELS[status], kind }
 }

@@ -18,6 +18,19 @@ export function isDocumentChanged(versions: VersionSummary[]): boolean {
   )
 }
 
+export function formatTone(tone: string): string {
+  return tone.charAt(0).toUpperCase() + tone.slice(1)
+}
+
+export function formatVoice(voice: string | null): string {
+  if (!voice) return "default voice"
+  return voice.slice(voice.indexOf(":") + 1)
+}
+
+export function describeVersion({ tone, voice }: AudioVersion): string {
+  return `${formatTone(tone)} · ${formatVoice(voice)}`
+}
+
 export function formatDate(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleDateString(undefined, {
     dateStyle: "medium",
