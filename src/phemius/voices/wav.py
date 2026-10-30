@@ -66,48 +66,75 @@ def write_clips(clips: list[Clip], out_path: Path) -> None:
             wav_file.writeframes(clip.frames)
 
 
-def join_wav_files(paths: list[Path], out_path: Path) -> list[float]:
-    """Write the WAV files back to back as `out_path`; each one's start in seconds.
+class WavJoiner:
+    """Appends WAV files to `out_path` one at a time, recording where each starts.
 
-    Frames are copied in blocks, so a long narration is never held in memory.
-    Deletes `out_path` and raises `VoiceError` if a part is not WAV or its
-    format differs from the first.
+    Frames are copied in blocks, so a long narration is never held in memory and
+    each part can be deleted as soon as it is appended. On any error the output
+    is deleted; a part that is not WAV, differs in format from the first, or
+    cannot be written raises `VoiceError`.
     """
-    try:
-        with wave.open(str(out_path), "wb") as out_file:
-            return _copy_parts(paths, out_file)
-    except (wave.Error, EOFError) as error:
-        out_path.unlink(missing_ok=True)
-        raise VoiceError(
-            "A narrated section is not readable WAV audio.", MISMATCH_HINT
-        ) from error
-    except VoiceError:
-        out_path.unlink(missing_ok=True)
-        raise
 
+    def __init__(self, out_path: Path) -> None:
+        self.out_path = out_path
+        self.starts: list[float] = []
+        self._frames = 0
+        self._format: tuple[int, int, int] | None = None
+        self._out: wave.Wave_write | None = None
 
-def _copy_parts(paths: list[Path], out_file: wave.Wave_write) -> list[float]:
-    starts: list[float] = []
-    frames_written = 0
-    audio_format: tuple[int, int, int] | None = None
-    for path in paths:
-        with wave.open(str(path), "rb") as part:
-            part_format = (
-                part.getnchannels(),
-                part.getsampwidth(),
-                part.getframerate(),
+    @property
+    def duration_seconds(self) -> float:
+        return self._frames / self._format[2] if self._format else 0.0
+
+    def __enter__(self) -> "WavJoiner":
+        return self
+
+    def __exit__(self, error_type: type[BaseException] | None, *_: object) -> None:
+        try:
+            if self._out is not None:
+                self._out.close()
+        except (wave.Error, OSError) as error:
+            self.out_path.unlink(missing_ok=True)
+            if error_type is None:
+                raise _write_error() from error
+        if error_type is not None:
+            self.out_path.unlink(missing_ok=True)
+
+    def append(self, path: Path) -> None:
+        try:
+            with wave.open(str(path), "rb") as part:
+                self._check_format(part)
+                self.starts.append(self.duration_seconds)
+                self._frames += _copy_frames(part, self._writer(part))
+        except (wave.Error, EOFError) as error:
+            raise VoiceError(
+                "A narrated section is not readable WAV audio.", MISMATCH_HINT
+            ) from error
+        except OSError as error:
+            raise _write_error() from error
+
+    def _check_format(self, part: wave.Wave_read) -> None:
+        part_format = (part.getnchannels(), part.getsampwidth(), part.getframerate())
+        if self._format is None:
+            self._format = part_format
+        elif part_format != self._format:
+            raise VoiceError(
+                "The voice engine narrated sections in different audio formats.",
+                MISMATCH_HINT,
             )
-            if audio_format is None:
-                audio_format = part_format
-                out_file.setparams(part.getparams())
-            elif part_format != audio_format:
-                raise VoiceError(
-                    "The voice engine narrated sections in different audio formats.",
-                    MISMATCH_HINT,
-                )
-            starts.append(frames_written / audio_format[2])
-            frames_written += _copy_frames(part, out_file)
-    return starts
+
+    def _writer(self, part: wave.Wave_read) -> wave.Wave_write:
+        if self._out is None:
+            self._out = wave.open(str(self.out_path), "wb")
+            self._out.setparams(part.getparams())
+        return self._out
+
+
+def _write_error() -> VoiceError:
+    return VoiceError(
+        "The narrated audio could not be written.",
+        "Check the free space and permissions of the data folder.",
+    )
 
 
 def _copy_frames(part: wave.Wave_read, out_file: wave.Wave_write) -> int:

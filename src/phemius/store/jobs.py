@@ -351,6 +351,7 @@ def clear_audio_files() -> list[str]:
             "UPDATE audio SET path = NULL, format = NULL, size_bytes = NULL,"
             " conversion_note = NULL"
         )
+        connection.execute("UPDATE audio_sections SET start_seconds = NULL")
     return [row["path"] for row in rows]
 
 

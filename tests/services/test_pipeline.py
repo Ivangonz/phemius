@@ -5,6 +5,7 @@ import pytest
 
 from phemius.errors import ModelError, VoiceError
 from phemius.models.base import Script, SectionContext, TokenUsage
+from phemius.services import library as library_service
 from phemius.services import pipeline, queue, runner
 from phemius.store import audio as audio_store
 from phemius.store import database
@@ -396,3 +397,51 @@ def test_a_failed_section_leaves_no_files_and_a_retry_narrates_again(
     assert _job(job_id)["state"] == "done"
     assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [0, 1, 3]
     assert _audio_files(isolated_env) == [f"{audio['id']}.wav"]
+
+
+def test_each_part_is_deleted_before_the_next_section_is_narrated(
+    use_script_model: UseScriptModel,
+    isolated_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
+    job_id = _scripted_audio(use_script_model)
+    audio_id = _audio(job_id)["id"]
+    files_seen: list[list[str]] = []
+    _use_engine(
+        monkeypatch,
+        CountingEngine(lambda calls: files_seen.append(_audio_files(isolated_env))),
+    )
+
+    assert runner.run_next("narrating")
+
+    joined = f"{audio_id}.wav"
+    assert files_seen == [[], [joined], [joined]]
+
+
+def test_leftover_parts_are_removed_and_other_audio_is_kept(
+    isolated_env: Path,
+) -> None:
+    audio_dir = isolated_env / "audio"
+    audio_dir.mkdir(parents=True)
+    for name in ["7.part0.wav", "7.part12.wav", "7.wav", "8.m4a"]:
+        (audio_dir / name).write_bytes(b"audio")
+
+    pipeline.remove_leftover_parts(audio_dir)
+
+    assert _audio_files(isolated_env) == ["7.wav", "8.m4a"]
+
+
+def test_deleting_all_audio_clears_the_chapter_times(
+    use_script_model: UseScriptModel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PHEMIUS_FORMAT", "wav")
+    job_id = _scripted_audio(use_script_model)
+    assert runner.run_next("narrating")
+
+    library_service.delete_all_audio()
+
+    audio = _audio(job_id)
+    assert audio["path"] is None
+    assert [chapter["title"] for chapter in audio["chapters"]] == HEADINGS
+    assert [chapter["start_seconds"] for chapter in audio["chapters"]] == [None] * 3
