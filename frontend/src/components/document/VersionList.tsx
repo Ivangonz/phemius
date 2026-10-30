@@ -3,7 +3,7 @@ import { VersionButton } from "./VersionButton"
 
 type VersionListProps = {
   versions: AudioVersion[]
-  selectedId: number
+  selectedId: number | null
   onSelect: (audioId: number) => void
 }
 

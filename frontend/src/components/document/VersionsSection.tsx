@@ -1,7 +1,9 @@
+import { useCallback, useState } from "react"
 import type { UseQueryResult } from "@tanstack/react-query"
 import { ListError } from "@/components/library/ListError"
 import type { components } from "@/lib/api-schema"
 import { isDocumentChanged, listAudioVersions } from "@/lib/audioVersions"
+import { CompareVersions } from "./CompareVersions"
 import { VersionDetail } from "./VersionDetail"
 import { VersionList } from "./VersionList"
 
@@ -23,6 +25,14 @@ export function VersionsSection({
   selectedId,
   onSelect,
 }: VersionsSectionProps) {
+  const [isComparing, setIsComparing] = useState(false)
+  const handleSelect = useCallback(
+    (audioId: number) => {
+      setIsComparing(false)
+      onSelect(audioId)
+    },
+    [onSelect],
+  )
   const page = result.data
 
   if (!page) {
@@ -42,8 +52,10 @@ export function VersionsSection({
   }
 
   const versions = listAudioVersions(page.items)
+  const [newest, second] = versions
   const selected =
-    versions.find((version) => version.id === selectedId) ?? versions[0]
+    versions.find((version) => version.id === selectedId) ?? newest
+  const comparePair = second && newest ? { first: newest, second } : null
 
   return (
     <section aria-label="Audio versions" className={PANEL_CLASSES}>
@@ -54,16 +66,31 @@ export function VersionsSection({
         </p>
       )}
       {selected ? (
-        <>
+        <div className="flex flex-wrap gap-2">
           <VersionList
             versions={versions}
-            selectedId={selected.id}
-            onSelect={onSelect}
+            selectedId={isComparing ? null : selected.id}
+            onSelect={handleSelect}
           />
-          <VersionDetail key={selected.id} version={selected} title={title} />
-        </>
+          {comparePair && (
+            <button
+              type="button"
+              aria-pressed={isComparing}
+              onClick={() => setIsComparing(!isComparing)}
+              className="min-h-11 cursor-pointer rounded-control border border-dashed border-line-dashed px-4 font-medium text-primary-hover hover:bg-primary-tint"
+            >
+              Compare two versions
+            </button>
+          )}
+        </div>
       ) : (
         <p className="text-muted">No audio yet for this document.</p>
+      )}
+      {comparePair && isComparing && (
+        <CompareVersions versions={versions} {...comparePair} />
+      )}
+      {selected && !isComparing && (
+        <VersionDetail key={selected.id} version={selected} title={title} />
       )}
     </section>
   )
