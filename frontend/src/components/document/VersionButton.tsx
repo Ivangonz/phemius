@@ -1,7 +1,7 @@
 import { memo } from "react"
 import { useAudio } from "@/hooks/useAudio"
+import { useVersionStatus } from "@/hooks/useVersionStatus"
 import { describeVersion, type AudioVersion } from "@/lib/audioVersions"
-import { describeJob } from "@/lib/documentStatus"
 import { formatTime } from "@/lib/formatTime"
 
 type VersionButtonProps = {
@@ -15,7 +15,8 @@ const IDLE_CLASSES = "border-line-control bg-surface hover:bg-surface-subtle"
 
 function useVersionDetailLabel(version: AudioVersion): string | null {
   const { data: audio } = useAudio(version.id)
-  if (version.status !== "done") return describeJob(version).label
+  const status = useVersionStatus(version)
+  if (version.status !== "done") return status.label
   if (audio?.duration_seconds == null) return null
   return formatTime(audio.duration_seconds)
 }
