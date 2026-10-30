@@ -5,6 +5,7 @@ import type { SourceView } from "@/hooks/useSources"
 import { useSyncTracker } from "@/hooks/useSyncTracker"
 import { AddFolderForm } from "./AddFolderForm"
 import { AddSourceTiles } from "./AddSourceTiles"
+import { SourceActivity } from "./SourceActivity"
 import { SourceList } from "./SourceList"
 
 const DESCRIPTION =
@@ -37,12 +38,20 @@ export function SourcesPage() {
           Add source
         </Button>
       </div>
-      <div className="flex flex-col gap-3.5">
-        {isAdding && (
-          <AddFolderForm onAdded={handleAdded} onCancel={handleCloseAdd} />
-        )}
-        <SourceList isSyncing={syncs.isSyncing} onSyncStarted={syncs.track} />
-        <AddSourceTiles onAddFolder={() => setIsAdding(true)} />
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="flex min-w-0 flex-[2_1_35rem] flex-col gap-3.5">
+          {isAdding && (
+            <AddFolderForm onAdded={handleAdded} onCancel={handleCloseAdd} />
+          )}
+          <SourceList isSyncing={syncs.isSyncing} onSyncStarted={syncs.track} />
+          <AddSourceTiles onAddFolder={() => setIsAdding(true)} />
+        </div>
+        <aside className="min-w-0 flex-[1_1_20rem]">
+          <SourceActivity
+            isSyncing={syncs.isSyncing}
+            isPolling={syncs.hasPending}
+          />
+        </aside>
       </div>
     </>
   )

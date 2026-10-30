@@ -48,5 +48,7 @@ export function useSyncTracker() {
     [pending],
   )
 
-  return { track, isSyncing }
+  // Activity keeps refreshing for the whole watch window, since a sync's
+  // last imports land just before the source reports it finished.
+  return { track, isSyncing, hasPending: pending.size > 0 }
 }
