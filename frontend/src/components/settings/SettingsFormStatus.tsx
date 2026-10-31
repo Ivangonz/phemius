@@ -1,23 +1,22 @@
-import type { ScriptModelConnection } from "@/hooks/useScriptModels"
+import type { ReactNode } from "react"
 import { ApiError, getErrorMessage } from "@/lib/api"
-import { ConnectionResult } from "./ConnectionResult"
 
-type ScriptModelStatusProps = {
+type SettingsFormStatusProps = {
   saveError: Error | null
   isSaved: boolean
   hasNoChanges: boolean
   isTesting: boolean
-  connection: ScriptModelConnection | undefined
+  testResult: ReactNode
 }
 
-// One live region for the outcome of Save and Test connection.
-export function ScriptModelStatus({
+// One live region for the outcome of Save and Test.
+export function SettingsFormStatus({
   saveError,
   isSaved,
   hasNoChanges,
   isTesting,
-  connection,
-}: ScriptModelStatusProps) {
+  testResult,
+}: SettingsFormStatusProps) {
   const hint = saveError instanceof ApiError ? saveError.hint : undefined
 
   return (
@@ -37,7 +36,7 @@ export function ScriptModelStatus({
       {isTesting && (
         <p className="text-secondary text-muted">Testing the connection…</p>
       )}
-      {connection && <ConnectionResult result={connection} />}
+      {testResult}
     </div>
   )
 }

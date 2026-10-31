@@ -1,37 +1,44 @@
 import { useId } from "react"
-import { useFormContext } from "react-hook-form"
-import {
-  PROVIDERS,
-  type ScriptModelFormValues,
-} from "@/lib/scriptModelSettings"
+import { useFormContext, type FieldValues, type Path } from "react-hook-form"
+import type { ProviderOption } from "@/lib/settingsFields"
 import { ProviderCard } from "./ProviderCard"
 
-type ProviderCardsProps = { isLocked: boolean }
+type ProviderCardsProps<T extends FieldValues> = {
+  name: NoInfer<Path<T>>
+  legend: string
+  options: ProviderOption[]
+  isLocked: boolean
+  lockedNote: string
+}
 
-export function ProviderCards({ isLocked }: ProviderCardsProps) {
+// T defaults to never so a caller must name its form type.
+export function ProviderCards<T extends FieldValues = never>({
+  name,
+  legend,
+  options,
+  isLocked,
+  lockedNote,
+}: ProviderCardsProps<T>) {
   const lockedId = useId()
-  const { register } = useFormContext<ScriptModelFormValues>()
-  const registration = register("script_provider")
+  const { register } = useFormContext<T>()
+  const registration = register(name)
 
   return (
     <fieldset
       className="flex flex-col gap-2"
       aria-describedby={isLocked ? lockedId : undefined}
     >
-      <legend className="mb-2 text-secondary font-semibold">
-        Where the model runs
-      </legend>
+      <legend className="mb-2 text-secondary font-semibold">{legend}</legend>
       {isLocked && (
         <p id={lockedId} className="text-secondary text-muted">
-          Locked: the provider is set by PHEMIUS_SCRIPT_PROVIDER on the server.
-          Unset it and restart to choose here.
+          {lockedNote}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        {PROVIDERS.map((provider) => (
+        {options.map((option) => (
           <ProviderCard
-            key={provider.id}
-            provider={provider}
+            key={option.id}
+            provider={option}
             registration={registration}
             isDisabled={isLocked}
           />
