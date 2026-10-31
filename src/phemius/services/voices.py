@@ -2,10 +2,11 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from phemius.config import Config, load_config
 from phemius.errors import InvalidInputError, VoiceError
+from phemius.services.voice_downloads import DownloadProgress, visible_progress
 from phemius.voices import Voice, VoiceCheck, get_engine, namespace_voice
 
 # "default": the default voice, then the engine's own order.
@@ -20,6 +21,9 @@ class VoiceView(BaseModel):
     size_bytes: int | None
     license: str | None
     is_default: bool
+    download: DownloadProgress | None = Field(
+        description="The download started since the server started, if any."
+    )
 
 
 def list_voices() -> list[Voice]:
@@ -107,4 +111,5 @@ def _view(voice: Voice, is_default: bool) -> VoiceView:
         size_bytes=voice.size_bytes,
         license=voice.license,
         is_default=is_default,
+        download=visible_progress(voice),
     )

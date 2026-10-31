@@ -1,10 +1,12 @@
 from dataclasses import asdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 
 from phemius.api.pagination import DEFAULT_PAGE_SIZE, Limit, Offset, Page
-from phemius.services import voices
+from phemius.api.params import VoiceId
+from phemius.services import voice_downloads, voices
 from phemius.services.library_config import VoiceEngineStatus
+from phemius.services.voice_downloads import DownloadProgress
 from phemius.services.voices import VoiceOrder, VoiceView
 
 router = APIRouter(prefix="/api/voices", tags=["voices"])
@@ -29,3 +31,13 @@ def check_voice_engine() -> VoiceEngineStatus:
     Always a fresh check: once hosted checks are cached (#64), this bypasses it.
     """
     return VoiceEngineStatus(**asdict(voices.check_engine()))
+
+
+@router.post("/{voice_id}/download", status_code=status.HTTP_202_ACCEPTED)
+def download_voice(voice_id: VoiceId) -> DownloadProgress:
+    """Download a voice in the background; its progress shows in the voice list.
+
+    Asking again while it downloads returns the same download. Fetches from the
+    voice catalogue host, never a paid provider.
+    """
+    return voice_downloads.download_voice(voice_id)

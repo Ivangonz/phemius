@@ -10,7 +10,12 @@ from phemius.models import SCRIPT_MODELS
 from phemius.models.base import ScriptModel
 from phemius.services import ffmpeg
 from phemius.store import database
+from phemius.voices import ENGINES
+from phemius.voices import piper as piper_voices
+from phemius.voices.downloads import Fetch
+from phemius.voices.piper import PiperEngine
 from tests.services.fakes import FAKE_EXECUTABLE, FakeFfmpeg, UseFfmpeg
+from tests.voices.fakes import UsePiper, fake_catalogue
 
 LOCAL_URL = "http://127.0.0.1:8000"
 
@@ -91,5 +96,20 @@ def use_script_model(
     def use(model: ScriptModel) -> None:
         monkeypatch.setitem(SCRIPT_MODELS, "fake", lambda loaded_config: model)
         monkeypatch.setenv("PHEMIUS_SCRIPT_PROVIDER", "fake")
+
+    return use
+
+
+@pytest.fixture
+def use_piper(isolated_env: Path, monkeypatch: pytest.MonkeyPatch) -> UsePiper:
+    """Selects Piper with a test catalogue; returns the voices folder."""
+    monkeypatch.setattr(piper_voices, "CATALOGUE", fake_catalogue())
+    monkeypatch.setenv("PHEMIUS_TTS", "piper")
+    voices_dir = isolated_env / "voices" / "piper"
+
+    def use(fetch: Fetch) -> Path:
+        engine = PiperEngine(voices_dir, fetch=fetch)
+        monkeypatch.setitem(ENGINES, "piper", lambda config: engine)
+        return voices_dir
 
     return use

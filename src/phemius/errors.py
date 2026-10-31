@@ -79,6 +79,13 @@ class LibraryBusyError(PhemiusError):
     status_code = 409
 
 
+class VoiceDownloadConflictError(PhemiusError):
+    """The engine has no voice downloads, or another voice is downloading."""
+
+    code = "voice_download_conflict"
+    status_code = 409
+
+
 class ServiceUnavailableError(PhemiusError):
     code = "unavailable"
     status_code = 503

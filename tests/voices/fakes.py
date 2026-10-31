@@ -1,13 +1,25 @@
+import hashlib
 import io
 import json
 import struct
+import threading
 import wave
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import httpx2
 
+from phemius.voices.downloads import Fetch
+from phemius.voices.piper import CatalogueVoice, VoiceFile
+
 type Handler = Callable[[httpx2.Request], httpx2.Response]
+type UsePiper = Callable[[Fetch], Path]
+"""Selects Piper with `fake_catalogue()`, fetching files with `fetch`."""
+
+CONTENT = b"fake voice model"
+VOICE = "piper:en_US-test-medium"
+OTHER_VOICE = "piper:en_GB-other-low"
+GATE_TIMEOUT_SECONDS = 5
 
 LONG_SCRIPT = "\n\n".join(
     " ".join(f"Paragraph {para} explains step {step} in detail." for step in range(30))
@@ -50,3 +62,43 @@ def recording(requests: list[httpx2.Request], respond: Handler) -> httpx2.MockTr
         return respond(request)
 
     return httpx2.MockTransport(handle)
+
+
+class GatedFetch:
+    """Sends half of each file, then waits for `gate` before sending the rest.
+
+    Only files whose URL passes `is_gated` wait; the rest arrive at once.
+    """
+
+    def __init__(
+        self,
+        gate: threading.Event,
+        is_gated: Callable[[str], bool] = lambda url: True,
+    ) -> None:
+        self.gate = gate
+        self.is_gated = is_gated
+        self.urls: list[str] = []
+
+    def __call__(self, url: str) -> Iterator[bytes]:
+        self.urls.append(url)
+        yield CONTENT[:4]
+        if self.is_gated(url):
+            self.gate.wait(GATE_TIMEOUT_SECONDS)
+        yield CONTENT[4:]
+
+
+def fake_fetch(url: str) -> Iterator[bytes]:
+    yield CONTENT
+
+
+def corrupt_fetch(url: str) -> Iterator[bytes]:
+    yield b"x" * len(CONTENT)
+
+
+def fake_catalogue() -> list[CatalogueVoice]:
+    """Two Piper voices whose model and config are both `CONTENT`."""
+    file = VoiceFile(hashlib.sha256(CONTENT).hexdigest(), len(CONTENT))
+    return [
+        CatalogueVoice(voice_id.split(":")[1], voice_id, "English", "CC0", file, file)
+        for voice_id in (VOICE, OTHER_VOICE)
+    ]

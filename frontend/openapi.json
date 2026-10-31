@@ -903,6 +903,65 @@
           }
         ]
       },
+      "DownloadProgress": {
+        "description": "A voice download started since the server started; bytes done of total.",
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DownloadState"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "DownloadProgress",
+        "type": "object"
+      },
+      "DownloadState": {
+        "enum": [
+          "downloading",
+          "installed",
+          "failed"
+        ],
+        "type": "string"
+      },
       "EffectiveRules": {
         "description": "The rules a source applies, with the global settings filled in.",
         "properties": {
@@ -2679,6 +2738,17 @@
             ],
             "title": "Accent"
           },
+          "download": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DownloadProgress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The download started since the server started, if any."
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -2725,7 +2795,8 @@
           "is_installed",
           "size_bytes",
           "license",
-          "is_default"
+          "is_default",
+          "download"
         ],
         "title": "VoiceView",
         "type": "object"
@@ -4551,6 +4622,52 @@
           }
         },
         "summary": "Check Voice Engine",
+        "tags": [
+          "voices"
+        ]
+      }
+    },
+    "/api/voices/{voice_id}/download": {
+      "post": {
+        "description": "Download a voice in the background; its progress shows in the voice list.\n\nAsking again while it downloads returns the same download. Fetches from the\nvoice catalogue host, never a paid provider.",
+        "operationId": "download_voice_api_voices__voice_id__download_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voice_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.:-]+$",
+              "title": "Voice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadProgress"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Voice",
         "tags": [
           "voices"
         ]
