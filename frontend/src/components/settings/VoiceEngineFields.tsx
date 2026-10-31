@@ -3,17 +3,18 @@ import {
   isLocked,
   savedValue,
   type SettingsOverview,
-} from "@/lib/scriptModelSettings"
+} from "@/lib/settingsFields"
 import {
   findVoiceEngine,
   type VoiceEngineFormValues,
+  type VoiceSecretKey,
 } from "@/lib/voiceEngineSettings"
 import { SecretField } from "./SecretField"
 import { TextSettingField } from "./TextSettingField"
 
 type VoiceEngineFieldsProps = { overview: SettingsOverview }
 
-const KEY_LABELS = {
+const KEY_LABELS: Record<VoiceSecretKey, string> = {
   openai_speech_api_key: "Speech server API key",
   elevenlabs_api_key: "ElevenLabs API key",
 }
@@ -28,7 +29,13 @@ export function VoiceEngineFields({ overview }: VoiceEngineFieldsProps) {
     name: ["voice_engine", "openai_speech_base_url"],
   })
   const engine = findVoiceEngine(engineId)
-  if (!engine) return null
+  if (!engine)
+    return engineId ? (
+      <p className="text-secondary text-muted">
+        The saved engine, {engineId}, is not one of these. Choose one above to
+        switch.
+      </p>
+    ) : null
   const has = (field: string) => engine.fields.some((item) => item === field)
   const keyField = engine.keyField
   // Until #85 is fixed, a saved key follows a changed base URL to the new host.
@@ -40,7 +47,7 @@ export function VoiceEngineFields({ overview }: VoiceEngineFieldsProps) {
   return (
     <div className="flex flex-col gap-4.5">
       {has("openai_speech_base_url") && (
-        <TextSettingField
+        <TextSettingField<VoiceEngineFormValues>
           name="openai_speech_base_url"
           label="Speech server address"
           isLocked={isLocked(overview, "openai_speech_base_url")}
@@ -49,7 +56,7 @@ export function VoiceEngineFields({ overview }: VoiceEngineFieldsProps) {
         />
       )}
       {keyField && (
-        <SecretField
+        <SecretField<VoiceEngineFormValues>
           name={keyField}
           label={KEY_LABELS[keyField]}
           status={overview.secrets[keyField]}
@@ -57,7 +64,7 @@ export function VoiceEngineFields({ overview }: VoiceEngineFieldsProps) {
         />
       )}
       {has("openai_speech_model") && (
-        <TextSettingField
+        <TextSettingField<VoiceEngineFormValues>
           name="openai_speech_model"
           label="Speech model"
           isLocked={isLocked(overview, "openai_speech_model")}

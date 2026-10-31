@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/Button"
 import { useLibraryConfig } from "@/hooks/useLibraryConfig"
 import { useUpdateSettings } from "@/hooks/useSettings"
 import { useCheckVoiceEngine } from "@/hooks/useVoiceEngine"
-import { isLocked, type SettingsOverview } from "@/lib/scriptModelSettings"
+import { isLocked, type SettingsOverview } from "@/lib/settingsFields"
 import {
   buildVoicePatch,
+  toFfmpegState,
   toVoiceFormValues,
   VOICE_ENGINES,
   voiceEngineFormSchema,
@@ -71,7 +72,7 @@ export function VoiceEngineForm({ overview }: VoiceEngineFormProps) {
         onSubmit={(event) => void handleSave(event)}
         className="flex flex-col gap-4.5"
       >
-        <ProviderCards
+        <ProviderCards<VoiceEngineFormValues>
           name="voice_engine"
           legend="Voice engine"
           options={VOICE_ENGINES}
@@ -81,7 +82,7 @@ export function VoiceEngineForm({ overview }: VoiceEngineFormProps) {
         <VoiceEngineFields key={savedCount} overview={overview} />
         <OutputFormatField
           isLocked={isLocked(overview, "output_format")}
-          hasFfmpeg={config.data?.ffmpeg.is_present}
+          ffmpeg={toFfmpegState(config.data?.ffmpeg, config.isError)}
         />
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={update.isPending}>

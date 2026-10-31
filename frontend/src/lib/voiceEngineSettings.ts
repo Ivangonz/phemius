@@ -6,9 +6,11 @@ import {
   type ProviderOption,
   type SettingsOverview,
   type SettingsUpdate,
-} from "./scriptModelSettings"
+} from "./settingsFields"
 
 type AudioFormat = components["schemas"]["AudioFormat"]
+type FfmpegStatus = components["schemas"]["FfmpegStatus"]
+export type FfmpegState = "checking" | "unknown" | "present" | "missing"
 export type VoiceSecretKey = "openai_speech_api_key" | "elevenlabs_api_key"
 type VoiceFieldKey =
   "openai_speech_base_url" | "openai_speech_model" | VoiceSecretKey
@@ -66,6 +68,14 @@ export const AUDIO_FORMATS = [
   label: string
   needsFfmpeg: boolean
 }[]
+
+export function toFfmpegState(
+  status: FfmpegStatus | undefined,
+  isError: boolean,
+): FfmpegState {
+  if (status) return status.is_present ? "present" : "missing"
+  return isError ? "unknown" : "checking"
+}
 
 export function findVoiceEngine(id: string): VoiceEngineOption | undefined {
   return VOICE_ENGINES.find((engine) => engine.id === id)

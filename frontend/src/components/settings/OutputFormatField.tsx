@@ -2,6 +2,7 @@ import { useId } from "react"
 import { useFormContext } from "react-hook-form"
 import {
   AUDIO_FORMATS,
+  type FfmpegState,
   type VoiceEngineFormValues,
 } from "@/lib/voiceEngineSettings"
 import { FieldShell } from "./FieldShell"
@@ -9,19 +10,25 @@ import { describedBy } from "./fieldProps"
 
 type OutputFormatFieldProps = {
   isLocked: boolean
-  hasFfmpeg: boolean | undefined
+  ffmpeg: FfmpegState
 }
 
-const NO_FFMPEG_NOTE =
-  "ffmpeg is not installed, so audio is kept as WAV. Install ffmpeg to choose M4A or MP3."
+const FFMPEG_NOTES: Record<FfmpegState, string | undefined> = {
+  checking: "Checking for ffmpeg…",
+  unknown:
+    "Could not check for ffmpeg, so only WAV can be chosen. Reload the page to try again.",
+  present: undefined,
+  missing:
+    "ffmpeg is not installed, so audio is kept as WAV. Install ffmpeg to choose M4A or MP3.",
+}
 
 export function OutputFormatField({
   isLocked,
-  hasFfmpeg,
+  ffmpeg,
 }: OutputFormatFieldProps) {
   const id = useId()
   const { register } = useFormContext<VoiceEngineFormValues>()
-  const description = hasFfmpeg === false ? NO_FFMPEG_NOTE : undefined
+  const description = FFMPEG_NOTES[ffmpeg]
 
   return (
     <FieldShell
@@ -41,7 +48,7 @@ export function OutputFormatField({
           <option
             key={format.id}
             value={format.id}
-            disabled={format.needsFfmpeg && hasFfmpeg !== true}
+            disabled={format.needsFfmpeg && ffmpeg !== "present"}
           >
             {format.label}
           </option>
