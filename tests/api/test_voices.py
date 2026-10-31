@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from phemius.errors import VoiceError
-from phemius.services import access
+from phemius.services import access, synthesis
 from phemius.voices import ENGINES, Voice, VoiceCheck
 from phemius.voices import piper as piper_voices
 from phemius.voices.base import SAMPLE_TEXT
@@ -169,6 +169,20 @@ def test_download_returns_202_and_progress_shows_on_the_voice(
     voice = _wait_for_installed(client, VOICE)
     assert voice["is_installed"] is True
     assert voice["download"]["done"] == voice["download"]["total"]
+
+
+def test_download_finishes_while_a_synthesis_holds_the_lock(
+    client: TestClient, use_piper: UsePiper
+) -> None:
+    use_piper(fake_fetch)
+
+    # Synthesis may wait on a voice's download lock, so a download must never
+    # wait on the synthesis lock.
+    with synthesis.lock:
+        client.post(f"/api/voices/{VOICE}/download")
+        voice = _wait_for_installed(client, VOICE)
+
+    assert voice["is_installed"] is True
 
 
 def test_download_for_an_engine_without_downloads_is_a_409(client: TestClient) -> None:
