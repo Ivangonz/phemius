@@ -65,16 +65,25 @@ def recording(requests: list[httpx2.Request], respond: Handler) -> httpx2.MockTr
 
 
 class GatedFetch:
-    """Sends half of each file, then waits for `gate` before sending the rest."""
+    """Sends half of each file, then waits for `gate` before sending the rest.
 
-    def __init__(self, gate: threading.Event) -> None:
+    Only files whose URL passes `is_gated` wait; the rest arrive at once.
+    """
+
+    def __init__(
+        self,
+        gate: threading.Event,
+        is_gated: Callable[[str], bool] = lambda url: True,
+    ) -> None:
         self.gate = gate
+        self.is_gated = is_gated
         self.urls: list[str] = []
 
     def __call__(self, url: str) -> Iterator[bytes]:
         self.urls.append(url)
         yield CONTENT[:4]
-        self.gate.wait(GATE_TIMEOUT_SECONDS)
+        if self.is_gated(url):
+            self.gate.wait(GATE_TIMEOUT_SECONDS)
         yield CONTENT[4:]
 
 

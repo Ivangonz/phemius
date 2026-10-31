@@ -4,9 +4,12 @@ from collections.abc import Callable, Iterator
 
 import pytest
 
+from phemius.config import load_config
 from phemius.errors import NotFoundError, VoiceDownloadConflictError
-from phemius.services import voice_downloads
+from phemius.services import voice_downloads, voices
 from phemius.services.voice_downloads import DownloadProgress
+from phemius.voices import get_engine
+from phemius.voices.piper import PiperEngine
 from tests.voices.fakes import (
     CONTENT,
     OTHER_VOICE,
@@ -18,6 +21,19 @@ from tests.voices.fakes import (
 )
 
 DEADLINE_SECONDS = 5
+
+
+def wait_until(condition: Callable[[], bool]) -> None:
+    deadline = time.monotonic() + DEADLINE_SECONDS
+    while not condition():
+        assert time.monotonic() < deadline, "the condition never held"
+        time.sleep(0.01)
+
+
+def configured_piper() -> PiperEngine:
+    engine = get_engine(load_config())
+    assert isinstance(engine, PiperEngine)
+    return engine
 
 
 def wait_for_progress(
@@ -139,3 +155,62 @@ def test_voice_outside_the_catalogue_is_not_found(
 
     with pytest.raises(NotFoundError):
         voice_downloads.download_voice(voice)
+
+
+def test_a_failure_is_hidden_once_the_voice_is_installed_another_way(
+    use_piper: UsePiper,
+) -> None:
+    use_piper(corrupt_fetch)
+    voice_downloads.download_voice(VOICE)
+    wait_for_progress(VOICE, lambda progress: progress.state == "failed")
+    use_piper(fake_fetch)
+
+    configured_piper().download(VOICE)  # as a narration does on first use
+
+    views, _ = voices.list_voice_views("default", 25, 0)
+    view = next(view for view in views if view.id == VOICE)
+    assert view.is_installed is True
+    assert view.download is None
+    assert voice_downloads.download_voice(VOICE).state == "installed"
+    assert voice_downloads.download_progress(VOICE) is None
+
+
+def test_stopping_while_queued_behind_narration_ends_promptly(
+    use_piper: UsePiper,
+) -> None:
+    release = threading.Event()
+    fetch = GatedFetch(release)
+    use_piper(fetch)
+    narration = threading.Thread(target=configured_piper().download, args=(VOICE,))
+    narration.start()
+    wait_until(lambda: len(fetch.urls) > 0)
+    voice_downloads.download_voice(VOICE)
+
+    started = time.monotonic()
+    voice_downloads.stop_downloads()
+    stop_seconds = time.monotonic() - started
+    voice_downloads.start_downloads()
+    release.set()
+    narration.join(DEADLINE_SECONDS)
+
+    assert stop_seconds < voice_downloads.STOP_TIMEOUT_SECONDS
+    assert voice_downloads.THREAD_NAME not in [t.name for t in threading.enumerate()]
+    assert voice_downloads.download_voice(OTHER_VOICE).state == "downloading"
+    wait_for_progress(OTHER_VOICE, lambda progress: progress.state == "installed")
+
+
+def test_stopping_during_the_model_keeps_only_the_verified_config(
+    use_piper: UsePiper,
+) -> None:
+    is_model = GatedFetch(
+        voice_downloads.stop_signal(), lambda url: url.endswith(".onnx")
+    )
+    voices_dir = use_piper(is_model)
+    voice_downloads.download_voice(VOICE)
+    wait_for_progress(VOICE, lambda progress: progress.done > len(CONTENT))
+
+    voice_downloads.stop_downloads()
+
+    assert [path.name for path in voices_dir.iterdir()] == [
+        "en_US-test-medium.onnx.json"
+    ]

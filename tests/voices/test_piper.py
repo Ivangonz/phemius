@@ -1,5 +1,7 @@
 import hashlib
 import sys
+import threading
+import time
 import wave
 from collections.abc import Callable, Iterator
 from importlib.machinery import ModuleSpec
@@ -12,10 +14,12 @@ from phemius.errors import VoiceError
 from phemius.voices import piper
 from phemius.voices.downloads import Fetch
 from phemius.voices.piper import CatalogueVoice, PiperEngine, VoiceFile
+from tests.voices.fakes import OTHER_VOICE, GatedFetch, fake_catalogue
 
 MODEL_BYTES = b"fake onnx model"
 CONFIG_BYTES = b'{"audio": {"sample_rate": 22050}}'
 VOICE_ID = "piper:en_US-test-medium"
+DEADLINE_SECONDS = 5
 
 
 def _voice_file(content: bytes) -> VoiceFile:
@@ -183,3 +187,53 @@ def test_missing_piper_fails_synthesis_with_install_hint(
         make_engine().synthesize("Hello.", tmp_path / "out.wav", VOICE_ID)
 
     assert raised.value.hint == piper.INSTALL_HINT
+
+
+def _start_download(engine: PiperEngine, voice: str) -> threading.Thread:
+    thread = threading.Thread(target=engine.download, args=(voice,))
+    thread.start()
+    return thread
+
+
+def test_concurrent_downloads_of_one_voice_fetch_each_file_once(
+    voices_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(piper, "CATALOGUE", fake_catalogue())
+    release, is_waiting = threading.Event(), threading.Event()
+    fetch = GatedFetch(release)
+    engine = PiperEngine(voices_dir, fetch=fetch)
+    first = _start_download(engine, VOICE_ID)
+    deadline = time.monotonic() + DEADLINE_SECONDS
+    while not fetch.urls:
+        assert time.monotonic() < deadline, "the first download never started"
+        time.sleep(0.01)
+
+    def on_progress(done: int, total: int) -> None:
+        if done == 0:  # reported only while queued behind the first download
+            is_waiting.set()
+
+    second = threading.Thread(target=engine.download, args=(VOICE_ID, on_progress))
+    second.start()
+    assert is_waiting.wait(DEADLINE_SECONDS)
+    release.set()
+    first.join(DEADLINE_SECONDS)
+    second.join(DEADLINE_SECONDS)
+
+    assert len(fetch.urls) == 2
+
+
+def test_downloads_of_different_voices_do_not_wait_on_each_other(
+    voices_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(piper, "CATALOGUE", fake_catalogue())
+    release = threading.Event()
+    engine = PiperEngine(voices_dir, GatedFetch(release, lambda url: "test" in url))
+    first = _start_download(engine, VOICE_ID)
+    other = _start_download(engine, OTHER_VOICE)
+
+    other.join(DEADLINE_SECONDS / 2)
+    is_other_done = not other.is_alive()
+    release.set()
+    first.join(DEADLINE_SECONDS)
+
+    assert is_other_done

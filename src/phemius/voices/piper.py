@@ -6,6 +6,8 @@ catalogue into `<data folder>/voices/piper`.
 
 import threading
 import wave
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.util import find_spec
@@ -30,6 +32,7 @@ CATALOGUE_URL = (
 )
 MODEL_SUFFIX = ".onnx"
 CONFIG_SUFFIX = ".onnx.json"
+LOCK_POLL_SECONDS = 0.1
 
 
 @dataclass(frozen=True)
@@ -149,8 +152,10 @@ class PiperEngine:
         self._fetch = fetch
         self._loaded: dict[str, Any] = {}  # one PiperVoice per voice name
         # Narration and a download from the Voices screen would otherwise
-        # write the same `.part` file at once.
-        self._download_lock = threading.Lock()
+        # write the same `.part` file at once. One lock per voice name, so a
+        # download never delays narration with another voice.
+        self._voice_locks: dict[str, threading.Lock] = {}
+        self._voice_locks_guard = threading.Lock()
 
     def voices(self) -> list[Voice]:
         return [
@@ -183,14 +188,11 @@ class PiperEngine:
         Raises `VoiceError` on a network failure or a checksum mismatch.
         """
         entry = _catalogue_voice(voice)
-        with self._download_lock:
-            missing = [
-                (suffix, file)
-                for suffix, file in self._files(entry)
-                if not self._path(entry, suffix).exists()
-            ]
-            if missing:
-                self._download_files(entry, missing, on_progress)
+        if self._missing(entry):
+            with self._voice_lock(entry, on_progress):
+                missing = self._missing(entry)
+                if missing:
+                    self._download_files(entry, missing, on_progress)
         return self._path(entry, MODEL_SUFFIX)
 
     def synthesize(self, script: str, out_path: Path, voice: str) -> None:
@@ -238,13 +240,33 @@ class PiperEngine:
             )
         log.info("piper_voice_download_finished", voice=entry.name)
 
+    @contextmanager
+    def _voice_lock(
+        self, entry: CatalogueVoice, on_progress: Progress
+    ) -> Iterator[None]:
+        with self._voice_locks_guard:
+            lock = self._voice_locks.setdefault(entry.name, threading.Lock())
+        # Reporting while queued lets a caller stop (by raising from
+        # `on_progress`) a download waiting behind another of the same voice.
+        while not lock.acquire(timeout=LOCK_POLL_SECONDS):
+            on_progress(0, entry.size_bytes)
+        try:
+            yield
+        finally:
+            lock.release()
+
+    def _missing(self, entry: CatalogueVoice) -> list[tuple[str, VoiceFile]]:
+        return [
+            (suffix, file)
+            for suffix, file in self._files(entry)
+            if not self._path(entry, suffix).exists()
+        ]
+
     def _files(self, entry: CatalogueVoice) -> list[tuple[str, VoiceFile]]:
         return [(CONFIG_SUFFIX, entry.config), (MODEL_SUFFIX, entry.model)]
 
     def _is_downloaded(self, entry: CatalogueVoice) -> bool:
-        return all(
-            self._path(entry, suffix).exists() for suffix, _ in self._files(entry)
-        )
+        return not self._missing(entry)
 
     def _path(self, entry: CatalogueVoice, suffix: str) -> Path:
         return self._directory() / f"{entry.name}{suffix}"
