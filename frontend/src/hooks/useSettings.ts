@@ -9,6 +9,7 @@ export type SettingsUpdate = components["schemas"]["Settings"]
 export const settingsQueryKey = ["settings"] as const
 // Anything read from the configured providers changes with the settings.
 export const modelsQueryKey = ["models"] as const
+export const voicesQueryKey = ["voices"] as const
 
 export function useSettings() {
   return useQuery({
@@ -27,9 +28,12 @@ export function useUpdateSettings() {
       queryClient.setQueryData(settingsQueryKey, overview),
     onSettled: () =>
       Promise.all(
-        [settingsQueryKey, libraryConfigQueryKey, modelsQueryKey].map(
-          (queryKey) => queryClient.invalidateQueries({ queryKey }),
-        ),
+        [
+          settingsQueryKey,
+          libraryConfigQueryKey,
+          modelsQueryKey,
+          voicesQueryKey,
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ),
   })
 }

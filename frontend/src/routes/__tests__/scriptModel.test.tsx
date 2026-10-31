@@ -3,10 +3,13 @@ import userEvent from "@testing-library/user-event"
 import { http, HttpResponse } from "msw"
 import { describe, expect, it } from "vitest"
 import type { ScriptModelConnection } from "@/hooks/useScriptModels"
-import type { SettingsOverview } from "@/hooks/useSettings"
 import { libraryConfig } from "@/test/mocks/handlers"
 import { server } from "@/test/mocks/server"
-import { settingsHandler, settingsOverview } from "@/test/mocks/settings"
+import {
+  serveSettingsSaving,
+  settingsHandler,
+  settingsOverview,
+} from "@/test/mocks/settings"
 import { renderAppAt } from "@/test/renderApp"
 
 const OLLAMA_MODELS = {
@@ -33,25 +36,8 @@ function serveOllamaModels() {
   )
 }
 
-// Answers PATCH like the server: the saved values come back in the overview.
 function serveSaving(patches: unknown[]) {
-  let overview = settingsOverview()
-  server.use(
-    http.get("/api/settings", () => HttpResponse.json(overview)),
-    http.patch("/api/settings", async ({ request }) => {
-      const patch = (await request.json()) as Record<string, string | number>
-      patches.push(patch)
-      overview = settingsOverview({
-        values: Object.fromEntries(
-          Object.entries(patch).map(([key, value]) => [
-            key,
-            { value, source: "saved", is_locked: false },
-          ]),
-        ),
-      })
-      return HttpResponse.json(overview satisfies SettingsOverview)
-    }),
-  )
+  server.use(...serveSettingsSaving(patches))
 }
 
 function serveCheck(result: ScriptModelConnection) {
@@ -132,7 +118,7 @@ describe("script model settings", () => {
     const readsBeforeSave = configReads
 
     await user.selectOptions(screen.getByLabelText("Model"), "qwen2.5:7b")
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    await user.click(within(section()).getByRole("button", { name: "Save" }))
 
     expect(await screen.findByText("Saved.")).toBeInTheDocument()
     expect(patches).toEqual([
@@ -149,7 +135,7 @@ describe("script model settings", () => {
 
     await user.click(screen.getByRole("button", { name: "Replace" }))
     await user.type(screen.getByLabelText("OpenRouter API key"), "sk-or-new")
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    await user.click(within(section()).getByRole("button", { name: "Save" }))
 
     expect(await screen.findByText("Saved.")).toBeInTheDocument()
     expect(patches).toEqual([{ openrouter_api_key: "sk-or-new" }])
@@ -253,7 +239,7 @@ describe("script model settings", () => {
     const limit = screen.getByLabelText("Longest script, in tokens")
     await user.clear(limit)
     await user.type(limit, "9000")
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    await user.click(within(section()).getByRole("button", { name: "Save" }))
 
     expect(await screen.findByText("Saved.")).toBeInTheDocument()
     expect(patches).toEqual([{ script_max_tokens: 9000 }])
@@ -301,7 +287,7 @@ describe("script model settings", () => {
     const user = await openSettings()
 
     await user.click(screen.getByRole("radio", { name: /^OpenAI Cloud/ }))
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    await user.click(within(section()).getByRole("button", { name: "Save" }))
 
     expect(
       await screen.findByText("Error: Enter an API key."),

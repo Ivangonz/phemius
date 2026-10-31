@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { RouteError } from "@/components/RouteError"
 import { ScriptModelSection } from "@/components/settings/ScriptModelSection"
 import { SettingsColumns } from "@/components/settings/SettingsColumns"
+import { VoiceSection } from "@/components/settings/VoiceSection"
 
 export const Route = createFileRoute("/settings/")({
   component: ModelsAndVoicesPage,
@@ -10,9 +11,6 @@ export const Route = createFileRoute("/settings/")({
 
 function ModelsAndVoicesPage() {
   return (
-    <SettingsColumns
-      left={<ScriptModelSection />}
-      right={<p className="text-muted">The voice section will appear here.</p>}
-    />
+    <SettingsColumns left={<ScriptModelSection />} right={<VoiceSection />} />
   )
 }
