@@ -104,9 +104,10 @@ describe("a source's import rules", () => {
     await user.click(within(types).getByRole("checkbox", { name: ".docx" }))
     await user.click(within(card).getByRole("switch", { name: KEEP_VERSIONS }))
 
-    expect(within(card).getByRole("status")).toHaveTextContent("Saving…")
+    const rules = within(card).getByRole("region", { name: "Import rules" })
+    expect(within(rules).getByRole("status")).toHaveTextContent("Saving…")
     await waitFor(() =>
-      expect(within(card).getByRole("status")).toBeEmptyDOMElement(),
+      expect(within(rules).getByRole("status")).toBeEmptyDOMElement(),
     )
     cleanup()
     const reloaded = await openEdit(user)

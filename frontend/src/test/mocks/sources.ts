@@ -6,6 +6,8 @@ type SourceView = components["schemas"]["SourceView"]
 type NewSourceRequest = components["schemas"]["NewSourceRequest"]
 type SourceChange = components["schemas"]["SourceChange"]
 type ImportRules = components["schemas"]["ImportRules"]
+type SourceExclusion = components["schemas"]["SourceExclusion"]
+type ActivityEntry = components["schemas"]["ActivityEntry"]
 
 // What a source applies for a rule it does not set.
 const GLOBAL_RULES = makeSource({ id: 0, name: "global" }).effective_rules
@@ -18,11 +20,37 @@ function applyRules(source: SourceView, sent: ImportRules) {
   return { rules: own, effective_rules: { ...GLOBAL_RULES, ...own } }
 }
 
+function reimportEntry(
+  source: SourceView,
+  lifted: SourceExclusion,
+  id: number,
+): ActivityEntry {
+  return {
+    id,
+    source_id: source.id,
+    source_name: source.name,
+    action: "reimport",
+    item: lifted.item_key,
+    document_id: null,
+    detail: "Brought back from Excluded files; the next sync imports it.",
+    created: 1_761_800_000,
+  }
+}
+
 // One list behind every /api/sources route, so a change survives the refetch
 // that follows it. A sync finishes on the second list request after it, so
 // the first refetch still sees it running.
-export function serveSources(initial: SourceView[]) {
+// A re-import adds its entry to `activity`; pass the same array to
+// activityHandler to see it in Recent activity.
+export function serveSources(
+  initial: SourceView[],
+  initialExclusions: Record<number, SourceExclusion[]> = {},
+  activity: ActivityEntry[] = [],
+) {
   let sources = [...initial]
+  const exclusions = new Map(
+    Object.entries(initialExclusions).map(([id, items]) => [Number(id), items]),
+  )
   let syncing: { id: unknown; listsLeft: number } | null = null
 
   function change(id: unknown, patch: Partial<SourceView>) {
@@ -97,6 +125,40 @@ export function serveSources(initial: SourceView[]) {
         ...(body.config ? { config: body.config } : {}),
         ...(source && body.rules ? applyRules(source, body.rules) : {}),
       })
+    }),
+    http.get("/api/sources/:id/exclusions", ({ params, request }) => {
+      const search = new URL(request.url).searchParams
+      const limit = Number(search.get("limit") ?? 25)
+      const offset = Number(search.get("offset") ?? 0)
+      const items = [...(exclusions.get(Number(params.id)) ?? [])].sort(
+        (first, second) => second.created - first.created,
+      )
+      return HttpResponse.json({
+        items: items.slice(offset, offset + limit),
+        total: items.length,
+        limit,
+        offset,
+      })
+    }),
+    http.delete("/api/sources/:id/exclusions/:exclusionId", ({ params }) => {
+      const id = Number(params.id)
+      const items = exclusions.get(id) ?? []
+      const lifted = items.find(
+        (item) => item.id === Number(params.exclusionId),
+      )
+      const source = sources.find((item) => item.id === id)
+      if (!lifted || !source)
+        return HttpResponse.json(
+          { detail: "Excluded item not found", code: "not_found" },
+          { status: 404 },
+        )
+      exclusions.set(
+        id,
+        items.filter((item) => item !== lifted),
+      )
+      activity.unshift(reimportEntry(source, lifted, activity.length + 1))
+      if (source.status === "active") syncing = { id, listsLeft: 2 }
+      return new HttpResponse(null, { status: 204 })
     }),
     http.delete("/api/sources/:id", ({ params }) => {
       sources = sources.filter((source) => source.id !== Number(params.id))
