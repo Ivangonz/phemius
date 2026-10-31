@@ -2,12 +2,16 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
+from phemius.errors import VoiceError
+from phemius.services import access, synthesis
 from phemius.voices import ENGINES, Voice, VoiceCheck
 from phemius.voices import piper as piper_voices
-from tests.voices.fakes import VOICE, UsePiper, fake_fetch
+from phemius.voices.base import SAMPLE_TEXT
+from tests.voices.fakes import VOICE, UseCounter, UsePiper, fake_fetch
 
 JOE = "piper:en_US-joe-medium"
 LESSAC = "piper:en_US-lessac-medium"
@@ -167,12 +171,114 @@ def test_download_returns_202_and_progress_shows_on_the_voice(
     assert voice["download"]["done"] == voice["download"]["total"]
 
 
+def test_download_finishes_while_a_synthesis_holds_the_lock(
+    client: TestClient, use_piper: UsePiper
+) -> None:
+    use_piper(fake_fetch)
+
+    # Synthesis may wait on a voice's download lock, so a download must never
+    # wait on the synthesis lock.
+    with synthesis.lock:
+        client.post(f"/api/voices/{VOICE}/download")
+        voice = _wait_for_installed(client, VOICE)
+
+    assert voice["is_installed"] is True
+
+
 def test_download_for_an_engine_without_downloads_is_a_409(client: TestClient) -> None:
     response = client.post("/api/voices/stub:silent/download")
 
     assert response.status_code == 409
     assert response.json()["code"] == "voice_download_conflict"
     assert response.json()["hint"]
+
+
+def _preview(client: TestClient, voice_id: str = "one") -> httpx2.Response:
+    return client.post(f"/api/voices/{voice_id}/preview")
+
+
+def test_preview_synthesizes_the_sample_once_and_then_serves_the_cache(
+    client: TestClient, use_counter: UseCounter
+) -> None:
+    engine = use_counter("hosted")
+
+    first = _preview(client)
+    second = _preview(client, "hosted:one")
+
+    assert first.status_code == second.status_code == 200
+    assert engine.calls == [SAMPLE_TEXT]
+    played = client.get(first.json()["url"])
+    assert played.status_code == 200
+    assert played.headers["content-type"] == "audio/wav"
+
+
+def test_another_engine_with_the_same_voice_name_gets_its_own_sample(
+    client: TestClient, use_counter: UseCounter
+) -> None:
+    first = use_counter("hosted")
+    _preview(client)
+    second = use_counter("other")
+
+    response = _preview(client)
+
+    assert response.status_code == 200
+    assert (len(first.calls), len(second.calls)) == (1, 1)
+
+
+def test_a_new_base_url_for_the_engine_makes_a_new_sample(
+    client: TestClient, use_counter: UseCounter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = use_counter("openai_speech")
+    _preview(client)
+    monkeypatch.setenv("PHEMIUS_OPENAI_SPEECH_BASE_URL", "http://127.0.0.1:9999/v1")
+
+    _preview(client)
+
+    assert len(engine.calls) == 2
+
+
+def test_adding_a_voice_to_the_engine_list_keeps_existing_samples(
+    client: TestClient, use_counter: UseCounter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = use_counter("openai_speech")
+    _preview(client)
+    monkeypatch.setenv("PHEMIUS_OPENAI_SPEECH_VOICES", "alloy,nova,shimmer")
+
+    _preview(client)
+
+    assert len(engine.calls) == 1
+
+
+def test_engine_error_is_a_voice_error_and_leaves_no_cached_sample(
+    client: TestClient, use_counter: UseCounter, isolated_env: Path
+) -> None:
+    engine = use_counter("hosted", VoiceError("Provider returned 401.", "Check key."))
+
+    response = _preview(client)
+    _preview(client)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Provider returned 401.",
+        "code": "voice_error",
+        "hint": "Check key.",
+    }
+    assert len(engine.calls) == 2
+    assert [
+        path for path in (isolated_env / "previews").rglob("*") if path.is_file()
+    ] == []
+
+
+def test_preview_file_is_never_generated_by_a_get(
+    client: TestClient, use_counter: UseCounter
+) -> None:
+    engine = use_counter("hosted")
+
+    response = client.get("/api/voices/hosted:one/preview/file")
+
+    assert response.status_code == 404
+    assert client.get("/api/voices/one/preview").status_code == 405
+    assert engine.calls == []
 
 
 @pytest.mark.parametrize(
@@ -195,3 +301,79 @@ def test_hostile_voice_ids_are_a_4xx_in_the_error_shape(
 
     assert response.status_code == status
     assert {"detail", "code"} <= response.json().keys()
+
+
+@pytest.mark.parametrize(
+    ("voice_id", "status"),
+    [
+        ("missing", 404),
+        ("..", 404),
+        # %2F decodes to "/", so no route matches.
+        ("..%2F..%2Flibrary.db", 404),
+        ("kokoro:af_heart", 404),
+        ("hosted%3A..%5Clibrary.db", 422),
+        ("a" * 500, 422),
+    ],
+)
+def test_hostile_preview_ids_are_rejected_in_the_error_shape(
+    client: TestClient, use_counter: UseCounter, voice_id: str, status: int
+) -> None:
+    engine = use_counter("hosted")
+
+    response = _preview(client, voice_id)
+    file_response = client.get(f"/api/voices/{voice_id}/preview/file")
+
+    assert (response.status_code, file_response.status_code) == (status, status)
+    assert {"detail", "code"} <= response.json().keys()
+    assert engine.calls == []
+
+
+@pytest.fixture
+def signed_preview_url(network_client: TestClient, use_counter: UseCounter) -> str:
+    use_counter("hosted")
+    headers = {"Authorization": f"Bearer {access.regenerate_token()}"}
+    response = network_client.post("/api/voices/one/preview", headers=headers)
+    assert response.status_code == 200
+    return str(response.json()["url"])
+
+
+def test_signed_preview_url_plays_without_the_token(
+    network_client: TestClient, signed_preview_url: str
+) -> None:
+    unsigned = signed_preview_url.partition("?")[0]
+
+    assert "?expires=" in signed_preview_url
+    assert network_client.get(signed_preview_url).status_code == 200
+    assert network_client.get(unsigned).status_code == 401
+
+
+def test_tampered_preview_signature_is_rejected(
+    network_client: TestClient, signed_preview_url: str
+) -> None:
+    path, _, query = signed_preview_url.partition("?")
+    params = dict(part.split("=") for part in query.split("&"))
+    tampered = f"{path}?expires={params['expires']}&sig={'0' * 64}"
+    other_voice = signed_preview_url.replace("hosted:one", "hosted:two")
+
+    response = network_client.get(tampered)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthorized"
+    assert network_client.get(other_voice).status_code == 401
+    assert network_client.get(f"/api/audio/1/file?{query}").status_code == 401
+
+
+def test_expired_preview_signature_is_rejected(
+    network_client: TestClient,
+    use_counter: UseCounter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(access, "AUDIO_URL_LIFETIME_SECONDS", -1)
+    use_counter("hosted")
+    headers = {"Authorization": f"Bearer {access.regenerate_token()}"}
+    url = network_client.post("/api/voices/one/preview", headers=headers).json()["url"]
+
+    response = network_client.get(url)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthorized"

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from phemius.api.params import Id
 from phemius.errors import NotFoundError
 from phemius.services import access as access_service
+from phemius.services.access import AudioUrlSignature
 from phemius.store import audio as audio_store
 from phemius.store.audio import Audio
 
@@ -38,10 +39,15 @@ def get_audio_url(audio_id: Id) -> AudioUrl:
     """A short-lived URL for the audio file that works without the token header."""
     _ready_audio_path(audio_id)
     signed = access_service.sign_audio_url(audio_id)
-    url = f"/api/audio/{audio_id}/file"
-    if signed.signature is not None:
-        url += f"?expires={signed.expires}&sig={signed.signature}"
+    url = signed_file_url(f"/api/audio/{audio_id}/file", signed)
     return AudioUrl(url=url, expires=signed.expires)
+
+
+def signed_file_url(path: str, signed: AudioUrlSignature) -> str:
+    """`path` with its signature; unsigned in local mode, where no token exists."""
+    if signed.signature is None:
+        return path
+    return f"{path}?expires={signed.expires}&sig={signed.signature}"
 
 
 @router.get("/{audio_id}/file", response_class=FileResponse)

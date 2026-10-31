@@ -18,9 +18,10 @@ router = APIRouter(prefix="/api/access", tags=["access"])
 # Docker and uptime checks probe health without a secret, and it reveals no
 # library data.
 OPEN_PATHS = {"/api/health"}
-# An <audio> element cannot send headers, so audio files also accept a signed,
-# short-lived URL from GET /api/audio/{id}/url.
+# An <audio> element cannot send headers, so audio files and voice previews also
+# accept a signed, short-lived URL (GET /api/audio/{id}/url, POST .../preview).
 AUDIO_FILE_PATH = re.compile(r"/api/audio/(\d+)/file")
+PREVIEW_FILE_PATH = re.compile(r"/api/voices/([^/]+)/preview/file")
 
 
 class AccessToken(BaseModel):
@@ -58,7 +59,7 @@ async def require_access_token(
     token = _bearer_token(request)
     if await run_in_threadpool(access_service.is_valid_token, token):
         return await call_next(request)
-    if await run_in_threadpool(_has_valid_audio_signature, request):
+    if await run_in_threadpool(_has_valid_file_signature, request):
         return await call_next(request)
     return JSONResponse(
         error_body(
@@ -96,12 +97,18 @@ def _bearer_token(request: Request) -> str | None:
     return None
 
 
-def _has_valid_audio_signature(request: Request) -> bool:
-    match = AUDIO_FILE_PATH.fullmatch(request.url.path)
-    if request.method not in {"GET", "HEAD"} or match is None:
+def _has_valid_file_signature(request: Request) -> bool:
+    if request.method not in {"GET", "HEAD"}:
         return False
-    return access_service.is_valid_audio_signature(
-        int(match.group(1)),
-        request.query_params.get("expires"),
-        request.query_params.get("sig"),
-    )
+    # The decoded path, as the router and the signer see it; `url.path`
+    # re-encodes characters such as `?` and `#`.
+    path: str = request.scope["path"]
+    expires = request.query_params.get("expires")
+    signature = request.query_params.get("sig")
+    if audio := AUDIO_FILE_PATH.fullmatch(path):
+        audio_id = int(audio.group(1))
+        return access_service.is_valid_audio_signature(audio_id, expires, signature)
+    if preview := PREVIEW_FILE_PATH.fullmatch(path):
+        voice_id = preview.group(1)
+        return access_service.is_valid_preview_signature(voice_id, expires, signature)
+    return False

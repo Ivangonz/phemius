@@ -712,6 +712,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voices/{voice_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Voice
+         * @description A short-lived URL to a sample of the voice, synthesized on the first call.
+         *
+         *     Later calls reuse the cached sample, so a hosted engine is paid once.
+         */
+        post: operations["preview_voice_api_voices__voice_id__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voices/{voice_id}/preview/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Preview File */
+        get: operations["get_preview_file_api_voices__voice_id__preview_file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1590,6 +1629,13 @@ export interface components {
             is_ready: boolean;
             /** Message */
             message: string;
+        };
+        /** VoicePreview */
+        VoicePreview: {
+            /** Expires */
+            expires: number;
+            /** Url */
+            url: string;
         };
         /** VoiceView */
         VoiceView: {
@@ -2825,6 +2871,66 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DownloadProgress"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_voice_api_voices__voice_id__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoicePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preview_file_api_voices__voice_id__preview_file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -12,7 +12,15 @@ import structlog
 
 from phemius.config import load_config
 from phemius.errors import NotFoundError, PhemiusError, VoiceError
-from phemius.services import agent, ffmpeg, ingest, narration_parts, queue, voices
+from phemius.services import (
+    agent,
+    ffmpeg,
+    ingest,
+    narration_parts,
+    queue,
+    synthesis,
+    voices,
+)
 from phemius.services.usage import job_usage
 from phemius.store import audio as audio_store
 from phemius.store import documents as document_store
@@ -253,7 +261,8 @@ def _narrate_sections(
     engine = get_engine(config)
     out_path = config.audio_dir / f"{audio_id}.{engine.extension}"
     if len(scripts) == 1:
-        engine.synthesize(scripts[0], out_path, voice)
+        with synthesis.lock:
+            engine.synthesize(scripts[0], out_path, voice)
         return _audio_file(out_path, "wav", wav_duration_seconds(out_path), (0.0,))
     folder = narration_parts.parts_dir(config.audio_dir, audio_id)
     parts = narration_parts.narrated_parts(

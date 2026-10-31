@@ -9,8 +9,11 @@ from pathlib import Path
 
 import httpx2
 
+from phemius.errors import VoiceError
+from phemius.voices import Voice, VoiceCheck
 from phemius.voices.downloads import Fetch
 from phemius.voices.piper import CatalogueVoice, VoiceFile
+from phemius.voices.stub import StubEngine
 
 type Handler = Callable[[httpx2.Request], httpx2.Response]
 type UsePiper = Callable[[Fetch], Path]
@@ -20,6 +23,38 @@ CONTENT = b"fake voice model"
 VOICE = "piper:en_US-test-medium"
 OTHER_VOICE = "piper:en_GB-other-low"
 GATE_TIMEOUT_SECONDS = 5
+
+
+class SynthesisCounter:
+    """An engine with one voice that writes stub audio and records each call.
+
+    With `error`, it writes a partial file and then raises it.
+    """
+
+    extension = "wav"
+
+    def __init__(self, engine_name: str, error: VoiceError | None = None) -> None:
+        self.voice_id = f"{engine_name}:one"
+        self.error = error
+        self.calls: list[str] = []
+
+    def voices(self) -> list[Voice]:
+        return [Voice(id=self.voice_id, label="One", accent=None)]
+
+    def check(self) -> VoiceCheck:
+        return VoiceCheck(True, "Ready.")
+
+    def synthesize(self, script: str, out_path: Path, voice: str) -> None:
+        # Kokoro's soundfile picks the format from the suffix, as real engines may.
+        assert out_path.suffix == f".{self.extension}", out_path
+        self.calls.append(script)
+        if self.error is not None:
+            out_path.write_bytes(b"partial")
+            raise self.error
+        StubEngine().synthesize(script, out_path, voice)
+
+
+type UseCounter = Callable[..., SynthesisCounter]
 
 LONG_SCRIPT = "\n\n".join(
     " ".join(f"Paragraph {para} explains step {step} in detail." for step in range(30))

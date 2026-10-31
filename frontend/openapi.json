@@ -2725,6 +2725,24 @@
         "title": "VoiceEngineStatus",
         "type": "object"
       },
+      "VoicePreview": {
+        "properties": {
+          "expires": {
+            "title": "Expires",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires"
+        ],
+        "title": "VoicePreview",
+        "type": "object"
+      },
       "VoiceView": {
         "properties": {
           "accent": {
@@ -4668,6 +4686,90 @@
           }
         },
         "summary": "Download Voice",
+        "tags": [
+          "voices"
+        ]
+      }
+    },
+    "/api/voices/{voice_id}/preview": {
+      "post": {
+        "description": "A short-lived URL to a sample of the voice, synthesized on the first call.\n\nLater calls reuse the cached sample, so a hosted engine is paid once.",
+        "operationId": "preview_voice_api_voices__voice_id__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voice_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.:-]+$",
+              "title": "Voice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoicePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Voice",
+        "tags": [
+          "voices"
+        ]
+      }
+    },
+    "/api/voices/{voice_id}/preview/file": {
+      "get": {
+        "operationId": "get_preview_file_api_voices__voice_id__preview_file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "voice_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.:-]+$",
+              "title": "Voice Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Preview File",
         "tags": [
           "voices"
         ]
