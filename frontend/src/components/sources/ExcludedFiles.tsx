@@ -21,22 +21,22 @@ export function ExcludedFiles({ source, onSyncStarted }: ExcludedFilesProps) {
   const [offset, setOffset] = useState(0)
   const [restored, setRestored] = useState<string | null>(null)
   const exclusions = useSourceExclusions(source.id, offset)
-  const reimport = useReimportFile(source.id)
+  const reimport = useReimportFile(source.id, (exclusion) => {
+    setRestored(exclusion.name)
+    // The server syncs an active source right away.
+    if (source.status === "active") onSyncStarted(source)
+  })
   const page = exclusions.data
   const error = exclusions.error ?? reimport.error
-  const isEmpty = page?.items.length === 0 && offset === 0
+  const isPastEnd = page !== undefined && !page.items.length && page.offset > 0
+  const isEmpty = page !== undefined && !page.items.length && page.offset === 0
+  const hasItems = page !== undefined && page.items.length > 0
+
+  if (isPastEnd && offset === page.offset)
+    setOffset(Math.max(0, offset - EXCLUSION_PAGE_SIZE))
 
   function handleReimport(exclusion: SourceExclusion) {
-    const isLastOnPage = page?.items.length === 1 && offset > 0
-    reimport.mutate(exclusion, {
-      onSuccess: () => {
-        setRestored(exclusion.name)
-        if (isLastOnPage) setOffset(offset - EXCLUSION_PAGE_SIZE)
-        // The server syncs an active source right away.
-        if (source.status === "active") onSyncStarted(source)
-        heading.current?.focus()
-      },
-    })
+    reimport.mutate(exclusion, { onSettled: () => heading.current?.focus() })
   }
 
   return (
@@ -59,11 +59,11 @@ export function ExcludedFiles({ source, onSyncStarted }: ExcludedFilesProps) {
           Error: {getErrorMessage(error)}
         </p>
       )}
-      {!page && !exclusions.isError && (
+      {(isPastEnd || (!page && !exclusions.isError)) && (
         <p className="text-muted">Loading excluded files…</p>
       )}
       {isEmpty && <p className="text-muted">No excluded files.</p>}
-      {page && !isEmpty && (
+      {page && hasItems && (
         <>
           <ul className="divide-y divide-line">
             {page.items.map((exclusion) => (

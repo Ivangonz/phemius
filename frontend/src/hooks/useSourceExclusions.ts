@@ -29,12 +29,17 @@ export function useSourceExclusions(sourceId: number, offset: number) {
 }
 
 // Lifting an exclusion records activity and may start a sync, so the source,
-// its exclusions and the activity list all refresh.
-export function useReimportFile(sourceId: number) {
+// its exclusions and the activity list all refresh. `onReimported` is a
+// hook-level callback so it still runs if the edit view closes meanwhile.
+export function useReimportFile(
+  sourceId: number,
+  onReimported: (exclusion: SourceExclusion) => void,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (exclusion: SourceExclusion) =>
       api.delete(`/sources/${sourceId}/exclusions/${exclusion.id}`),
+    onSuccess: (_, exclusion) => onReimported(exclusion),
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: sourcesQueryKey }),
   })

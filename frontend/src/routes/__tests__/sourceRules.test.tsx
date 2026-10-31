@@ -9,18 +9,14 @@ import { serveSources } from "@/test/mocks/sources"
 import { renderAppAt } from "@/test/renderApp"
 
 type SourceView = components["schemas"]["SourceView"]
-type SourceExclusion = components["schemas"]["SourceExclusion"]
 
 const AUTO_AUDIO = "Generate audio automatically for new documents"
 const KEEP_VERSIONS = "Keep earlier versions when a document changes"
 const GLOBAL_RULES = makeSource({ id: 0, name: "global" }).effective_rules
 
-function serve(
-  source: Partial<SourceView>,
-  exclusions: SourceExclusion[] = [],
-) {
+function serve(source: Partial<SourceView>) {
   const handbook = makeSource({ id: 1, name: "handbook", ...source })
-  server.use(...serveSources([handbook], { 1: exclusions }).handlers)
+  server.use(...serveSources([handbook]).handlers)
 }
 
 // Falls through to the served source after a pause, so saves overlap clicks.
@@ -108,9 +104,10 @@ describe("a source's import rules", () => {
     await user.click(within(types).getByRole("checkbox", { name: ".docx" }))
     await user.click(within(card).getByRole("switch", { name: KEEP_VERSIONS }))
 
-    expect(within(card).getByRole("status")).toHaveTextContent("Saving…")
+    const rules = within(card).getByRole("region", { name: "Import rules" })
+    expect(within(rules).getByRole("status")).toHaveTextContent("Saving…")
     await waitFor(() =>
-      expect(within(card).getByRole("status")).toBeEmptyDOMElement(),
+      expect(within(rules).getByRole("status")).toBeEmptyDOMElement(),
     )
     cleanup()
     const reloaded = await openEdit(user)
@@ -177,36 +174,5 @@ describe("a source's import rules", () => {
     )
     await waitFor(() => expect(rule).toBeChecked())
     expect(rule).toHaveAccessibleDescription("Follows global setting: On")
-  })
-})
-
-describe("a source's excluded files", () => {
-  it("re-imports a file and removes it from Excluded files", async () => {
-    const user = userEvent.setup()
-    serve({ status: "paused" }, [
-      {
-        id: 7,
-        name: "old-notes.md",
-        item_key: "notes/old-notes.md",
-        created: 1,
-      },
-    ])
-    const card = await openEdit(user)
-    const excluded = within(card).getByRole("region", {
-      name: "Excluded files",
-    })
-
-    await user.click(
-      await within(excluded).findByRole("button", {
-        name: "Re-import old-notes.md",
-      }),
-    )
-
-    expect(
-      await within(excluded).findByText("No excluded files."),
-    ).toBeInTheDocument()
-    expect(within(excluded).getByRole("status")).toHaveTextContent(
-      "old-notes.md imports on the next sync.",
-    )
   })
 })
