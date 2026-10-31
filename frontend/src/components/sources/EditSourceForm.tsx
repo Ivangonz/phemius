@@ -5,6 +5,7 @@ import {
   type SourceFormValues,
 } from "@/lib/sourceForm"
 import { SourceForm } from "./SourceForm"
+import { SourceRules } from "./SourceRules"
 
 type EditSourceFormProps = {
   source: SourceView
@@ -29,13 +30,18 @@ export function EditSourceForm({
   }
 
   return (
-    <SourceForm
-      label={`Edit ${source.name}`}
-      defaultValues={toSourceFormValues(source)}
-      isPathLocked={source.is_locked}
-      submitLabel="Save"
-      onSave={handleSave}
-      onCancel={onClose}
-    />
+    <div className="flex w-full flex-col gap-4">
+      <SourceForm
+        label={`Edit ${source.name}`}
+        defaultValues={toSourceFormValues(source)}
+        isPathLocked={source.is_locked}
+        submitLabel="Save"
+        onSave={handleSave}
+        onCancel={onClose}
+      />
+      <div className="flex flex-wrap items-start gap-4">
+        <SourceRules source={source} />
+      </div>
+    </div>
   )
 }
