@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx2
 
@@ -98,8 +99,9 @@ class OllamaModel(ChatScriptModel):
         try:
             response = self._client.request(method, path, json=body)
         except (httpx2.ConnectError, httpx2.ConnectTimeout) as error:
+            host = urlsplit(str(self._client.base_url)).netloc.rpartition("@")[2]
             raise ModelError(
-                f"Ollama is not running at {self._client.base_url}.",
+                f"Ollama is not running at {host}.",
                 hint="Start it with `ollama serve`, or set PHEMIUS_OLLAMA_URL.",
             ) from error
         except httpx2.TimeoutException as error:

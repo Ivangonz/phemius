@@ -78,6 +78,35 @@ def test_check_reports_ollama_not_running() -> None:
     assert result.hint is not None and "ollama serve" in result.hint
 
 
+@pytest.mark.parametrize("error_type", [httpx2.ConnectError, httpx2.ConnectTimeout])
+@pytest.mark.parametrize(
+    ("base_url", "server"),
+    [
+        ("http://user:secret@127.0.0.1:9", "127.0.0.1:9"),
+        ("http://user:sec%40ret@[::1]:9/private?token=secret", "[::1]:9"),
+        ("http://ollama.test:11434", "ollama.test:11434"),
+    ],
+)
+def test_connection_errors_only_name_the_server(
+    base_url: str, server: str, error_type: type[httpx2.RequestError]
+) -> None:
+    def refuse(request: httpx2.Request) -> httpx2.Response:
+        raise error_type("Connection failed", request=request)
+
+    with httpx2.Client(
+        base_url=base_url, transport=httpx2.MockTransport(refuse)
+    ) as client:
+        model = OllamaModel("llama3.2", script_max_tokens=100, http_client=client)
+        result = model.check()
+        assert not result.is_reachable
+        assert result.error == f"Ollama is not running at {server}."
+        assert result.hint == "Start it with `ollama serve`, or set PHEMIUS_OLLAMA_URL."
+        with pytest.raises(ModelError) as raised:
+            model.write_script("Setup", "# Setup", "neutral")
+        assert raised.value.message == result.error
+        assert raised.value.hint == result.hint
+
+
 def test_write_script_sends_a_non_streaming_chat_and_cleans_the_reply() -> None:
     requests: list[dict[str, Any]] = []
 
