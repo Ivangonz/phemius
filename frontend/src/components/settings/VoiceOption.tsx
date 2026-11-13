@@ -21,7 +21,7 @@ export function VoiceOption({
   action,
   footer,
 }: VoiceOptionProps) {
-  const details = [voice.accent, voiceStateText(voice, isChecked)]
+  const details = [voice.accent, voiceStateText(voice)]
     .filter(Boolean)
     .join(" · ")
 

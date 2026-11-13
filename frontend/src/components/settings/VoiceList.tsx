@@ -1,6 +1,6 @@
 import { useId } from "react"
 import { Button } from "@/components/ui/Button"
-import { useUpdateSettings } from "@/hooks/useSettings"
+import { useDefaultVoice } from "@/hooks/useDefaultVoice"
 import { useVoicePreview } from "@/hooks/useVoicePreview"
 import { useDownloadVoice, useVoices } from "@/hooks/useVoices"
 import { getErrorMessage } from "@/lib/api"
@@ -17,12 +17,14 @@ const LOCKED_NOTE =
 export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
   const name = useId()
   const voices = useVoices()
-  const update = useUpdateSettings()
+  const items = voices.data?.items ?? []
+  const savedDefault = items.find((voice) => voice.is_default)?.id
+  const defaultVoice = useDefaultVoice(savedDefault)
   const download = useDownloadVoice()
   const { preview, toggle } = useVoicePreview()
 
   if (voices.isPending) return <p className="text-muted">Loading voices…</p>
-  if (voices.isError) {
+  if (voices.isError && !voices.data) {
     return (
       <div role="alert" className="flex flex-col items-start gap-2">
         <p className="font-semibold text-danger-ink">
@@ -35,11 +37,6 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
     )
   }
 
-  const items = voices.data.items
-  const savedDefault = items.find((voice) => voice.is_default)?.id
-  const selectedId = update.isPending
-    ? update.variables.default_voice
-    : savedDefault
   const activePreviewId =
     preview && preview.status !== "failed" ? preview.voiceId : null
   const isStartingFor = (voiceId: string) =>
@@ -66,9 +63,9 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
               key={voice.id}
               voice={voice}
               name={name}
-              isChecked={voice.id === selectedId}
+              isChecked={voice.id === defaultVoice.selectedId}
               isDisabled={isLocked}
-              onSelect={(voiceId) => update.mutate({ default_voice: voiceId })}
+              onSelect={defaultVoice.select}
               action={
                 <VoicePreviewButton
                   label={voice.label}
@@ -89,7 +86,8 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
         </ul>
       )}
       <VoiceListStatus
-        saveError={update.error}
+        saveError={defaultVoice.error}
+        isRefreshFailed={voices.isRefetchError}
         preview={preview}
         labelOf={labelOf}
       />

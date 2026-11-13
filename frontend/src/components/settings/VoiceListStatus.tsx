@@ -3,6 +3,7 @@ import { getErrorMessage } from "@/lib/api"
 
 type VoiceListStatusProps = {
   saveError: Error | null
+  isRefreshFailed: boolean
   preview: PreviewState
   labelOf: (voiceId: string) => string
 }
@@ -18,6 +19,7 @@ function previewText(preview: PreviewState, labelOf: (id: string) => string) {
 // One live region for saving the default and for previews.
 export function VoiceListStatus({
   saveError,
+  isRefreshFailed,
   preview,
   labelOf,
 }: VoiceListStatusProps) {
@@ -28,6 +30,11 @@ export function VoiceListStatus({
       {saveError && (
         <p className="font-semibold text-danger-ink">
           Not saved: {getErrorMessage(saveError)}
+        </p>
+      )}
+      {isRefreshFailed && (
+        <p className="text-muted">
+          Could not refresh the voice list; showing the last one loaded.
         </p>
       )}
       <p className={isPreviewFailed ? "font-semibold text-danger-ink" : ""}>
