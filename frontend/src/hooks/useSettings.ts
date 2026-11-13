@@ -22,6 +22,8 @@ export function useUpdateSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
+    // One at a time, so picking voices quickly saves the last one picked.
+    scope: { id: "settings" },
     mutationFn: (update: SettingsUpdate) =>
       api.patch<SettingsOverview>("/settings", update),
     onSuccess: (overview) =>
