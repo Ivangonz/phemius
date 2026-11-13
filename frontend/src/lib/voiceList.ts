@@ -7,7 +7,8 @@ export function installStateText(voice: VoiceView): string {
   return `Not installed · ${formatBytes(voice.size_bytes)}`
 }
 
-export function voiceStateText(voice: VoiceView, isDefault: boolean): string {
+// "Default" follows the saved setting, not the radio a save is still waiting on.
+export function voiceStateText(voice: VoiceView): string {
   const install = installStateText(voice)
-  return isDefault ? `Default · ${install}` : install
+  return voice.is_default ? `Default · ${install}` : install
 }

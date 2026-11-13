@@ -19,7 +19,7 @@ export function VoiceOption({
   onSelect,
   children,
 }: VoiceOptionProps) {
-  const details = [voice.accent, voiceStateText(voice, isChecked)]
+  const details = [voice.accent, voiceStateText(voice)]
     .filter(Boolean)
     .join(" · ")
 

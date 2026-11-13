@@ -1,6 +1,6 @@
 import { useId } from "react"
 import { Button } from "@/components/ui/Button"
-import { useUpdateSettings } from "@/hooks/useSettings"
+import { useDefaultVoice } from "@/hooks/useDefaultVoice"
 import { useVoices } from "@/hooks/useVoices"
 import { getErrorMessage } from "@/lib/api"
 import { VoiceOption } from "./VoiceOption"
@@ -13,10 +13,12 @@ const LOCKED_NOTE =
 export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
   const name = useId()
   const voices = useVoices()
-  const update = useUpdateSettings()
+  const items = voices.data?.items ?? []
+  const savedDefault = items.find((voice) => voice.is_default)?.id
+  const defaultVoice = useDefaultVoice(savedDefault)
 
   if (voices.isPending) return <p className="text-muted">Loading voices…</p>
-  if (voices.isError) {
+  if (voices.isError && !voices.data) {
     return (
       <div role="alert" className="flex flex-col items-start gap-2">
         <p className="font-semibold text-danger-ink">
@@ -28,12 +30,6 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
       </div>
     )
   }
-
-  const items = voices.data.items
-  const savedDefault = items.find((voice) => voice.is_default)?.id
-  const selectedId = update.isPending
-    ? update.variables.default_voice
-    : savedDefault
 
   return (
     <fieldset className="flex flex-col gap-2">
@@ -52,20 +48,25 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
               key={voice.id}
               voice={voice}
               name={name}
-              isChecked={voice.id === selectedId}
+              isChecked={voice.id === defaultVoice.selectedId}
               isDisabled={isLocked}
-              onSelect={(voiceId) => update.mutate({ default_voice: voiceId })}
+              onSelect={defaultVoice.select}
             />
           ))}
         </ul>
       )}
-      <p role="status" className="text-secondary">
-        {update.isError && (
-          <span className="font-semibold text-danger-ink">
-            Not saved: {getErrorMessage(update.error)}
-          </span>
+      <div role="status" className="flex flex-col gap-0.5 text-secondary">
+        {defaultVoice.error && (
+          <p className="font-semibold text-danger-ink">
+            Not saved: {getErrorMessage(defaultVoice.error)}
+          </p>
         )}
-      </p>
+        {voices.isRefetchError && (
+          <p className="text-muted">
+            Could not refresh the voice list; showing the last one loaded.
+          </p>
+        )}
+      </div>
     </fieldset>
   )
 }
