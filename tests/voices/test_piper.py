@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from structlog.testing import capture_logs
 
 from phemius.errors import VoiceError
 from phemius.voices import piper
@@ -189,26 +190,79 @@ def test_missing_piper_fails_synthesis_with_install_hint(
     assert raised.value.hint == piper.INSTALL_HINT
 
 
+SCRIPT = "A sentence the phonemizer cannot read."
+
+
+def _fail_before_writing(text: str, wav_file: wave.Wave_write) -> None:
+    raise RuntimeError(f"Failed to phonemize sentence: {text}")
+
+
+def _fail_after_writing(text: str, wav_file: wave.Wave_write) -> None:
+    wav_file.setparams((1, 2, 22050, 0, "NONE", "not compressed"))
+    wav_file.writeframes(b"\x01\x00" * 100)
+    raise ValueError(f"Bad phoneme in: {text}")
+
+
+def _write_nothing(text: str, wav_file: wave.Wave_write) -> None:
+    pass
+
+
+def _fail_to_write(text: str, wav_file: wave.Wave_write) -> None:
+    raise OSError(28, f"No space left on device while writing {text}")
+
+
 @pytest.mark.usefixtures("piper_installed")
+@pytest.mark.parametrize(
+    ("synthesize_wav", "message", "hint"),
+    [
+        (_fail_before_writing, "(RuntimeError)", piper.SYNTHESIS_HINT),
+        (_fail_after_writing, "(ValueError)", piper.SYNTHESIS_HINT),
+        (_write_nothing, "produced no audio", piper.SYNTHESIS_HINT),
+        (_fail_to_write, "could not be written", "free space and permissions"),
+    ],
+)
 def test_piper_failure_raises_voice_error_without_the_script(
+    synthesize_wav: Callable[[str, wave.Wave_write], None],
+    message: str,
+    hint: str,
     make_engine: Callable[..., PiperEngine],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    script = "A sentence the phonemizer cannot read."
-
-    def fail(voice: FakePiperVoice, text: str, wav_file: wave.Wave_write) -> None:
-        raise RuntimeError(f"Failed to phonemize sentence: {text}")
-
-    monkeypatch.setattr(FakePiperVoice, "synthesize_wav", fail)
+    monkeypatch.setattr(
+        FakePiperVoice,
+        "synthesize_wav",
+        lambda voice, text, wav_file: synthesize_wav(text, wav_file),
+    )
 
     with pytest.raises(VoiceError) as raised:
-        make_engine().synthesize(script, tmp_path / "out.wav", VOICE_ID)
+        make_engine().synthesize(SCRIPT, tmp_path / "out.wav", VOICE_ID)
 
-    assert "RuntimeError" in raised.value.message
-    assert raised.value.hint
-    assert script not in raised.value.message
-    assert script not in raised.value.hint
+    assert message in raised.value.message
+    assert raised.value.hint and hint in raised.value.hint
+    assert SCRIPT not in raised.value.message + raised.value.hint
+
+
+@pytest.mark.usefixtures("piper_installed")
+def test_piper_failure_logs_where_it_failed_but_not_the_script(
+    make_engine: Callable[..., PiperEngine],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        FakePiperVoice,
+        "synthesize_wav",
+        lambda voice, text, wav_file: _fail_before_writing(text, wav_file),
+    )
+
+    with capture_logs() as logs, pytest.raises(VoiceError):
+        make_engine().synthesize(SCRIPT, tmp_path / "out.wav", VOICE_ID)
+
+    [failure] = [entry for entry in logs if entry["event"] == "piper_synthesis_failed"]
+    assert failure["error_type"] == "RuntimeError"
+    assert failure["module"] == __name__
+    assert isinstance(failure["line"], int)
+    assert SCRIPT not in str(logs)
 
 
 def _start_download(engine: PiperEngine, voice: str) -> threading.Thread:

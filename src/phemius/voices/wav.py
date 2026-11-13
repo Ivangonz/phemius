@@ -120,7 +120,7 @@ class WavJoiner:
         except (wave.Error, OSError) as error:
             self.out_path.unlink(missing_ok=True)
             if error_type is None:
-                raise _write_error() from error
+                raise write_error() from error
         if error_type is not None:
             self.out_path.unlink(missing_ok=True)
 
@@ -135,7 +135,7 @@ class WavJoiner:
                 "A narrated section is not readable WAV audio.", MISMATCH_HINT
             ) from error
         except OSError as error:
-            raise _write_error() from error
+            raise write_error() from error
 
     def _check_format(self, part: wave.Wave_read) -> None:
         part_format = _format_of(part)
@@ -154,7 +154,7 @@ class WavJoiner:
         return self._out
 
 
-def _write_error() -> VoiceError:
+def write_error() -> VoiceError:
     return VoiceError(
         "The narrated audio could not be written.",
         "Check the free space and permissions of the data folder.",
