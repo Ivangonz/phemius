@@ -8,7 +8,8 @@ type VoiceOptionProps = {
   isChecked: boolean
   isDisabled: boolean
   onSelect: (voiceId: string) => void
-  children?: ReactNode
+  action: ReactNode
+  footer: ReactNode
 }
 
 export function VoiceOption({
@@ -17,7 +18,8 @@ export function VoiceOption({
   isChecked,
   isDisabled,
   onSelect,
-  children,
+  action,
+  footer,
 }: VoiceOptionProps) {
   const details = [voice.accent, voiceStateText(voice, isChecked)]
     .filter(Boolean)
@@ -46,8 +48,9 @@ export function VoiceOption({
             )}
           </span>
         </label>
-        {children}
+        {action}
       </div>
+      {footer}
     </li>
   )
 }

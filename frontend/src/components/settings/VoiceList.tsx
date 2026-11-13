@@ -1,9 +1,13 @@
 import { useId } from "react"
 import { Button } from "@/components/ui/Button"
 import { useUpdateSettings } from "@/hooks/useSettings"
-import { useVoices } from "@/hooks/useVoices"
+import { useVoicePreview } from "@/hooks/useVoicePreview"
+import { useDownloadVoice, useVoices } from "@/hooks/useVoices"
 import { getErrorMessage } from "@/lib/api"
+import { VoiceInstall } from "./VoiceInstall"
+import { VoiceListStatus } from "./VoiceListStatus"
 import { VoiceOption } from "./VoiceOption"
+import { VoicePreviewButton } from "./VoicePreviewButton"
 
 type VoiceListProps = { engineLabel: string; isLocked: boolean }
 
@@ -14,6 +18,8 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
   const name = useId()
   const voices = useVoices()
   const update = useUpdateSettings()
+  const download = useDownloadVoice()
+  const { preview, toggle } = useVoicePreview()
 
   if (voices.isPending) return <p className="text-muted">Loading voices…</p>
   if (voices.isError) {
@@ -34,6 +40,14 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
   const selectedId = update.isPending
     ? update.variables.default_voice
     : savedDefault
+  const activePreviewId =
+    preview && preview.status !== "failed" ? preview.voiceId : null
+  const isStartingFor = (voiceId: string) =>
+    download.isPending && download.variables === voiceId
+  const startErrorFor = (voiceId: string) =>
+    download.variables === voiceId ? download.error : null
+  const labelOf = (voiceId: string) =>
+    items.find((voice) => voice.id === voiceId)?.label ?? voiceId
 
   return (
     <fieldset className="flex flex-col gap-2">
@@ -55,17 +69,30 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
               isChecked={voice.id === selectedId}
               isDisabled={isLocked}
               onSelect={(voiceId) => update.mutate({ default_voice: voiceId })}
+              action={
+                <VoicePreviewButton
+                  label={voice.label}
+                  isActive={voice.id === activePreviewId}
+                  onToggle={() => toggle(voice.id)}
+                />
+              }
+              footer={
+                <VoiceInstall
+                  voice={voice}
+                  isStarting={isStartingFor(voice.id)}
+                  startError={startErrorFor(voice.id)}
+                  onInstall={() => download.mutate(voice.id)}
+                />
+              }
             />
           ))}
         </ul>
       )}
-      <p role="status" className="text-secondary">
-        {update.isError && (
-          <span className="font-semibold text-danger-ink">
-            Not saved: {getErrorMessage(update.error)}
-          </span>
-        )}
-      </p>
+      <VoiceListStatus
+        saveError={update.error}
+        preview={preview}
+        labelOf={labelOf}
+      />
     </fieldset>
   )
 }
