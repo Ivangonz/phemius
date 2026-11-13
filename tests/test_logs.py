@@ -1,6 +1,6 @@
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import httpx2
 import pytest
@@ -8,7 +8,7 @@ import structlog
 from openai import DefaultHttpxClient
 from openai._utils._logs import setup_logging as openai_setup_logging
 
-from phemius.logs import QUIET_LOGGERS, configure_logging
+from phemius.logs import QUIET_LOGGERS, REDACTED_LOGGERS, configure_logging
 from phemius.models.openai_compatible import OpenAICompatibleModel
 
 DOCUMENT_TEXT = "The quarterly migration plan moves billing to the new ledger."
@@ -112,7 +112,9 @@ def test_openai_log_debug_does_not_turn_sdk_logging_back_on(
     _assert_no_private_text(output)
 
 
-@pytest.mark.parametrize("name", QUIET_LOGGERS)
+@pytest.mark.parametrize(
+    "name", [name for name in QUIET_LOGGERS if name not in REDACTED_LOGGERS]
+)
 def test_third_party_debug_and_info_records_are_dropped(
     name: str,
     request: pytest.FixtureRequest,
@@ -132,3 +134,53 @@ def test_third_party_debug_and_info_records_are_dropped(
     output = _written_output(capsys, caplog)
     assert "provider_unreachable" in output
     _assert_no_private_text(output)
+
+
+def _log_phonemizer_failure(logger: logging.Logger) -> None:
+    try:
+        raise RuntimeError(f"cannot parse {SCRIPT_TEXT}")
+    except RuntimeError:
+        logger.exception("Failed to phonemize sentence: %s", SCRIPT_TEXT)
+
+
+# Logger names and calls as in piper-tts 1.8.0; each can carry script text.
+@pytest.mark.parametrize(
+    ("name", "emit"),
+    [
+        (
+            "piper.voice",
+            lambda logger: logger.debug("text=%s, phonemes=%s", SCRIPT_TEXT, []),
+        ),
+        (
+            "piper.phonemize_thai",
+            lambda logger: logger.warning("No phonemes for Thai run: %s", SCRIPT_TEXT),
+        ),
+        ("piper.phonemize_japanese", _log_phonemizer_failure),
+    ],
+)
+def test_piper_records_carry_no_script_text(
+    name: str,
+    emit: Callable[[logging.Logger], None],
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    configure_logging("DEBUG")
+
+    emit(logging.getLogger(name))
+
+    output = _written_output(capsys, caplog)
+    assert SCRIPT_TEXT not in output
+    assert "Failed to phonemize" not in output
+
+
+def test_piper_warnings_still_show_level_and_logger_name(
+    capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    configure_logging("DEBUG")
+
+    _log_phonemizer_failure(logging.getLogger("piper.phonemize_japanese"))
+
+    output = _written_output(capsys, caplog)
+    assert "ERROR" in output
+    assert "piper.phonemize_japanese" in output
+    assert "RuntimeError" in output

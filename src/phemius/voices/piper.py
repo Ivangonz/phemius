@@ -25,6 +25,7 @@ log = structlog.get_logger(__name__)
 
 ENGINE_NAME = "piper"
 INSTALL_HINT = "Run `uv sync --extra piper`, or set PHEMIUS_TTS=stub to test."
+SYNTHESIS_HINT = "Check the voice matches the script's language, or pick another."
 # Pinning the revision keeps the checksums below valid if a voice is re-uploaded.
 CATALOGUE_REVISION = "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd"
 CATALOGUE_URL = (
@@ -142,6 +143,22 @@ def _catalogue_voice(voice: str) -> CatalogueVoice:
     raise VoiceError(f"Unknown Piper voice '{voice}'.", hint=f"Choose one of: {names}.")
 
 
+def _synthesis_error(error: Exception) -> VoiceError:
+    # Closing the WAV raises wave.Error when nothing was written, which hides
+    # a failure inside Piper; report that failure instead.
+    cause = error
+    if isinstance(error, wave.Error) and isinstance(error.__context__, Exception):
+        cause = error.__context__
+    if isinstance(cause, wave.Error):
+        return VoiceError("Piper produced no audio for this script.", SYNTHESIS_HINT)
+    # Piper's errors can quote the script and the job stores this message,
+    # so name only the error type.
+    return VoiceError(
+        f"Piper failed to narrate this script ({type(cause).__name__}).",
+        SYNTHESIS_HINT,
+    )
+
+
 class PiperEngine:
     extension = "wav"
 
@@ -202,8 +219,8 @@ class PiperEngine:
         try:
             with wave.open(str(out_path), "wb") as wav_file:
                 piper_voice.synthesize_wav(script, wav_file)
-        except wave.Error as error:  # raised on close when nothing was written
-            raise VoiceError("Piper produced no audio for this script.") from error
+        except Exception as error:
+            raise _synthesis_error(error) from error
 
     def _load(self, voice: str) -> Any:
         if voice not in self._loaded:

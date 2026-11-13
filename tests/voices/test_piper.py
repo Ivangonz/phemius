@@ -189,6 +189,28 @@ def test_missing_piper_fails_synthesis_with_install_hint(
     assert raised.value.hint == piper.INSTALL_HINT
 
 
+@pytest.mark.usefixtures("piper_installed")
+def test_piper_failure_raises_voice_error_without_the_script(
+    make_engine: Callable[..., PiperEngine],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = "A sentence the phonemizer cannot read."
+
+    def fail(voice: FakePiperVoice, text: str, wav_file: wave.Wave_write) -> None:
+        raise RuntimeError(f"Failed to phonemize sentence: {text}")
+
+    monkeypatch.setattr(FakePiperVoice, "synthesize_wav", fail)
+
+    with pytest.raises(VoiceError) as raised:
+        make_engine().synthesize(script, tmp_path / "out.wav", VOICE_ID)
+
+    assert "RuntimeError" in raised.value.message
+    assert raised.value.hint
+    assert script not in raised.value.message
+    assert script not in raised.value.hint
+
+
 def _start_download(engine: PiperEngine, voice: str) -> threading.Thread:
     thread = threading.Thread(target=engine.download, args=(voice,))
     thread.start()
