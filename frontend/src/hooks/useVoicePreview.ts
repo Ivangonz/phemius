@@ -10,16 +10,22 @@ export type PreviewState =
   | { voiceId: string; status: "failed"; message: string }
   | null
 
+type PreviewAudio = { audio: HTMLAudioElement; listeners: AbortController }
+
+const PLAYBACK_FAILED = "The sample could not be played."
+
 // Its own audio element, separate from the player bar's, so a preview never
 // replaces or pauses what the player holds. One element means one sample.
 export function useVoicePreview() {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const previewAudioRef = useRef<PreviewAudio | null>(null)
   const requestRef = useRef(0)
+  const playingRequestRef = useRef<number | null>(null)
   const [preview, setPreview] = useState<PreviewState>(null)
 
   const stop = useCallback(() => {
     requestRef.current += 1
-    const audio = audioRef.current
+    playingRequestRef.current = null
+    const audio = previewAudioRef.current?.audio
     if (audio) {
       audio.pause()
       audio.removeAttribute("src")
@@ -27,15 +33,44 @@ export function useVoicePreview() {
     setPreview(null)
   }, [])
 
-  useEffect(() => stop, [stop])
+  useEffect(
+    () => () => {
+      stop()
+      previewAudioRef.current?.listeners.abort()
+      previewAudioRef.current = null
+    },
+    [stop],
+  )
 
+  // A pause or error from an earlier sample arrives after the next one has
+  // started; only the sample that is playing now may change the state.
   const audioElement = useCallback(() => {
-    if (!audioRef.current) {
-      const audio = new Audio()
-      audio.addEventListener("ended", () => setPreview(null))
-      audioRef.current = audio
+    if (previewAudioRef.current) return previewAudioRef.current.audio
+    const audio = new Audio()
+    const listeners = new AbortController()
+    const isPlayingNow = () =>
+      playingRequestRef.current !== null &&
+      playingRequestRef.current === requestRef.current
+    const handleEnd = () => {
+      if (isPlayingNow() && audio.paused) setPreview(null)
     }
-    return audioRef.current
+    const handleError = () => {
+      if (!isPlayingNow()) return
+      setPreview(
+        (current) =>
+          current && {
+            voiceId: current.voiceId,
+            status: "failed",
+            message: PLAYBACK_FAILED,
+          },
+      )
+    }
+    const { signal } = listeners
+    audio.addEventListener("ended", handleEnd, { signal })
+    audio.addEventListener("pause", handleEnd, { signal })
+    audio.addEventListener("error", handleError, { signal })
+    previewAudioRef.current = { audio, listeners }
+    return audio
   }, [])
 
   const start = useCallback(
@@ -51,15 +86,14 @@ export function useVoicePreview() {
         if (!isCurrent()) return
         const audio = audioElement()
         audio.src = url
+        playingRequestRef.current = request
         await audio.play()
         if (isCurrent()) setPreview({ voiceId, status: "playing" })
       } catch (error) {
         if (!isCurrent()) return
-        setPreview({
-          voiceId,
-          status: "failed",
-          message: getErrorMessage(error),
-        })
+        playingRequestRef.current = null
+        const message = getErrorMessage(error)
+        setPreview({ voiceId, status: "failed", message })
       }
     },
     [stop, audioElement],
@@ -75,5 +109,5 @@ export function useVoicePreview() {
     [preview, start, stop],
   )
 
-  return { preview, toggle }
+  return { preview, toggle, stop }
 }

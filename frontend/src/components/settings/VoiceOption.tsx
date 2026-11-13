@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { useKeepFocusInRow } from "@/hooks/useKeepFocusInRow"
 import type { VoiceView } from "@/hooks/useVoices"
 import { voiceStateText } from "@/lib/voiceList"
 
@@ -21,15 +22,22 @@ export function VoiceOption({
   action,
   footer,
 }: VoiceOptionProps) {
+  const { targetRef, rowProps } = useKeepFocusInRow<HTMLInputElement>(
+    voice.is_installed,
+  )
   const details = [voice.accent, voiceStateText(voice)]
     .filter(Boolean)
     .join(" · ")
 
   return (
-    <li className="flex min-w-0 flex-[1_1_15rem] flex-col gap-2 rounded-control border border-line bg-surface p-2.5 has-checked:border-primary has-checked:bg-selected">
+    <li
+      {...rowProps}
+      className="flex min-w-0 flex-[1_1_15rem] flex-col gap-2 rounded-control border border-line bg-surface p-2.5 has-checked:border-primary has-checked:bg-selected"
+    >
       <div className="flex items-center gap-2.5">
         <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2.5 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary has-disabled:cursor-not-allowed">
           <input
+            ref={targetRef}
             type="radio"
             name={name}
             value={voice.id}

@@ -1,8 +1,9 @@
-import { useId } from "react"
+import { useEffect, useId } from "react"
 import { Button } from "@/components/ui/Button"
 import { useDefaultVoice } from "@/hooks/useDefaultVoice"
+import { useVoiceInstalls } from "@/hooks/useVoiceInstalls"
 import { useVoicePreview } from "@/hooks/useVoicePreview"
-import { useDownloadVoice, useVoices } from "@/hooks/useVoices"
+import { useVoices, type VoiceView } from "@/hooks/useVoices"
 import { getErrorMessage } from "@/lib/api"
 import { VoiceInstall } from "./VoiceInstall"
 import { VoiceListStatus } from "./VoiceListStatus"
@@ -13,15 +14,24 @@ type VoiceListProps = { engineLabel: string; isLocked: boolean }
 
 const LOCKED_NOTE =
   "Locked: the default voice is set by PHEMIUS_VOICE on the server. Unset it and restart to choose here."
+// Stable, so the install tracking sees no change while the list loads.
+const NO_VOICES: VoiceView[] = []
 
 export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
   const name = useId()
   const voices = useVoices()
-  const items = voices.data?.items ?? []
+  const items = voices.data?.items ?? NO_VOICES
   const savedDefault = items.find((voice) => voice.is_default)?.id
   const defaultVoice = useDefaultVoice(savedDefault)
-  const download = useDownloadVoice()
-  const { preview, toggle } = useVoicePreview()
+  const installs = useVoiceInstalls(items)
+  const { preview, toggle, stop } = useVoicePreview()
+  const previewVoiceId = preview?.voiceId
+  const isPreviewListed = items.some((voice) => voice.id === previewVoiceId)
+
+  // A saved engine change swaps the list; a sample of a voice that left it stops.
+  useEffect(() => {
+    if (previewVoiceId && !isPreviewListed) stop()
+  }, [previewVoiceId, isPreviewListed, stop])
 
   if (voices.isPending) return <p className="text-muted">Loading voices…</p>
   if (voices.isError && !voices.data) {
@@ -39,12 +49,12 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
 
   const activePreviewId =
     preview && preview.status !== "failed" ? preview.voiceId : null
-  const isStartingFor = (voiceId: string) =>
-    download.isPending && download.variables === voiceId
-  const startErrorFor = (voiceId: string) =>
-    download.variables === voiceId ? download.error : null
   const labelOf = (voiceId: string) =>
     items.find((voice) => voice.id === voiceId)?.label ?? voiceId
+  const waitsFor = (voiceId: string) =>
+    installs.busyId && installs.busyId !== voiceId
+      ? labelOf(installs.busyId)
+      : null
 
   return (
     <fieldset className="flex flex-col gap-2">
@@ -76,9 +86,10 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
               footer={
                 <VoiceInstall
                   voice={voice}
-                  isStarting={isStartingFor(voice.id)}
-                  startError={startErrorFor(voice.id)}
-                  onInstall={() => download.mutate(voice.id)}
+                  isStarting={installs.isStarting(voice.id)}
+                  startError={installs.startError(voice.id)}
+                  waitsFor={waitsFor(voice.id)}
+                  onInstall={() => installs.install(voice.id)}
                 />
               }
             />
@@ -89,6 +100,7 @@ export function VoiceList({ engineLabel, isLocked }: VoiceListProps) {
         saveError={defaultVoice.error}
         isRefreshFailed={voices.isRefetchError}
         preview={preview}
+        installNote={installs.note}
         labelOf={labelOf}
       />
     </fieldset>

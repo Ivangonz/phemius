@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/Button"
+
 type VoicePreviewButtonProps = {
   label: string
   isActive: boolean
@@ -12,17 +14,16 @@ export function VoicePreviewButton({
   isActive,
   onToggle,
 }: VoicePreviewButtonProps) {
-  const verb = isActive ? "Stop" : "Preview"
   const accessibleName = isActive
     ? `Stop preview of ${label}`
     : `Preview ${label}`
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="secondary"
       aria-label={accessibleName}
       onClick={onToggle}
-      className="inline-flex min-h-11 min-w-11 flex-none cursor-pointer items-center justify-center gap-1.5 rounded-control border border-line-control bg-surface px-3 text-secondary font-medium text-ink hover:bg-surface-subtle"
+      className="flex-none"
     >
       <svg
         width="16"
@@ -33,7 +34,7 @@ export function VoicePreviewButton({
       >
         <path d={isActive ? STOP_PATH : PLAY_PATH} />
       </svg>
-      {verb}
-    </button>
+      {isActive ? "Stop" : "Preview"}
+    </Button>
   )
 }

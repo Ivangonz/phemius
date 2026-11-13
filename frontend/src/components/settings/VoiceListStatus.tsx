@@ -1,3 +1,4 @@
+import type { InstallNote } from "@/hooks/useVoiceInstalls"
 import type { PreviewState } from "@/hooks/useVoicePreview"
 import { getErrorMessage } from "@/lib/api"
 
@@ -5,6 +6,7 @@ type VoiceListStatusProps = {
   saveError: Error | null
   isRefreshFailed: boolean
   preview: PreviewState
+  installNote: InstallNote | null
   labelOf: (voiceId: string) => string
 }
 
@@ -16,11 +18,19 @@ function previewText(preview: PreviewState, labelOf: (id: string) => string) {
   return `Playing a preview of ${label}.`
 }
 
-// One live region for saving the default and for previews.
+const INSTALL_TEXT: Record<InstallNote["kind"], (label: string) => string> = {
+  started: (label) => `Installing ${label}…`,
+  installed: (label) => `${label} is installed.`,
+  failed: (label) => `${label} could not be installed.`,
+}
+
+// One live region for saving the default, installs and previews. Installs
+// announce their start and end, not every percent.
 export function VoiceListStatus({
   saveError,
   isRefreshFailed,
   preview,
+  installNote,
   labelOf,
 }: VoiceListStatusProps) {
   const isPreviewFailed = preview?.status === "failed"
@@ -36,6 +46,9 @@ export function VoiceListStatus({
         <p className="text-muted">
           Could not refresh the voice list; showing the last one loaded.
         </p>
+      )}
+      {installNote && (
+        <p>{INSTALL_TEXT[installNote.kind](labelOf(installNote.voiceId))}</p>
       )}
       <p className={isPreviewFailed ? "font-semibold text-danger-ink" : ""}>
         {previewText(preview, labelOf)}
