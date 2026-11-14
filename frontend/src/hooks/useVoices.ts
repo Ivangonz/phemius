@@ -8,7 +8,20 @@ type VoicePage = components["schemas"]["Page_VoiceView_"]
 
 // The API's largest page; engines offer a few dozen voices at most.
 export const VOICE_PAGE_SIZE = 100
+const DOWNLOAD_POLL_MS = 1_000
 
+function isDownloading(page: VoicePage | undefined): boolean {
+  return (
+    page?.items.some((voice) => voice.download?.state === "downloading") ??
+    false
+  )
+}
+
+export function voicePath(voiceId: string): string {
+  return `/voices/${encodeURIComponent(voiceId)}`
+}
+
+// Polling reads only the voice list, which sends no provider request.
 export function useVoices() {
   return useQuery({
     queryKey: voicesQueryKey,
@@ -20,5 +33,7 @@ export function useVoices() {
           offset: 0,
         }),
       ),
+    refetchInterval: (query) =>
+      isDownloading(query.state.data) ? DOWNLOAD_POLL_MS : false,
   })
 }
