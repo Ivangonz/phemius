@@ -1,4 +1,5 @@
 import { SettingsSection } from "./SettingsSection"
+import { VoiceDefaults } from "./VoiceDefaults"
 import { VoiceEngineForm } from "./VoiceEngineForm"
 
 export function VoiceSection() {
@@ -8,7 +9,12 @@ export function VoiceSection() {
       title="Voice"
       description="Local engines run on this computer, so nothing is uploaded and there is no per-minute cost."
     >
-      {(overview) => <VoiceEngineForm overview={overview} />}
+      {(overview) => (
+        <>
+          <VoiceEngineForm overview={overview} />
+          <VoiceDefaults overview={overview} />
+        </>
+      )}
     </SettingsSection>
   )
 }

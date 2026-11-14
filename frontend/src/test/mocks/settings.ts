@@ -37,6 +37,8 @@ export function settingsOverview(
       openai_speech_base_url: saved("https://api.openai.com/v1"),
       openai_speech_model: saved("tts-1"),
       output_format: saved("wav"),
+      default_voice: saved(null),
+      default_tone: saved("neutral"),
       ...overrides.values,
     },
     secrets: {

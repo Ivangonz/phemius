@@ -6,6 +6,7 @@ import { healthyChecks, makeCheckRun, serveChecks } from "./checks"
 import { documentsHandler } from "./documents"
 import { queueHandlers, quietDay, todayStatsHandler } from "./queue"
 import { settingsHandler } from "./settings"
+import { voicesHandler } from "./voices"
 
 export const libraryConfig: LibraryConfig = {
   tones: { teacher: "Patient and structured.", executive: "Concise." },
@@ -51,5 +52,6 @@ export const handlers = [
     runs: [makeCheckRun(healthyChecks)],
   }).handlers,
   settingsHandler(),
+  voicesHandler(),
   activityHandler(),
 ]
